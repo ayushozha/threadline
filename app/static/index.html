@@ -106,6 +106,36 @@
             <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
           </div>
 
+          <div class="pair watch" id="watch-pair" data-state="idle">
+            <div class="pair-head">
+              <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
+                <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
+                <rect x="20" y="82" width="30" height="22" rx="6" class="strap"></rect>
+                <rect x="8" y="16" width="52" height="72" rx="16" class="case"></rect>
+                <rect x="61" y="36" width="5" height="14" rx="2.5" class="crown"></rect>
+                <rect x="13" y="21" width="42" height="62" rx="11" class="screen"></rect>
+                <circle cx="34" cy="52" r="12" class="watch-ring"></circle>
+                <circle cx="34" cy="52" r="6" class="watch-dot"></circle>
+              </svg>
+              <div class="pair-id">
+                <span class="pair-eyebrow">Apple Watch</span>
+                <span class="pair-name">Pair with a code</span>
+                <span id="watch-status" class="pair-status" role="status" aria-live="polite">Not paired</span>
+              </div>
+            </div>
+            <div id="watch-code-box" class="watch-code-box" hidden>
+              <span class="caption">Enter this code in Threadline on your watch</span>
+              <output id="watch-code" class="watch-code">——————</output>
+              <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Record</b>. The transcript appears here.</li></ol>
+            </div>
+            <div class="pair-buttons">
+              <button type="button" id="watch-pair-btn" class="primary-sm">Pair Apple Watch</button>
+              <button type="button" id="watch-unpair" class="secondary" hidden>Unpair</button>
+            </div>
+            <p id="watch-msg" class="pair-msg" role="status" aria-live="polite"></p>
+            <p class="pair-hint">A web page cannot reach a watch directly: the Threadline watch app streams its microphone to this server, and the code links it to this page.</p>
+          </div>
+
           <label for="source">Record from</label>
           <select id="source">
             <option value="vexo">The Vexo band above</option>

@@ -71,3 +71,18 @@ h3{font:normal 21px/1.2 Georgia,serif;margin:0 0 8px;letter-spacing:-.3px}select
 @keyframes flash-glow{0%{opacity:.9;fill:#fff;transform:scale(1)}100%{opacity:0;transform:scale(2.8)}}
 @keyframes breathe{0%,100%{opacity:.18;transform:scale(1)}50%{opacity:.4;transform:scale(1.35)}}
 @media(prefers-reduced-motion:reduce){.pair .band-led,.pair .band-glow,.pair .band-art,.pair .pair-status:before{animation:none!important}.pair[data-state=busy] .band-led{fill:#3b6cf6}}
+.watch-art{width:64px;height:104px;flex:none;overflow:visible}.watch-art .strap{fill:#2b2b31}.watch-art .case{fill:#16161a}.watch-art .crown{fill:#3a3a42}.watch-art .screen{fill:#050507}
+.watch-dot{fill:#3a3a42;transition:fill .25s}.watch-ring{fill:none;stroke:#30d158;stroke-width:3;opacity:0;transform-box:fill-box;transform-origin:center}
+.pair.watch[data-state=busy] .watch-dot{fill:#30d158;animation:led-blink-g 1.2s steps(1) infinite}
+.pair.watch[data-state=busy] .watch-ring{animation:ripple 1.8s ease-out infinite}
+.pair.watch[data-state=busy] .watch-art{animation:bob 2.4s ease-in-out infinite}
+.pair.watch[data-state=busy] .pair-status:before{background:#30d158}
+.pair.watch[data-state=connected] .watch-dot{fill:#ff453a}
+.pair.watch[data-state=connected] .watch-ring{stroke:#ff453a;animation:breathe 2s ease-in-out infinite}
+.pair.watch[data-state=connected] .pair-status:before{background:#ff453a}
+@keyframes led-blink-g{50%{fill:#0b3d1c}}
+.watch-code-box{margin:6px 0 12px;padding:14px 16px;border-radius:14px;background:#16161a;color:#fff}.watch-code-box .caption{color:#b4b4bc}.watch-code-box .steps{color:#e6e6ea;margin:10px 0 0}
+.watch-code{display:block;font:600 40px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;margin-top:4px}
+@media(prefers-reduced-motion:reduce){.pair.watch .watch-dot,.pair.watch .watch-ring,.pair.watch .watch-art{animation:none!important}}
+.pair.watch[data-state=busy] .pair-status:before{animation:dot-blink-g 1.2s steps(1) infinite}
+@keyframes dot-blink-g{0%{background:#30d158}50%{background:#b9ecc8}}

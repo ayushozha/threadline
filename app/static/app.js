@@ -12,7 +12,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const fmtWhen = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-const SOURCE_LABELS = { fictional: "Fictional demo history", typed: "Typed", vexo: "Vexo band · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", scripted: "Scripted demo transcript" };
+const SOURCE_LABELS = { fictional: "Fictional demo history", typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", scripted: "Scripted demo transcript" };
 
 const demos = {
   reflection: {
@@ -715,7 +715,7 @@ function archiveSession(finals, meta) {
     const speakers = [...new Set(f.words.map((w) => w.speaker).filter((s) => s != null))];
     return { at: new Date(meta.startedAt.getTime() + f.start * 1000).toISOString(), offset: f.start, speakers, text: f.transcript, activity: f.activity || "", marked: meta.marks.some((m) => m >= f.start - 1 && m <= f.start + (f.duration || 0) + 1) };
   });
-  const entry = { id: newId("t"), startedAt: meta.startedAt.toISOString(), endedAt: new Date().toISOString(), source: meta.source, device: capture.band?.name || (meta.source === "browser" ? "Browser microphone" : bandNumber ? bandLabel() : ""), marks: meta.marks.length, lines };
+  const entry = { id: newId("t"), startedAt: meta.startedAt.toISOString(), endedAt: new Date().toISOString(), source: meta.source, device: meta.device || capture.band?.name || (meta.source === "browser" ? "Browser microphone" : bandNumber ? bandLabel() : ""), marks: meta.marks.length, lines };
   const ok = saveArchive([entry, ...loadArchive()]);
   renderArchive();
   return ok;
@@ -807,5 +807,59 @@ function showGraphNode(n, edges, byId) {
     el("ul", { className: "why" }, ...n.sources.map((id) => notes.find((x) => x.id === id)).filter(Boolean).map((x) => el("li", {}, `“${x.text}” `, el("span", { className: "caption", textContent: `${fmtDate(x.at)} · ${SOURCE_LABELS[x.source] || x.source} ` }), sourceLink(x.id)))),
     el("p", { className: "caption", textContent: "A link means two things came up in the same saved statement. It is not a cause or a diagnosis." }));
 }
+
+
+/* ---------- Apple Watch (companion app streams to this server; this page follows it by code) ---------- */
+const watch = { ws: null, code: "", finals: [], startedAt: null, device: "Apple Watch" };
+function watchState(state, text) { $("watch-pair").dataset.state = state; $("watch-status").textContent = text; }
+function watchMsg(text, error = false) { $("watch-msg").textContent = text; $("watch-msg").classList.toggle("error", error); }
+$("watch-pair-btn").addEventListener("click", async () => {
+  if (watch.ws) return;
+  try {
+    const token = $("token").value.trim();
+    const headers = tokenRequired && token ? { "X-App-Token": token } : {};
+    if (tokenRequired && !token) throw new Error("Enter the app access token (Live providers, above) first.");
+    const data = await request("/api/watch/pair", { method: "POST", headers });
+    watch.code = data.code;
+    $("watch-code").textContent = data.code.replace(/(\d{3})(\d{3})/, "$1 $2");
+    $("watch-code-box").hidden = false; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false;
+    watchState("busy", "Waiting for your watch…"); watchMsg(`Code expires in ${Math.round(data.expires_in / 60)} minutes if unused.`);
+    openWatchFeed(token);
+  } catch (e) { watchMsg(e.message.includes("Not Found") ? "Apple Watch pairing is not available on this server yet." : e.message, true); }
+});
+function openWatchFeed(token) {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/watch/feed`);
+  watch.ws = ws;
+  ws.onopen = () => ws.send(JSON.stringify({ token, code: watch.code }));
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "watch_connected") {
+      watch.device = msg.device || "Apple Watch"; watch.finals = []; watch.startedAt = new Date();
+      watchState("connected", `${watch.device} · streaming`); watchMsg("Connected. Recording happens on the watch.");
+      $("watch-code-box").hidden = true;
+      $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = watch.device; $("signals").hidden = true;
+    } else if (msg.type === "result") {
+      if (msg.is_final && msg.transcript.trim()) {
+        watch.finals.push(msg);
+        const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
+        $("live-lines").append(el("li", {}, el("span", { className: "caption", textContent: `${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${watch.device} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}` }), el("p", { textContent: msg.transcript })));
+        $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+        $("live-interim").textContent = "";
+      } else if (!msg.is_final) $("live-interim").textContent = msg.transcript;
+    } else if (msg.type === "watch_disconnected") {
+      watchState("busy", "Watch stopped · waiting for it again");
+      finishWatchSession();
+    } else if (msg.type === "error") { watchMsg(msg.message, true); }
+  };
+  ws.onclose = () => { if (watch.ws === ws) { watch.ws = null; finishWatchSession(); watchState("idle", "Not paired"); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; } };
+}
+function finishWatchSession() {
+  if (!watch.finals.length) return;
+  const finals = watch.finals.map((f) => ({ ...f, start: f.start || 0 })); watch.finals = [];
+  archiveSession(finals, { startedAt: watch.startedAt || new Date(), source: "watch", marks: [], device: watch.device });
+  openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), "watch", watch.startedAt || new Date(), `${watch.device} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
+  recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
+}
+$("watch-unpair").addEventListener("click", () => { const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; });
 
 render();
