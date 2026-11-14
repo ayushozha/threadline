@@ -2,7 +2,7 @@
 
 Personal memory, with the thread still attached. Built at VexoHacks (AI wearables, Y Combinator, November 14, 2026).
 
-[Live prototype](https://threadline.ayushojha.com) · [Demo script](docs/DEMO.md) · [API setup](docs/API_SETUP.md) · [Deployment](deploy/README.md) · [Demo assets](assets/demo/index.html)
+[Live prototype](https://threadline.ayushojha.com) · [Demo script](docs/DEMO.md) · [API setup](docs/API_SETUP.md) · [Live video and device setup](docs/LIVE_CAPTURE_HANDOFF.md) · [Deployment](deploy/README.md) · [Demo assets](assets/demo/index.html)
 
 ## The problem
 
@@ -29,6 +29,7 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 | Stored transcripts per band (this browser's storage only), export .txt, delete | Implemented |
 | Knowledge graph that rebuilds as statements are saved (keywords, or Gemini with source checks) | Implemented; Gemini verified live |
 | Optional camera: live preview + local video recording (never uploaded) | Implemented; not yet verified with a camera |
+| Private remote video viewing, synchronized Gemini visual analysis, Meta/phone/Pi camera bridges | Required next work; [implementation and setup instructions](docs/LIVE_CAPTURE_HANDOFF.md). Local preview does not establish these capabilities |
 | Live transcript for the browser microphone | Implemented (Deepgram streaming via server relay) |
 | Double-tap the band to start/stop capture | Implemented; needs a check on the physical band |
 | Pipecat pipeline, ElevenLabs playback | Not connected. The band has no speaker or haptics; any voice output must play on the laptop |
@@ -60,11 +61,16 @@ Browser memory and consent controls → authenticated FastAPI adapters → Gemin
 - `POST /api/schedule/book`: `{events, event}`; public, stateless. Re-checks for conflicts and returns `409` with the conflicting events, or the created event. Nothing is stored server-side.
 - `GET /api/device`: public; the configured `VEXO_BAND_NUMBER`.
 - `WS /api/live-transcribe`: first message `{token, source: "vexo"|"browser"}`, then binary audio (one band Opus packet per message, or browser WebM chunks), `{"type":"stop"}` to finish. Relays to Deepgram streaming with the server's key; returns interim/final results with word timings and speaker labels. Nothing is stored.
-- `POST /api/transcribe`: raw audio body and supported `audio/*` content type, maximum 10 MB; requires token. Speaker labels are not identity verification. Automatic live BLE capture is not connected.
+- `POST /api/transcribe`: raw audio body and supported `audio/*` content type, maximum 10 MB; requires token. Speaker labels are not identity verification. Live BLE capture uses the separate `/api/live-transcribe` route.
 
 ## Vexo band
 
 Set `VEXO_BAND_NUMBER` in `.env` to your team's band (ours is 73, `Vexo-HACK-73`). In Capture, choose **Vexo band · USB cable** or **· Bluetooth**, press **Connect band**, and pick only your band. Close the Vexo dashboard first: a band serves one program per link. The browser library in `app/static/vendor/vexo-open/` is the official [Vexo Open kit](https://github.com/VexoAI-Org/vexo-open-kit) (MIT), copied unchanged; `UPSTREAM_COMMIT` records the version. The library refuses any band whose number does not match.
+
+For the combined Vexo + GoPro setup, supported camera paths, website streaming,
+Meta companion requirements, SD card roles, timing and acceptance checks, follow
+[Live video and device setup](docs/LIVE_CAPTURE_HANDOFF.md). Those instructions
+specify the next implementation; they do not claim every device is connected today.
 
 ## Repository
 
