@@ -21,14 +21,14 @@
       <h1>Pick up your <em>thread.</em></h1>
       <p class="lead">Your own words, kept with their source. Support you chose, offered only when it fits.</p>
     </section>
-    <div class="modes" role="group" aria-label="Choose a demo">
+    <div class="modes" role="group" aria-label="Choose a mode">
       <button type="button" data-mode="reflection" aria-pressed="true">01 <span>Personal reflection</span></button>
       <button type="button" data-mode="routine" aria-pressed="false">02 <span>Resume a routine</span></button>
     </div>
     <p id="mode-description" class="description"></p>
 
     <details class="live-settings strip">
-      <summary>Live providers <span id="provider-summary" class="caption">· off — local demo only</span></summary>
+      <summary>Live providers <span id="provider-summary" class="caption">· off — keyword search only</span></summary>
       <div class="strip-body">
         <label class="check"><input id="live-on" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
         <label for="token">App access token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Provided by your app operator">
@@ -75,7 +75,6 @@
           <div id="band-controls" class="pair-buttons">
             <button type="button" id="btn-ble" class="primary-sm">Connect</button>
             <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
-            <button type="button" id="btn-sim" class="text-button">Try without a band</button>
             <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
             <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
           </div>
@@ -154,11 +153,9 @@
           </div>
           <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
           <details class="audio-option">
-            <summary>Other ways to add a conversation</summary>
+            <summary>Upload a recording instead</summary>
             <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
             <button type="button" id="transcribe" class="secondary">Transcribe file</button>
-            <p class="caption">No band or keys? Load a short scripted conversation. It is labeled as scripted, not captured audio.</p>
-            <button type="button" id="scripted" class="secondary">Load scripted demo conversation</button>
           </details>
         </section>
 
@@ -212,10 +209,10 @@
 
         <p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like to revisit?</h2>
         <form id="question-form">
-          <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required></textarea>
+          <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required placeholder="e.g. What did I say about evenings?"></textarea>
           <button id="run" type="submit" class="primary">Revisit my notes <span aria-hidden="true">↗</span></button>
         </form>
-        <p id="status" class="status" role="status">Local demo · no AI request</p>
+        <p id="status" class="status" role="status">Keyword search · no AI request</p>
         <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div>
 
         <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">

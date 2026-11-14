@@ -12,47 +12,39 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const fmtWhen = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-const SOURCE_LABELS = { fictional: "Fictional demo history", typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", scripted: "Scripted demo transcript" };
+const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed" };
 
-const demos = {
-  reflection: {
-    description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Cycle timing is optional self-reported context — never a cause, diagnosis, or judgment.",
-    question: "What helped last time I felt overloaded?",
-    notes: [
-      { text: "Keeping an evening free helped when I felt overloaded.", at: ago(61, 21, 10), context: "Self-reported: late in my cycle (approximate)" },
-      { text: "I said yes to three dinners this week and regretted the last one. I was too drained to enjoy it.", at: ago(58, 22, 5) },
-      { text: "Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.", at: ago(30, 16, 40), context: "Self-reported: cycle day 25 (approximate)" },
-      { text: "A short walk after work helped more than scrolling.", at: ago(29, 19, 15) },
-    ],
-    prefs: [{ text: "When I describe feeling overloaded, offer to help make space in my schedule.", triggers: ["overloaded", "exhausted", "drained", "too much", "burned out", "wiped"], action: "schedule", at: ago(60, 9, 30), source: "fictional" }],
-  },
-  routine: {
-    description: "Resume a routine: recover your stated intention and the last thing you recorded. A recorded action is not proof it happened — Threadline asks when progress is unknown.",
-    question: "Where did I leave off packing?",
-    notes: [
-      { text: "I'm packing for the family visit on Saturday: clothes, phone charger, and the gift for Mom.", at: ago(0, new Date().getHours() - 2, 5) },
-      { text: "Clothes are in the suitcase.", at: ago(0, new Date().getHours() - 2, 20) },
-      { text: "Doorbell — going to get the delivery.", at: ago(0, new Date().getHours() - 2, 24) },
-    ],
-    prefs: [],
-  },
+const MODES = {
+  reflection: { description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Cycle timing is optional self-reported context — never a cause, diagnosis, or judgment." },
+  routine: { description: "Resume a routine: recover your stated intention and the last thing you recorded. A recorded action is not proof it happened — Threadline asks when progress is unknown." },
 };
-
 const day = tomorrow();
-const seedCalendar = () => [
-  { id: "cal-1", title: "Lunch with Priya", date: day, start: "12:00", end: "13:00" },
-  { id: "cal-2", title: "Project review", date: day, start: "13:00", end: "14:00" },
-  { id: "cal-3", title: "Dentist", date: day, start: "15:30", end: "16:15" },
-  { id: "cal-4", title: "Book club", date: day, start: "18:30", end: "20:30" },
-];
 
 let mode = "reflection", busy = false;
-const sessions = Object.fromEntries(Object.entries(demos).map(([key, demo]) => [key, {
-  sample: true, question: demo.question,
-  notes: demo.notes.map((n, i) => ({ id: `${key}-${i + 1}`, source: "fictional", context: "", ...n })),
-  prefs: demo.prefs.map((p, i) => ({ id: `pref-${i + 1}`, ...p })),
-}]));
-const agent = { offer: null, events: seedCalendar(), proposal: null, skip: [], log: [], created: null, duration: 30, window: "afternoon" };
+// Everything below starts empty and holds only what this person captured, typed or saved.
+const emptyThread = () => ({ reflection: { question: "", notes: [], prefs: [] }, routine: { question: "", notes: [], prefs: [] } });
+let sessions = emptyThread();
+const agent = { offer: null, events: [], proposal: null, skip: [], log: [], created: null, duration: 30, window: "afternoon" };
+// Stored in this browser per band (localStorage); nothing is stored on the server.
+let threadKey = "", threadLoaded = false;
+function loadThread(key) {
+  threadKey = key; threadLoaded = false;
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(`threadline.thread.v1.${key}`) || "null"); } catch { saved = null; }
+  sessions = emptyThread();
+  if (saved) for (const m of ["reflection", "routine"]) Object.assign(sessions[m], { notes: saved[m]?.notes || [], prefs: saved[m]?.prefs || [] });
+  Object.assign(agent, { offer: null, events: saved?.events || [], proposal: null, skip: [], log: [], created: null });
+  threadLoaded = true;
+}
+function saveThread() {
+  if (!threadLoaded) return;
+  try {
+    localStorage.setItem(`threadline.thread.v1.${threadKey}`, JSON.stringify({
+      reflection: { notes: sessions.reflection.notes, prefs: sessions.reflection.prefs },
+      routine: { notes: sessions.routine.notes }, events: agent.events,
+    }));
+  } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
+}
 const capture = { active: false, band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
 
 function message(text, error = false) { $("status").textContent = text; $("status").classList.toggle("error", error); }
@@ -62,7 +54,8 @@ function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; 
 function renderTimeline() {
   const session = sessions[mode];
   if (typeof scheduleGraph === "function") scheduleGraph();
-  $("sample-label").textContent = session.sample ? "Entries marked “Fictional demo history” are invented examples — not real observations." : "Session notes · kept in this page only";
+  saveThread();
+  $("sample-label").textContent = `Your statements only — stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Nothing is stored on the server.`;
   $("timeline").replaceChildren();
   for (const note of session.notes) {
     const time = el("time", { dateTime: note.at, textContent: fmtWhen(note.at) }, el("span", { className: "note-id", textContent: note.id }));
@@ -70,7 +63,7 @@ function renderTimeline() {
     const text = el("p", { textContent: note.text });
     const li = el("li", { id: `note-${note.id}` }, time, el("div", { className: "meta" }, badge, el("span", { className: "speaker", textContent: "Speaker: you" })), text);
     if (note.context) li.append(el("p", { className: "context", textContent: note.context }));
-    if (note.source !== "fictional") {
+    {
       const edit = el("button", { type: "button", className: "text-button", textContent: "Correct" });
       const del = el("button", { type: "button", className: "text-button", textContent: "Delete" });
       edit.addEventListener("click", () => editNote(li, note));
@@ -79,7 +72,7 @@ function renderTimeline() {
     }
     $("timeline").append(li);
   }
-  if (!session.notes.length) $("timeline").append(el("p", { className: "empty", textContent: "A fresh thread. Capture or type your first note." }));
+  if (!session.notes.length) $("timeline").append(el("p", { className: "empty", textContent: "Nothing yet. Capture a conversation or type a note — only what you save appears here." }));
 }
 function editNote(li, note) {
   const area = el("textarea", { value: note.text, rows: 2, maxLength: 4000 });
@@ -97,6 +90,7 @@ function addNotes(items) {
 
 /* ---------- Preferences ---------- */
 function renderPrefs() {
+  saveThread();
   $("prefs-section").hidden = mode !== "reflection";
   const list = $("prefs"); list.replaceChildren();
   for (const pref of sessions[mode].prefs) {
@@ -104,7 +98,7 @@ function renderPrefs() {
     remove.addEventListener("click", () => { sessions[mode].prefs = sessions[mode].prefs.filter((p) => p !== pref); renderPrefs(); });
     list.append(el("li", {},
       el("p", { textContent: `“${pref.text}”` }),
-      el("p", { className: "caption", textContent: `Matches: ${pref.triggers.join(", ")} · ${pref.action === "schedule" ? "offers schedule help" : "shows earlier notes only"} · saved ${fmtDate(pref.at)}${pref.source === "fictional" ? " · fictional demo" : ""}` }),
+      el("p", { className: "caption", textContent: `Matches: ${pref.triggers.join(", ")} · ${pref.action === "schedule" ? "offers schedule help" : "shows earlier notes only"} · saved ${fmtDate(pref.at)}` }),
       remove));
   }
   if (!sessions[mode].prefs.length) list.append(el("li", { className: "empty", textContent: "No preferences saved. Threadline will not offer help on its own." }));
@@ -141,7 +135,7 @@ function renderSupport() {
   if (box.hidden) return;
   const why = el("ul", { className: "why" },
     el("li", {}, el("strong", { textContent: "You just said: " }), `“${offer.note.text}” `, el("span", { className: "caption", textContent: `${fmtWhen(offer.note.at)} · ${SOURCE_LABELS[offer.note.source]} ` }), sourceLink(offer.note.id)),
-    el("li", {}, el("strong", { textContent: "You saved: " }), `“${offer.pref.text}” `, el("span", { className: "caption", textContent: `${fmtDate(offer.pref.at)}${offer.pref.source === "fictional" ? " · fictional demo" : ""}` })),
+    el("li", {}, el("strong", { textContent: "You saved: " }), `“${offer.pref.text}” `, el("span", { className: "caption", textContent: `saved ${fmtDate(offer.pref.at)}` })),
     ...offer.evidence.map((n) => el("li", {}, el("strong", { textContent: "Earlier you said: " }), `“${n.text}” `, el("span", { className: "caption", textContent: `${fmtDate(n.at)} · ${SOURCE_LABELS[n.source]} ` }), sourceLink(n.id))));
   const children = [
     el("p", { className: "eyebrow", textContent: "Support you asked for" }),
@@ -161,7 +155,7 @@ function renderSupport() {
   box.replaceChildren(...children);
 }
 
-/* ---------- Demo calendar agent ---------- */
+/* ---------- Schedule agent (your busy times in this browser; approved blocks export as .ics) ---------- */
 const WINDOWS = { afternoon: ["12:00", "17:00", "tomorrow afternoon"], evening: ["17:00", "21:00", "tomorrow evening"], morning: ["08:00", "12:00", "tomorrow morning"] };
 function logStep(text, kind = "") { agent.log.push({ text, kind }); }
 async function postJSON(url, body) {
@@ -171,7 +165,7 @@ async function postJSON(url, body) {
 }
 async function findSlot() {
   const [start, end] = WINDOWS[agent.window];
-  logStep(`Checking the demo calendar for ${agent.duration} minutes ${WINDOWS[agent.window][2]}…`);
+  logStep(`Checking your Threadline schedule (${agent.events.filter((e) => e.date === day).length} busy times entered) for ${agent.duration} minutes ${WINDOWS[agent.window][2]}…`);
   const { ok, data } = await postJSON("/api/schedule/find-slot", { events: agent.events, date: day, window_start: start, window_end: end, duration_minutes: agent.duration, skip: agent.skip });
   if (!ok) { logStep("The planner rejected the request. Nothing changed.", "bad"); agent.proposal = null; return; }
   for (const c of data.checked) logStep(`${fmtClock(c.start)}–${fmtClock(c.end)}: ${c.status === "free" ? "free" : `${c.status} (${c.detail})`}`, c.status === "free" ? "good" : "muted");
@@ -184,8 +178,9 @@ async function bookProposal() {
   const { ok, status, data } = await postJSON("/api/schedule/book", { events: agent.events, event: { title: "Quiet time (protected)", date: p.date, start: p.start, end: p.end } });
   if (ok) {
     agent.events.push(data.event); agent.created = data.event; agent.proposal = null;
-    logStep(`Created “${data.event.title}” ${fmtClock(data.event.start)}–${fmtClock(data.event.end)} in the demo calendar.`, "good");
-    message("Action complete · demo calendar only, no external calendar changed");
+    logStep(`Created “${data.event.title}” ${fmtClock(data.event.start)}–${fmtClock(data.event.end)} in your Threadline schedule.`, "good");
+    message("Created in your Threadline schedule. Download the .ics to add it to your own calendar.");
+    saveThread();
   } else if (status === 409) {
     const names = (data.conflicts || []).map((c) => `“${c.title}”`).join(", ");
     logStep(`Conflict: ${names} now occupies that time. Nothing was created.`, "bad");
@@ -193,15 +188,35 @@ async function bookProposal() {
     agent.proposal = null; await findSlot();
   } else { logStep("Booking failed. Nothing was created.", "bad"); }
 }
+function icsFor(e) {
+  const stamp = (d, t) => `${d.replaceAll("-", "")}T${t.replace(":", "")}00`;
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Threadline//EN", "BEGIN:VEVENT", `UID:${e.id}@threadline`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+    `DTSTART:${stamp(e.date, e.start)}`, `DTEND:${stamp(e.date, e.end)}`, `SUMMARY:${e.title}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+}
 function renderCalendar() {
   const box = $("calendar");
   box.hidden = mode !== "reflection" || agent.offer?.status !== "accepted";
+  saveThread();
   if (box.hidden) return;
   const events = agent.events.filter((e) => e.date === day).sort((a, b) => a.start.localeCompare(b.start));
-  const list = el("ul", { className: "events" }, ...events.map((e) => el("li", { className: e.created_by === "threadline" ? "mine" : e.injected ? "injected" : "" },
-    el("span", { className: "when", textContent: `${fmtClock(e.start)}–${fmtClock(e.end)}` }), el("span", { textContent: e.title }),
-    e.created_by === "threadline" ? el("span", { className: "badge typed", textContent: "created by Threadline" }) : e.injected ? el("span", { className: "badge scripted", textContent: "demo conflict" }) : null)));
+  const list = el("ul", { className: "events" }, ...events.map((e) => {
+    const remove = el("button", { type: "button", className: "text-button", textContent: "Remove", "aria-label": `Remove ${e.title}` });
+    remove.addEventListener("click", () => { agent.events = agent.events.filter((x) => x !== e); if (agent.created?.id === e.id) agent.created = null; renderCalendar(); });
+    return el("li", { className: e.created_by === "threadline" ? "mine" : "" },
+      el("span", { className: "when", textContent: `${fmtClock(e.start)}–${fmtClock(e.end)}` }), el("span", { textContent: e.title }),
+      e.created_by === "threadline" ? el("span", { className: "badge typed", textContent: "created by Threadline" }) : null, remove);
+  }));
+  if (!events.length) list.append(el("li", { className: "empty", textContent: "No busy times entered for tomorrow." }));
   const dateLabel = new Date(`${day}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+  const busyTitle = el("input", { type: "text", placeholder: "What's on (e.g. team sync)", maxLength: 120, "aria-label": "Busy time title" });
+  const busyStart = el("input", { type: "time", value: "13:00", "aria-label": "Starts" }), busyEnd = el("input", { type: "time", value: "14:00", "aria-label": "Ends" });
+  const addBusy = el("button", { type: "button", className: "secondary", textContent: "Add busy time" });
+  addBusy.addEventListener("click", () => {
+    if (!busyTitle.value.trim() || busyEnd.value <= busyStart.value) return message("Give the busy time a name and an end after its start.", true);
+    agent.events.push({ id: newId("cal"), title: busyTitle.value.trim(), date: day, start: busyStart.value, end: busyEnd.value });
+    logStep(`You added “${busyTitle.value.trim()}” ${fmtClock(busyStart.value)}–${fmtClock(busyEnd.value)}.`, "muted");
+    renderCalendar();
+  });
   const duration = el("select", { id: "cal-duration" }, ...[15, 30, 60].map((m) => el("option", { value: m, textContent: m === 30 ? "thirty minutes" : `${m} minutes`, selected: m === agent.duration })));
   const windowSel = el("select", { id: "cal-window" }, ...Object.entries(WINDOWS).map(([k, w]) => el("option", { value: k, textContent: w[2], selected: k === agent.window })));
   duration.addEventListener("change", () => { agent.duration = Number(duration.value); });
@@ -210,30 +225,26 @@ function renderCalendar() {
   find.addEventListener("click", () => run(async () => { agent.skip = []; agent.proposal = null; await findSlot(); }));
   const children = [
     el("p", { className: "eyebrow", textContent: "Approved action" }),
-    el("h3", { textContent: `Demo calendar · ${dateLabel}` }),
-    el("p", { className: "caption warn", textContent: "Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar." }),
+    el("h3", { textContent: `Your schedule · ${dateLabel}` }),
+    el("p", { className: "caption", textContent: "Threadline does not read your calendar. Add tomorrow's busy times here (kept in this browser); an approved block downloads as an .ics file for your own calendar." }),
     list,
+    el("div", { className: "busy-form" }, busyTitle, busyStart, busyEnd, addBusy),
     el("div", { className: "ask-line" }, el("span", { textContent: "Find " }), duration, el("span", { textContent: " " }), windowSel, find),
   ];
-  if (agent.log.length) children.push(el("ol", { className: "agent-log", "aria-label": "What Threadline checked" }, ...agent.log.map((s) => el("li", { className: s.kind, textContent: s.text }))));
+  if (agent.log.length) children.push(el("ol", { className: "agent-log", "aria-label": "What Threadline checked" }, ...agent.log.map((st) => el("li", { className: st.kind, textContent: st.text }))));
   if (agent.proposal) {
-    const p = agent.proposal;
-    const approve = el("button", { type: "button", className: "primary", innerHTML: `Create quiet time ${fmtClock(p.start)}–${fmtClock(p.end)} <span aria-hidden="true">✓</span>` });
+    const pr = agent.proposal;
+    const approve = el("button", { type: "button", className: "primary", innerHTML: `Create quiet time ${fmtClock(pr.start)}–${fmtClock(pr.end)} <span aria-hidden="true">✓</span>` });
     const other = el("button", { type: "button", className: "secondary", textContent: "Try another time" });
-    const conflict = el("button", { type: "button", className: "text-button demo-control", textContent: "Demo control: someone else books this slot" });
     approve.addEventListener("click", () => run(bookProposal));
-    other.addEventListener("click", () => run(async () => { agent.skip.push(p.start); logStep(`You declined ${fmtClock(p.start)}.`); await findSlot(); }));
-    conflict.addEventListener("click", () => {
-      agent.events.push({ id: newId("cal"), title: "Call with landlord", date: p.date, start: p.start, end: p.end, injected: true });
-      logStep(`(Demo control) “Call with landlord” was added at ${fmtClock(p.start)} by someone else.`, "muted");
-      renderCalendar(); message("Calendar changed underneath the proposal. Approve to see Threadline re-check.");
-    });
-    children.push(el("div", { className: "proposal" }, approve, el("div", { className: "row" }, other, conflict)));
+    other.addEventListener("click", () => run(async () => { agent.skip.push(pr.start); logStep(`You declined ${fmtClock(pr.start)}.`); await findSlot(); }));
+    children.push(el("div", { className: "proposal" }, approve, el("div", { className: "row" }, other)));
   }
   if (agent.created) {
+    const ics = el("a", { href: URL.createObjectURL(new Blob([icsFor(agent.created)], { type: "text/calendar" })), download: "threadline-quiet-time.ics", className: "secondary ics", textContent: "Download .ics for your calendar" });
     const undo = el("button", { type: "button", className: "text-button", textContent: "Undo — remove the quiet time" });
-    undo.addEventListener("click", () => { agent.events = agent.events.filter((e) => e.id !== agent.created.id); logStep("Removed the quiet time block from the demo calendar."); agent.created = null; renderCalendar(); });
-    children.push(el("p", { className: "done", textContent: `Done: “${agent.created.title}” is on the demo calendar, ${fmtClock(agent.created.start)}–${fmtClock(agent.created.end)}.` }), undo);
+    undo.addEventListener("click", () => { agent.events = agent.events.filter((e) => e.id !== agent.created.id); logStep("Removed the quiet time block."); agent.created = null; renderCalendar(); });
+    children.push(el("p", { className: "done", textContent: `Done: “${agent.created.title}” ${fmtClock(agent.created.start)}–${fmtClock(agent.created.end)} is in your Threadline schedule.` }), el("div", { className: "row" }, ics, undo));
   }
   box.replaceChildren(...children);
 }
@@ -262,7 +273,7 @@ fetch("/api/device").then((r) => r.json()).then((d) => {
   if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
   const fromUrl = new URLSearchParams(location.search).get("band");
   const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : recentBands()[0] || configuredBand;
-  if (start) chooseBand(start, false);
+  if (start) chooseBand(start, false); else { loadThread("browser"); render(); }
   renderPair(); setRecUI();
 }).catch(() => renderPair());
 
@@ -272,6 +283,7 @@ function chooseBand(number, remember = true) {
   $("pick-number").value = String(number).padStart(2, "0");
   if (remember) rememberBand(number);
   const url = new URL(location.href); url.searchParams.set("band", String(number).padStart(2, "0")); history.replaceState(null, "", url);
+  loadThread(`band-${number}`); render();
   renderPair(); renderArchive(); bandStatus("");
 }
 $("pick-form").addEventListener("submit", (e) => {
@@ -290,8 +302,8 @@ function renderPair() {
   if (capture.active && linked && !recon) { $("pair").dataset.state = "mic"; }
   $("pick-form").hidden = linked || pair.busy;
   $("connect-steps").hidden = linked;
-  $("btn-ble").hidden = $("btn-serial").hidden = $("btn-sim").hidden = linked || pair.busy;
-  $("btn-ble").disabled = $("btn-serial").disabled = $("btn-sim").disabled = !bandNumber;
+  $("btn-ble").hidden = $("btn-serial").hidden = linked || pair.busy;
+  $("btn-ble").disabled = $("btn-serial").disabled = !bandNumber;
   $("btn-cancel").hidden = !pair.busy;
   $("band-disconnect").hidden = !linked;
   $("usb-help").hidden = linked;
@@ -334,12 +346,8 @@ async function connectBand(kind) {
     await loadKit();
     pair.slow = setTimeout(() => { if (mine === pair.attempt && pair.busy) bandStatus(logic.stillConnectingMessage(kind, wanted)); }, logic.STILL_CONNECTING_MS);
     let transport = kind;
-    if (kind === "sim") {
-      const bytes = new Uint8Array(await (await fetch("/static/vendor/vexo-open/sample-speech.opus")).arrayBuffer());
-      transport = new kit.SimTransport(bandNumber, { audioPackets: kit.oggPackets(bytes) });
-    }
     // The library filters Bluetooth to this exact name and refuses a band whose number differs.
-    connected = await kit.Band.connect(bandNumber, { transport, autoReconnect: kind !== "sim" });
+    connected = await kit.Band.connect(bandNumber, { transport, autoReconnect: true });
     if (connected.number !== bandNumber) { await connected.disconnect(); throw Object.assign(new Error(`That is ${connected.name}, not ${wanted}. Disconnected without changing it.`), { code: "wrong-band" }); }
   } catch (e) {
     if (mine === pair.attempt) { pair.busy = false; bandStatus(logic ? logic.connectProblem(e, { kind, wanted }) : e.message, true); }
@@ -349,7 +357,7 @@ async function connectBand(kind) {
   if (!connected) return renderPair();
   rememberBand(bandNumber);
   attachBand(connected);
-  bandStatus(kind === "sim" ? "Pretend band: it plays the kit's sample recording as its microphone. Use it to rehearse." : `Connected to ${connected.name}. It flashes white.`);
+  bandStatus(`Connected to ${connected.name}. It flashes white.`);
   $("info-link").textContent = { serial: "USB cable", ble: "Bluetooth", sim: "Pretend (simulator)" }[connected.transportKind] || connected.transportKind;
   $("info-fw").textContent = connected.info?.firmware || "—";
   try { await connected.configure({ events: true, battery: true }); } catch { /* keep going */ }
@@ -357,7 +365,6 @@ async function connectBand(kind) {
 }
 $("btn-ble").addEventListener("click", () => connectBand("ble"));
 $("btn-serial").addEventListener("click", () => connectBand("serial"));
-$("btn-sim").addEventListener("click", () => connectBand("sim"));
 $("btn-cancel").addEventListener("click", () => { pair.attempt += 1; pair.busy = false; clearTimeout(pair.slow); bandStatus(logic?.CANCELLED_MESSAGE || "Cancelled."); });
 function attachBand(band) {
   capture.band = band;
@@ -553,12 +560,6 @@ $("transcribe").addEventListener("click", async () => {
   try { const file = $("audio").files[0]; if (!file) throw new Error("Choose an audio file first."); capture.startedAt = new Date(); await transcribe(file, "upload"); $("audio").value = ""; }
   catch (e) { recState(e.message, true); }
 });
-$("scripted").addEventListener("click", () => {
-  const lines = mode === "reflection"
-    ? [{ speaker: 0, text: "I'm exhausted, and I have something scheduled every evening.", offset: 0 }, { speaker: 1, text: "Do you still want to do dinner Thursday?", offset: 5 }]
-    : [{ speaker: 0, text: "Okay, back. Where was I with the packing?", offset: 0 }, { speaker: 1, text: "The delivery's on the counter.", offset: 4 }];
-  openReview(lines, "scripted", new Date(), "Scripted demo transcript — typed in advance, not captured audio.");
-});
 function openReview(segments, source, startedAt, label) {
   capture.review = { source, startedAt, segments: segments.map((s) => ({ ...s, who: "unsure" })) };
   const speakers = [...new Set(segments.map((s) => s.speaker))];
@@ -599,7 +600,7 @@ function showAnswer(answer, sources = [], provenance = "") {
   const links = el("div", { className: "sources" });
   for (const id of sources) {
     const note = sessions[mode].notes.find((n) => n.id === id); if (!note) continue;
-    links.append(el("a", { href: `#note-${id}`, textContent: `Source: ${id}${note.source === "fictional" ? " · fictional" : ""}` }));
+    links.append(el("a", { href: `#note-${id}`, textContent: `Source: ${id}` }));
   }
   if (links.childElementCount) children.push(links);
   $("answer").replaceChildren(...children);
@@ -633,7 +634,7 @@ $("check-config").addEventListener("click", async () => {
 
 document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => {
   if (busy) return; sessions[mode].question = $("question").value; mode = button.dataset.mode;
-  $("note").value = ""; capture.review = null; $("review").hidden = true; render(); showAnswer("Ask a question to revisit this thread."); message("Local demo · no AI request");
+  $("note").value = ""; capture.review = null; $("review").hidden = true; render(); showAnswer("Ask a question to revisit this thread."); message("Keyword search · no AI request");
 }));
 $("question").addEventListener("input", () => { sessions[mode].question = $("question").value; });
 $("note-form").addEventListener("submit", (event) => {
@@ -641,9 +642,9 @@ $("note-form").addEventListener("submit", (event) => {
   $("note").value = ""; addNotes([{ text, at: new Date().toISOString(), source: "typed" }]); message("Note added to this session.");
 });
 $("clear").addEventListener("click", () => {
-  if (busy || !confirm("Clear all notes in this demo mode? This cannot be undone.")) return;
-  Object.assign(sessions[mode], { notes: [], sample: false }); $("note").value = ""; $("audio").value = "";
-  if (mode === "reflection") Object.assign(agent, { offer: null, events: seedCalendar(), proposal: null, skip: [], log: [], created: null });
+  if (busy || !confirm("Delete every note in this mode for this band? This cannot be undone.")) return;
+  Object.assign(sessions[mode], { notes: [] }); $("note").value = ""; $("audio").value = "";
+  if (mode === "reflection") Object.assign(agent, { offer: null, proposal: null, skip: [], log: [], created: null });
   render(); showAnswer("Your session notes have been cleared."); message("Fresh session · no saved notes");
 });
 $("question-form").addEventListener("submit", async (event) => {
@@ -656,7 +657,7 @@ $("question-form").addEventListener("submit", async (event) => {
     const matches = notes.filter((note) => words.some((word) => note.text.toLowerCase().includes(word)));
     const selected = matches.length ? matches : notes.slice(-3);
     showAnswer(`${matches.length ? "Your notes that share words with the question:" : "No direct keyword match. Your latest notes:"}\n\n${selected.map((n) => `${fmtDate(n.at)} — “${n.text}”`).join("\n\n")}`, selected.map((n) => n.id), "Local keyword match · not AI · no interpretation");
-    return message("Local demo · no data sent");
+    return message("Keyword search on this page · nothing sent");
   }
   try {
     const headers = liveHeaders(); setBusy(true); message("Sending this question and these notes to Gemini…");
@@ -668,7 +669,7 @@ $("question-form").addEventListener("submit", async (event) => {
 });
 
 function render() {
-  $("mode-description").textContent = demos[mode].description;
+  $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive();

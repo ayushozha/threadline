@@ -16,14 +16,11 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 
 | Surface | Status |
 | --- | --- |
-| Two scenarios (personal reflection, resume a routine) with labeled fictional history | Implemented |
 | Browser-microphone capture: consent, start/stop, recording state, playback, delete | Implemented (browser mic, not the bracelet) |
 | Review before saving: pick which speaker is you, correct text, drop other people's speech | Implemented |
-| Correct or delete saved notes; source badges (fictional / typed / mic / file / scripted) | Implemented |
 | Saved support preferences matched against your own words (local keyword rule, labeled) | Implemented; not AI |
 | Support offer showing why: the new statement, the preference, and earlier dated evidence | Implemented |
-| Approved action: find time, propose, re-check, recover from a conflict, create, undo | Implemented on a **local demo calendar** in the browser; no external calendar |
-| Scripted demo conversation for use without microphone or keys | Implemented; labeled as scripted |
+| Approved action: you enter tomorrow's busy times; Threadline finds a slot, re-checks on approval, recovers from conflicts, creates the block and exports it as .ics | Implemented; Threadline never reads or writes an external calendar |
 | Gemini grounded-response adapter | Implemented; requires your API key and accessible model |
 | Deepgram audio-file transcription | Implemented; requires your API key |
 | Vexo band 73 live audio (USB cable or Bluetooth) via the official Vexo Open kit | Implemented; band audio streams through the server to Deepgram with a live transcript. Verified end-to-end with the kit's recorded band audio on a pretend band; needs a check on the physical band |
@@ -47,7 +44,6 @@ uv sync --locked
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. The fictional local demo needs no provider keys. To enable live requests, set a strong `APP_ACCESS_TOKEN`, `GOOGLE_API_KEY`, `GEMINI_MODEL`, and optionally `DEEPGRAM_API_KEY` / `DEEPGRAM_MODEL` in `.env`. Enter the project access token in the live-provider controls. Provider keys remain on the server. Restart after changing `.env`.
 
 The root task created an ignored `.env` with a generated access token. Fill the empty provider key fields using your event accounts. `APP_HOST` / `APP_PORT` document local host/port defaults; the command flags determine Uvicorn's listener.
 
@@ -86,7 +82,7 @@ Update the exported lock requirements whenever `uv.lock` changes. Deployment use
 
 ## Limits and privacy
 
-This is not a diagnostic, monitoring, emergency, or validated cognitive-assessment product. It does not infer hormone levels, judge capacity, establish dementia, or prove cycle-related causation. Notes can be wrong; check the cited sources and correct them. No real recordings or personal information are committed. Synthetic demo data is isolated in the browser and disappears on refresh. Clearing the page does not delete information already sent to a provider; its retention terms apply.
+This is not a diagnostic, monitoring, emergency, or validated cognitive-assessment product. It does not infer hormone levels, judge capacity, establish dementia, or prove cycle-related causation. Notes can be wrong; check the cited sources and correct them. No real recordings or personal information are committed. The app ships with no sample data. Your thread, preferences, schedule and transcripts are stored in this browser's localStorage, per band; nothing is stored on the server. Delete them from the page. Clearing the page does not delete information already sent to a provider; its retention terms apply.
 
 ## License
 
