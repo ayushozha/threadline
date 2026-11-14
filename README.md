@@ -27,6 +27,11 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 | Gemini grounded-response adapter | Implemented; requires your API key and accessible model |
 | Deepgram audio-file transcription | Implemented; requires your API key |
 | Vexo band 73 live audio (USB cable or Bluetooth) via the official Vexo Open kit | Implemented; band audio streams through the server to Deepgram with a live transcript. Verified end-to-end with the kit's recorded band audio on a pretend band; needs a check on the physical band |
+| Continuous capture: auto-reconnects the Deepgram stream and the band link (kit auto-reconnect) and keeps the transcript | Implemented; tested with a forced stream drop on a simulated band |
+| Band signals during capture: loudness, movement state, steps, battery; single tap marks a moment | Implemented; simulated band verified, physical band needs a check |
+| Stored transcripts per band (this browser's storage only), export .txt, delete | Implemented |
+| Knowledge graph that rebuilds as statements are saved (keywords, or Gemini with source checks) | Implemented; Gemini verified live |
+| Optional camera: live preview + local video recording (never uploaded) | Implemented; not yet verified with a camera |
 | Live transcript for the browser microphone | Implemented (Deepgram streaming via server relay) |
 | Double-tap the band to start/stop capture | Implemented; needs a check on the physical band |
 | Pipecat pipeline, ElevenLabs playback | Not connected. The band has no speaker or haptics; any voice output must play on the laptop |

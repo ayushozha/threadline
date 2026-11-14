@@ -53,7 +53,7 @@ const sessions = Object.fromEntries(Object.entries(demos).map(([key, demo]) => [
   prefs: demo.prefs.map((p, i) => ({ id: `pref-${i + 1}`, ...p })),
 }]));
 const agent = { offer: null, events: seedCalendar(), proposal: null, skip: [], log: [], created: null, duration: 30, window: "afternoon" };
-const capture = { band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
+const capture = { active: false, band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
 
 function message(text, error = false) { $("status").textContent = text; $("status").classList.toggle("error", error); }
 function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; }
@@ -61,6 +61,7 @@ function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; 
 /* ---------- Thread ---------- */
 function renderTimeline() {
   const session = sessions[mode];
+  if (typeof scheduleGraph === "function") scheduleGraph();
   $("sample-label").textContent = session.sample ? "Entries marked “Fictional demo history” are invented examples — not real observations." : "Session notes · kept in this page only";
   $("timeline").replaceChildren();
   for (const note of session.notes) {
@@ -239,30 +240,32 @@ function renderCalendar() {
 async function run(task) { if (busy) return; setBusy(true); try { await task(); } catch (error) { message(error.message || "Something went wrong.", true); } finally { setBusy(false); renderCalendar(); } }
 
 /* ---------- Capture & review ---------- */
-// Live capture: Vexo band (USB or Bluetooth, official Vexo Open kit library) or this browser's microphone.
-// Audio streams through Threadline's server to Deepgram; the provider key never reaches the page.
+// Continuous live capture from the Vexo band (USB or Bluetooth, official Vexo Open kit) or this browser's
+// microphone, with optional camera video kept in this browser. Audio streams through Threadline's server to
+// Deepgram; the provider key never reaches the page. If Deepgram or the band link drops, capture reconnects
+// by itself and keeps everything heard so far.
 const SOURCE_LABELS_LIVE = { "vexo-usb": "Vexo band · USB", "vexo-ble": "Vexo band · Bluetooth", browser: "Browser microphone" };
-let kit = null, bandNumber = null;
-let tokenRequired = true;
+let kit = null, bandNumber = null, tokenRequired = true;
 fetch("/api/device").then((r) => r.json()).then((d) => {
   bandNumber = d.vexo_band_number; tokenRequired = d.token_required !== false;
   if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
-  bandStatus(); setRecUI();
+  bandStatus(); setRecUI(); renderArchive();
 }).catch(() => bandStatus());
 const isVexo = () => $("source").value.startsWith("vexo");
+const bandLabel = () => `Vexo-HACK-${String(bandNumber).padStart(2, "0")}`;
 function bandStatus(text, error = false) {
-  const name = bandNumber ? `Vexo-HACK-${String(bandNumber).padStart(2, "0")}` : "";
-  $("band-state").textContent = text || (capture.band ? `Connected: ${capture.band.name} over ${({ serial: "USB cable", ble: "Bluetooth", sim: "a pretend band (simulator)" })[capture.band.transportKind] || capture.band.transportKind}. Double-tap the band to start or stop capture.` : bandNumber ? `${name} not connected.` : "No band number configured (VEXO_BAND_NUMBER). Use the browser microphone.");
+  const link = capture.band ? ({ serial: "USB cable", ble: "Bluetooth", sim: "a pretend band (simulator)" })[capture.band.transportKind] || capture.band.transportKind : "";
+  $("band-state").textContent = text || (capture.band ? `Connected: ${capture.band.name} over ${link}. Double-tap the band to start or stop capture.` : bandNumber ? `${bandLabel()} not connected.` : "No band number configured (VEXO_BAND_NUMBER). Use the browser microphone.");
   $("band-state").classList.toggle("error", error);
 }
 function setRecUI() {
-  const live = Boolean(capture.ws), vexo = isVexo();
+  const live = capture.active, vexo = isVexo();
   $("band-controls").hidden = !vexo;
   $("band-connect").disabled = busy || live || Boolean(capture.band) || !bandNumber;
   $("band-disconnect").disabled = busy || live || !capture.band;
   $("rec-start").disabled = busy || live || (vexo && !capture.band);
   $("rec-stop").disabled = !live;
-  $("source").disabled = live;
+  $("source").disabled = live; $("cam-on").disabled = live;
   $("rec-start").classList.toggle("recording", live);
 }
 function recState(text, error = false) { $("rec-state").textContent = text; $("rec-state").classList.toggle("error", error); }
@@ -271,85 +274,110 @@ $("source").addEventListener("change", () => { bandStatus(); setRecUI(); });
 $("band-connect").addEventListener("click", async () => {
   if (!bandNumber || capture.band) return;
   const usb = $("source").value === "vexo-usb";
-  bandStatus(usb ? "Choose the “Vexo Open band” port (cu.usbmodem… on a Mac, COM… on Windows)." : `Double-tap the band, then choose Vexo-HACK-${String(bandNumber).padStart(2, "0")} only.`);
+  bandStatus(usb ? "Choose the “Vexo Open band” port (cu.usbmodem… on a Mac, COM… on Windows)." : `Double-tap the band, then choose ${bandLabel()} only.`);
   try {
     kit = kit || await import("/static/vendor/vexo-open/src/index.js");
-    const band = await kit.Band.connect(bandNumber, usb ? { transport: "serial" } : {});  // library filters by exact name and checks the number
+    // The library filters by the exact band name and refuses a band whose number differs.
+    const band = await kit.Band.connect(bandNumber, { autoReconnect: true, ...(usb ? { transport: "serial" } : {}) });
     if (band.number !== bandNumber) { await band.disconnect(); throw new Error(`That is band ${band.number}, not ${bandNumber}. Disconnected without changing it.`); }
-    capture.band = band;
-    band.on("disconnect", (e) => {
-      capture.band = null;
-      if (capture.ws) stopLive(`Band link ended (${e.reason}). Capture stopped; what was heard so far is kept for review.`);
-      bandStatus(e.reason === "closed" ? "" : `Band disconnected (${e.reason}).${e.message ? " " + e.message : ""}`, e.reason !== "closed"); setRecUI();
-    });
-    band.on("double-tap", () => { if (capture.ws) stopLive(); else if (!busy) $("rec-start").click(); });
-    band.on("stream-taken", (e) => {
-      // Another program (often the Vexo dashboard) started the mic last, so the audio goes there.
-      recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true);
-      $("rec-takeback").hidden = false;
-    });
-    band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
+    attachBand(band);
     await band.configure({ events: true });
     bandStatus(); setRecUI();
   } catch (error) { bandStatus(error.message || "Could not connect to the band.", true); setRecUI(); }
 });
+function attachBand(band) {
+  capture.band = band;
+  band.on("disconnect", (e) => {
+    capture.band = null;
+    if (capture.active) stopLive(`Band link ended (${e.reason}${e.reconnect ? ", gave up reconnecting" : ""}). Capture stopped; everything heard so far is kept for review.`);
+    bandStatus(e.reason === "closed" ? "" : `Band disconnected (${e.reason}).${e.message ? " " + e.message : ""}`, e.reason !== "closed"); setRecUI();
+  });
+  band.on("reconnecting", (e) => { bandStatus(`Band link dropped (${e.reason}). Reconnecting for up to ${e.seconds} s — keep it close.`, true); if (capture.active) recState("Band reconnecting… capture continues as soon as it is back.", true); });
+  band.on("reconnected", () => { bandStatus(); if (capture.active) { capture.audioStarted = Date.now(); capture.warnedSilent = false; recState("Band is back. Listening again."); } });
+  band.on("double-tap", () => { if (capture.active) stopLive(); else if (!busy) $("rec-start").click(); });
+  band.on("stream-taken", (e) => { recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true); $("rec-takeback").hidden = false; });
+  band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
+  // Audio goes to whichever Deepgram socket is open right now (sockets are replaced on reconnect).
+  attachSignals(band);
+  band.on("audio", (a) => { const ws = capture.ws; if (capture.active && !capture.stopping && ws && ws.readyState === 1) { ws.send(a.opus); capture.packets += 1; } });
+}
 $("band-disconnect").addEventListener("click", async () => { try { await capture.band?.disconnect(); } catch { /* already gone */ } capture.band = null; bandStatus(); setRecUI(); });
 
 $("rec-start").addEventListener("click", async () => {
-  if (capture.ws) return;
+  if (capture.active) return;
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
   const token = $("token").value.trim();
   if (tokenRequired && !token) { $("token").closest("details").open = true; $("token").focus(); return recState("Enter the app access token (Live providers, above) to stream audio.", true); }
-  const source = $("source").value, vexo = source.startsWith("vexo");
+  const source = $("source").value, vexo = source.startsWith("vexo"), camera = $("cam-on").checked;
   if (vexo && !capture.band) return recState("Connect the band first.", true);
   let stream = null;
-  if (!vexo) {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record audio.", true);
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return recState("Microphone permission was not granted. Nothing was recorded.", true); }
+  if (!vexo || camera) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record from the microphone or camera.", true);
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: !vexo, video: camera }); }
+    catch { return recState(`${camera ? "Camera" : "Microphone"} permission was not granted. Nothing was recorded.`, true); }
   }
-  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
-  ws.binaryType = "arraybuffer";
-  Object.assign(capture, { ws, source, stream, startedAt: new Date(), finals: [], interim: "", stopping: false, packets: 0, chunks: 0, warnedSilent: false, lastError: "" });
+  Object.assign(capture, { active: true, token, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
+    warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now() });
   $("rec-takeback").hidden = true;
-  $("live-on").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source];
-  recState("Connecting to Deepgram…"); setRecUI();
-  ws.onopen = () => ws.send(JSON.stringify({ token, source: vexo ? "vexo" : "browser" }));
-  ws.onmessage = async (event) => {
+  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source] + (camera ? " + camera" : "");
+  if (camera) startVideo(stream);
+  capture.marks = [];
+  if (vexo) { try { await capture.band.configure({ audio: true }); await startSignals(); } catch (e) { capture.active = false; setRecUI(); return recState(`The band refused the microphone: ${e.message}`, true); } }
+  else {
+    const audioOnly = new MediaStream(stream.getAudioTracks());
+    capture.recorder = new MediaRecorder(audioOnly);
+    capture.recorder.ondataavailable = (e) => { const ws = capture.ws; if (e.data.size && ws && ws.readyState === 1 && !capture.stopping) { ws.send(e.data); capture.chunks += 1; } };
+  }
+  capture.timer = setInterval(tick, 500);
+  openSocket();
+  setRecUI();
+});
+function tick() {
+  const s = Math.round((Date.now() - capture.startedAt) / 1000), count = capture.vexo ? capture.packets : capture.chunks;
+  $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${count} ${capture.vexo ? "audio packets" : "audio chunks"}${capture.reconnects ? ` · ${capture.reconnects} reconnect${capture.reconnects > 1 ? "s" : ""}` : ""}`;
+  if (count === 0 && capture.ws?.readyState === 1 && Date.now() - capture.audioStarted > 4000 && !capture.warnedSilent && !capture.band?.reconnecting) {
+    capture.warnedSilent = true;
+    recState(capture.vexo ? "No audio is arriving from the band. If the Vexo dashboard (or another tab) is connected to it, close that, then press “Take it back”." : "No audio is arriving from the microphone. Check the browser's microphone permission and input device.", true);
+    if (capture.vexo) $("rec-takeback").hidden = false;
+  }
+}
+function openSocket() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
+  ws.binaryType = "arraybuffer"; capture.ws = ws;
+  const opened = Date.now();
+  ws.onopen = () => ws.send(JSON.stringify({ token: capture.token, source: capture.vexo ? "vexo" : "browser" }));
+  ws.onmessage = (event) => {
+    if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
     if (msg.type === "ready") {
-      if (vexo) {
-        capture.offAudio = capture.band.on("audio", (a) => { if (ws.readyState === 1 && !capture.stopping) { ws.send(a.opus); capture.packets += 1; } });
-        try { await capture.band.configure({ audio: true }); } catch (e) { return stopLive(`The band refused the microphone: ${e.message}`); }
-      } else {
-        capture.recorder = new MediaRecorder(stream);
-        capture.recorder.ondataavailable = (e) => { if (e.data.size && ws.readyState === 1 && !capture.stopping) { ws.send(e.data); capture.chunks += 1; } };
-        capture.recorder.start(250);
-      }
-      capture.audioStarted = Date.now();
-      capture.timer = setInterval(() => {
-        const s = Math.round((Date.now() - capture.startedAt) / 1000);
-        const sent = vexo ? `${capture.packets} audio packets` : `${capture.chunks} audio chunks`;
-        $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${sent}`;
-        const count = vexo ? capture.packets : capture.chunks;
-        if (count === 0 && Date.now() - capture.audioStarted > 3000 && !capture.warnedSilent) {
-          capture.warnedSilent = true;
-          recState(vexo ? "No audio is arriving from the band. If the Vexo dashboard (or another tab) is connected to it, close that, then press “Take it back”." : "No audio is arriving from the microphone. Check the browser's microphone permission and input device.", true);
-          if (vexo) $("rec-takeback").hidden = false;
-        }
-      }, 500);
-      recState(vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
+      ws.offset = (Date.now() - capture.startedAt) / 1000;  // Deepgram times restart at 0 for each socket
+      if (capture.recorder && capture.recorder.state === "inactive") capture.recorder.start(250);
+      recState(capture.vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
     } else if (msg.type === "result") {
       if (msg.is_final) {
-        if (msg.transcript.trim()) { capture.finals.push(msg); addLiveLine(msg); }
+        if (msg.transcript.trim()) {
+          const shift = ws.offset || 0;
+          const final = { ...msg, start: msg.start + shift, words: msg.words.map((w) => ({ ...w, start: (w.start || 0) + shift, end: (w.end || 0) + shift })) };
+          final.activity = signals.activity; capture.finals.push(final); addLiveLine(final);
+        }
         $("live-interim").textContent = "";
       } else $("live-interim").textContent = msg.transcript;
-    } else if (msg.type === "error") {
-      capture.lastError = msg.message; recState(msg.message, true);
-    } else if (msg.type === "closed") finishLive();
+    } else if (msg.type === "error") { capture.lastError = msg.message; recState(msg.message, true); }
+    else if (msg.type === "closed") ws.closedCleanly = true;
   };
-  ws.onclose = () => finishLive();
-  ws.onerror = () => recState("Live connection failed. Check the access token and server configuration.", true);
-});
+  ws.onclose = () => {
+    if (ws !== capture.ws) return;
+    if (capture.active && !capture.stopping) {
+      // Unexpected drop (network, provider limit): keep recording on a fresh socket.
+      const quick = Date.now() - opened < 3000;
+      capture.reconnects += 1;
+      if (capture.reconnects > 20 || (quick && capture.lastError && /token|configure|Set DEEPGRAM|Another live transcript/i.test(capture.lastError))) return finishLive();
+      recState("Transcription connection dropped — reconnecting. Recording continues.", true);
+      if (capture.recorder && capture.recorder.state === "recording") capture.recorder.stop();  // a new WebM stream needs its own header
+      setTimeout(() => { if (capture.active && !capture.stopping) openSocket(); }, quick ? 2000 : 300);
+    } else finishLive();
+  };
+}
 function addLiveLine(msg) {
   const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
@@ -359,41 +387,70 @@ function addLiveLine(msg) {
   $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
 }
 async function stopLive(reason) {
-  if (!capture.ws || capture.stopping) return;
+  if (!capture.active || capture.stopping) return;
   capture.stopping = true;
   recState(reason || "Stopping… waiting for the last words from Deepgram.");
-  if (capture.offAudio) { capture.offAudio(); capture.offAudio = null; }
-  if (capture.band) { try { await capture.band.configure({ audio: false }); } catch { /* band gone */ } }
+  if (capture.band && !capture.band.reconnecting) { try { await capture.band.configure({ audio: false }); } catch { /* band gone */ } await stopSignals(); }
   if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
+  stopVideo();
   capture.stream?.getTracks().forEach((t) => t.stop());
-  if (capture.ws.readyState === 1) capture.ws.send(JSON.stringify({ type: "stop" }));
-  setTimeout(() => { if (capture.ws) capture.ws.close(); }, 6000);
+  const ws = capture.ws;
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "stop" })); else finishLive();
+  setTimeout(() => { if (capture.ws === ws && ws) ws.close(); }, 6000);
 }
 $("rec-stop").addEventListener("click", () => stopLive());
 $("rec-takeback").addEventListener("click", async () => {
   if (!capture.band) return;
   try {
     await capture.band.takeBack();
-    if (capture.ws) await capture.band.configure({ audio: true });
+    if (capture.active) await capture.band.configure({ audio: true });
     capture.warnedSilent = false; capture.audioStarted = Date.now();
     $("rec-takeback").hidden = true; recState("Took the microphone back. Listening through the band.");
   } catch (e) { recState(`Could not take the band back: ${e.message}`, true); }
 });
 function finishLive() {
-  if (!capture.ws) return;
-  clearInterval(capture.timer); $("live-timer").textContent = "stopped";
+  if (!capture.active) return;
+  clearInterval(capture.timer); $("live-timer").textContent = `stopped · ${$("live-timer").textContent.replace("● live · ", "")}`;
   const { finals, source, startedAt } = capture;
-  if (capture.offAudio) { capture.offAudio(); capture.offAudio = null; }
-  if (capture.band && !capture.stopping) capture.band.configure({ audio: false }).catch(() => {});
+  if (finals.length) archiveSession(finals, { startedAt, source, marks: capture.marks || [] });
+  if (capture.band && !capture.stopping && !capture.band.reconnecting) capture.band.configure({ audio: false }).catch(() => {});
+  if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
+  stopVideo();
   capture.stream?.getTracks().forEach((t) => t.stop());
-  Object.assign(capture, { ws: null, recorder: null, stream: null, stopping: false });
+  Object.assign(capture, { active: false, ws: null, recorder: null, stream: null, stopping: false });
   setRecUI();
-  const words = finals.flatMap((f) => f.words);
+  if (!capture.vexo) $("signals").hidden = true;
   if (!finals.length) { const err = capture.lastError; capture.lastError = ""; return recState(err ? `Capture ended: ${err}` : "Capture ended. No speech was transcribed; nothing was saved.", Boolean(err)); }
-  openReview(segmentsFromWords(words, finals.map((f) => f.transcript).join(" ")), source.startsWith("vexo") ? "vexo" : "mic", startedAt,
-    `${SOURCE_LABELS_LIVE[source]} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
+  openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), source.startsWith("vexo") ? "vexo" : "mic", startedAt,
+    `${SOURCE_LABELS_LIVE[source]} · Deepgram live transcript · ${finals.length} lines. Speaker labels separate voices; they do not prove identity.`);
   recState("Capture stopped. Review below: choose which speaker is you before anything is saved.");
 }
+
+/* Camera: explicit opt-in, previewed live, recorded only in this browser (never uploaded). */
+function startVideo(stream) {
+  const tracks = stream.getVideoTracks(); if (!tracks.length) return;
+  clearVideo();
+  const preview = $("cam-preview"); preview.srcObject = new MediaStream(tracks); preview.hidden = false; preview.play().catch(() => {});
+  const mixed = new MediaStream([...tracks, ...stream.getAudioTracks()]);
+  capture.videoChunks = [];
+  capture.videoRecorder = new MediaRecorder(mixed);
+  capture.videoRecorder.ondataavailable = (e) => { if (e.data.size) capture.videoChunks.push(e.data); };
+  capture.videoRecorder.onstop = () => {
+    const blob = new Blob(capture.videoChunks, { type: capture.videoRecorder.mimeType || "video/webm" });
+    capture.videoUrl = URL.createObjectURL(blob);
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    $("cam-result").hidden = false;
+    $("cam-download").href = capture.videoUrl; $("cam-download").download = `threadline-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${ext}`;
+    $("cam-size").textContent = `${Math.round(blob.size / 1024 / 1024 * 10) / 10} MB, in this browser only`;
+  };
+  capture.videoRecorder.start(1000);
+}
+function stopVideo() {
+  if (capture.videoRecorder && capture.videoRecorder.state !== "inactive") capture.videoRecorder.stop();
+  const preview = $("cam-preview"); preview.srcObject = null; preview.hidden = true;
+}
+function clearVideo() { if (capture.videoUrl) URL.revokeObjectURL(capture.videoUrl); capture.videoUrl = ""; $("cam-result").hidden = true; }
+$("cam-delete").addEventListener("click", () => { clearVideo(); recState("Video deleted from this page."); });
 
 function segmentsFromWords(words, text) {
   if (!words?.length) return text ? [{ speaker: null, text, offset: 0 }] : [];
@@ -539,6 +596,141 @@ function render() {
   $("mode-description").textContent = demos[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive();
 }
+
+/* ---------- Band signals ---------- */
+// What the band itself reports while capturing: loudness, movement state, steps, taps, battery.
+// These describe the device and the room, never the wearer's feelings.
+const signals = { level: 0, activity: "", steps0: null, steps: 0, taps: 0, battery: "" };
+function attachSignals(band) {
+  band.on("mic-level", (e) => { signals.level = Math.max(0, Math.min(1, (52 - e.rmsDb) / 40)); $("sig-loud").style.width = `${Math.round(signals.level * 100)}%`; });
+  band.on("activity", (e) => {
+    if (signals.steps0 == null) signals.steps0 = e.steps;
+    signals.activity = e.state; signals.steps = e.steps - signals.steps0;
+    $("sig-activity").textContent = e.state + (e.cadence ? ` · ${e.cadence}/min` : "");
+    $("sig-steps").textContent = `${signals.steps} this session`;
+  });
+  band.on("battery", (e) => { signals.battery = `${e.percent}%${e.charging ? " · charging" : ""}`; $("sig-battery").textContent = signals.battery; });
+  band.on("tap", () => {
+    if (!capture.active) return;
+    signals.taps += 1; $("sig-taps").textContent = String(signals.taps);
+    const t = (Date.now() - capture.startedAt) / 1000;
+    capture.marks.push(t);
+    $("live-lines").append(el("li", { className: "mark" }, el("span", { className: "caption", textContent: `${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · marked on the band` }), el("p", { textContent: "★ Moment marked" })));
+  });
+}
+async function startSignals() {
+  Object.assign(signals, { level: 0, activity: "", steps0: null, steps: 0, taps: 0 });
+  ["sig-activity", "sig-steps", "sig-battery"].forEach((id) => { $(id).textContent = "—"; }); $("sig-taps").textContent = "0";
+  $("signals").hidden = false;
+  try { await capture.band.configure({ micLevel: 0.1, activity: true, battery: true }); } catch (e) { $("sig-activity").textContent = `unavailable (${e.code || e.message})`; }
+}
+async function stopSignals() {
+  if (capture.band && !capture.band.reconnecting) { try { await capture.band.configure({ micLevel: false, activity: false }); } catch { /* gone */ } }
+  $("sig-loud").style.width = "0%";
+}
+
+/* ---------- Stored transcripts (this browser, per band) ---------- */
+const archiveKey = () => `threadline.transcripts.v1.${bandNumber ? `band-${bandNumber}` : "browser"}`;
+function loadArchive() { try { return JSON.parse(localStorage.getItem(archiveKey()) || "[]"); } catch { return []; } }
+function saveArchive(list) { try { localStorage.setItem(archiveKey(), JSON.stringify(list.slice(0, 50))); return true; } catch { return false; } }
+function archiveSession(finals, meta) {
+  const lines = finals.map((f) => {
+    const speakers = [...new Set(f.words.map((w) => w.speaker).filter((s) => s != null))];
+    return { at: new Date(meta.startedAt.getTime() + f.start * 1000).toISOString(), offset: f.start, speakers, text: f.transcript, activity: f.activity || "", marked: meta.marks.some((m) => m >= f.start - 1 && m <= f.start + (f.duration || 0) + 1) };
+  });
+  const entry = { id: newId("t"), startedAt: meta.startedAt.toISOString(), endedAt: new Date().toISOString(), source: meta.source, device: capture.band?.name || (meta.source === "browser" ? "Browser microphone" : bandNumber ? bandLabel() : ""), marks: meta.marks.length, lines };
+  const ok = saveArchive([entry, ...loadArchive()]);
+  renderArchive();
+  return ok;
+}
+function renderArchive() {
+  const list = loadArchive(), box = $("archive"); box.replaceChildren();
+  $("archive-caption").textContent = `Every captured session's full transcript${bandNumber ? ` for ${bandLabel()}` : ""}, stored in this browser only. Nothing is stored on the server.`;
+  if (!list.length) { box.append(el("li", { className: "empty", textContent: "No transcripts yet. Start a live capture." })); return; }
+  for (const entry of list) {
+    const mins = Math.max(1, Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000));
+    const lines = el("ol", { className: "archive-lines" }, ...entry.lines.map((l) => el("li", { className: l.marked ? "marked" : "" },
+      el("span", { className: "caption", textContent: `${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${l.speakers.length ? l.speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${l.activity ? ` · ${l.activity}` : ""}${l.marked ? " · ★ marked" : ""}` }),
+      el("p", { textContent: l.text }))));
+    const exp = el("button", { type: "button", className: "text-button", textContent: "Export .txt" });
+    const review = el("button", { type: "button", className: "text-button", textContent: "Save statements from this" });
+    const del = el("button", { type: "button", className: "text-button", textContent: "Delete" });
+    exp.addEventListener("click", () => {
+      const text = entry.lines.map((l) => `[${new Date(l.at).toLocaleString()}] ${l.speakers.map((s) => `Speaker ${s}`).join(", ") || "Speaker ?"}${l.marked ? " ★" : ""}: ${l.text}`).join("\n");
+      const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `threadline-transcript-${entry.startedAt.slice(0, 16).replace(/[:T]/g, "-")}.txt` });
+      document.body.append(a); a.click(); a.remove();
+    });
+    review.addEventListener("click", () => openReview(entry.lines.map((l) => ({ speaker: l.speakers[0] ?? null, text: l.text, offset: l.offset })), entry.source === "browser" ? "mic" : "vexo", new Date(entry.startedAt), `${entry.device} · stored transcript from ${new Date(entry.startedAt).toLocaleString()}.`));
+    del.addEventListener("click", () => { if (confirm("Delete this transcript from this browser?")) { saveArchive(loadArchive().filter((e) => e.id !== entry.id)); renderArchive(); } });
+    box.append(el("li", {}, el("details", {},
+      el("summary", {}, el("strong", { textContent: new Date(entry.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }), ` · ${entry.device} · ${entry.lines.length} lines · ${mins} min${entry.marks ? ` · ${entry.marks} ★` : ""}`),
+      lines, el("div", { className: "row tight" }, review, exp, del))));
+  }
+}
+$("archive-clear").addEventListener("click", () => { if (confirm("Delete every stored transcript for this band from this browser?")) { saveArchive([]); renderArchive(); } });
+
+/* ---------- Knowledge graph (rebuilds as statements are saved) ---------- */
+const graph = { timer: 0, version: 0, data: null, selected: null, signature: "" };
+const TYPE_COLORS = { person: "#0E7C86", feeling: "#E8452C", time: "#D99A1E", place: "#6B5BD6", commitment: "#16161A", preference: "#3B4BDB", topic: "#8A8A92" };
+function graphEngine() { return document.querySelector("input[name=graph-engine]:checked")?.value || "local"; }
+function scheduleGraph(delay = 1500) {
+  if (mode !== "reflection") { $("graph-panel").hidden = true; return; }
+  $("graph-panel").hidden = false;
+  clearTimeout(graph.timer); graph.timer = setTimeout(buildGraph, delay);
+}
+async function buildGraph() {
+  const notes = sessions.reflection.notes.slice(-60).map(({ id, text, at, source, context }) => ({ id, text, at, source, context, speaker: "me", device: source === "vexo" && bandNumber ? bandLabel() : "" }));
+  const engine = graphEngine(), signature = engine + "|" + notes.map((n) => n.id + n.text).join("|");
+  if (!notes.length) { graph.data = null; drawGraph(); $("graph-status").textContent = "No saved statements yet"; return; }
+  if (signature === graph.signature && graph.data) return;
+  const version = ++graph.version;
+  $("graph-status").textContent = engine === "gemini" ? "Updating with Gemini…" : "Updating…";
+  try {
+    const token = $("token").value.trim();
+    const data = await request("/api/graph", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify({ mode: engine, notes }) });
+    if (version !== graph.version) return;
+    graph.data = data; graph.signature = signature;
+    $("graph-status").textContent = `${data.engine === "gemini" ? "Gemini" : "Keywords · no AI"} · ${data.nodes.length} nodes · ${notes.length} statements · ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    drawGraph();
+  } catch (e) { if (version === graph.version) $("graph-status").textContent = `Graph not updated: ${e.message}`; }
+}
+document.querySelectorAll("input[name=graph-engine]").forEach((r) => r.addEventListener("change", () => scheduleGraph(0)));
+function drawGraph() {
+  const svg = $("graph-svg"), NS = "http://www.w3.org/2000/svg", W = 600, H = 420;
+  svg.replaceChildren();
+  const data = graph.data;
+  if (!data || !data.nodes.length) { const t = document.createElementNS(NS, "text"); t.setAttribute("x", W / 2); t.setAttribute("y", H / 2); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "g-empty"); t.textContent = "Save a statement to start your graph"; svg.append(t); return; }
+  const nodes = data.nodes.map((n, i) => ({ ...n, x: W / 2 + 160 * Math.cos((i / data.nodes.length) * Math.PI * 2), y: H / 2 + 130 * Math.sin((i / data.nodes.length) * Math.PI * 2), vx: 0, vy: 0 }));
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const edges = data.edges.filter((e) => byId[e.source] && byId[e.target]);
+  for (let step = 0; step < 220; step++) {  // small force layout: repel all, pull linked, centre
+    for (const a of nodes) for (const b of nodes) { if (a === b) continue; const dx = a.x - b.x, dy = a.y - b.y, d2 = Math.max(dx * dx + dy * dy, 30); a.vx += (dx / d2) * 260; a.vy += (dy / d2) * 260; }
+    for (const e of edges) { const a = byId[e.source], b = byId[e.target], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, f = (d - 80) * 0.03; a.vx += (dx / d) * f; a.vy += (dy / d) * f; b.vx -= (dx / d) * f; b.vy -= (dy / d) * f; }
+    for (const n of nodes) { n.vx += (W / 2 - n.x) * 0.012; n.vy += (H / 2 - n.y) * 0.016; n.x = Math.max(70, Math.min(W - 70, n.x + n.vx * 0.5)); n.y = Math.max(34, Math.min(H - 40, n.y + n.vy * 0.5)); n.vx *= 0.6; n.vy *= 0.6; }
+  }
+  const maxW = Math.max(...nodes.map((n) => n.weight || 1));
+  for (const e of edges) { const a = byId[e.source], b = byId[e.target], line = document.createElementNS(NS, "line"); Object.entries({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "g-edge", "stroke-width": 1 + Math.min(3, (e.weight || 1) - 1) }).forEach(([k, v]) => line.setAttribute(k, v)); svg.append(line); }
+  for (const n of nodes) {
+    const g = document.createElementNS(NS, "g"); g.setAttribute("class", `g-node${graph.selected === n.id ? " selected" : ""}`); g.setAttribute("tabindex", "0"); g.setAttribute("role", "button"); g.setAttribute("aria-label", `${n.type}: ${n.label}`);
+    const r = 6 + 8 * Math.sqrt((n.weight || 1) / maxW);
+    const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", n.x); c.setAttribute("cy", n.y); c.setAttribute("r", r); c.setAttribute("fill", TYPE_COLORS[n.type] || "#8A8A92");
+    const t = document.createElementNS(NS, "text"); t.setAttribute("x", n.x); t.setAttribute("y", n.y + r + 13); t.setAttribute("text-anchor", "middle"); t.textContent = n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label;
+    g.append(c, t);
+    const pick = () => { graph.selected = n.id; drawGraph(); showGraphNode(n, edges, byId); };
+    g.addEventListener("click", pick); g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
+    svg.append(g);
+  }
+}
+function showGraphNode(n, edges, byId) {
+  const notes = sessions.reflection.notes, links = edges.filter((e) => e.source === n.id || e.target === n.id);
+  $("graph-detail").replaceChildren(
+    el("p", { className: "eyebrow", textContent: `${n.type} · ${n.sources.length} statement${n.sources.length === 1 ? "" : "s"}` }),
+    el("h3", { textContent: n.label }),
+    links.length ? el("p", { className: "caption", textContent: "Linked with: " + links.map((e) => byId[e.source === n.id ? e.target : e.source].label).join(", ") }) : null,
+    el("ul", { className: "why" }, ...n.sources.map((id) => notes.find((x) => x.id === id)).filter(Boolean).map((x) => el("li", {}, `“${x.text}” `, el("span", { className: "caption", textContent: `${fmtDate(x.at)} · ${SOURCE_LABELS[x.source] || x.source} ` }), sourceLink(x.id)))),
+    el("p", { className: "caption", textContent: "A link means two things came up in the same saved statement. It is not a cause or a diagnosis." }));
+}
+
 render();

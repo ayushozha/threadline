@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -216,3 +217,41 @@ def test_gemini_graph_reports_unparseable_output(client, monkeypatch):
     monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
     response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "gemini", "notes": GRAPH_NOTES})
     assert response.status_code == 502
+
+
+def test_live_relay_releases_provider_when_browser_leaves(client, monkeypatch):
+    """A browser that disconnects must not keep a Deepgram stream (and a slot) open."""
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-only-key")
+    monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")
+    closed = []
+
+    class FakeDeepgram:
+        def __init__(self):
+            self.queue = asyncio.Queue()
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *exc):
+            return False
+        async def send(self, data):
+            pass
+        async def close(self):
+            closed.append(True)
+            await self.queue.put(None)
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            item = await self.queue.get()
+            if item is None:
+                raise StopAsyncIteration
+            return item
+
+    monkeypatch.setattr(main, "ws_connect", lambda *a, **k: FakeDeepgram())
+    for _ in range(3):  # more sessions than slots: each must release its slot
+        with client.websocket_connect("/api/live-transcribe") as ws:
+            ws.send_json({"token": "test-only-access", "source": "vexo"})
+            assert ws.receive_json()["type"] == "ready"
+            ws.send_bytes(b"\x01\x02")
+    import time
+    time.sleep(0.2)
+    assert len(closed) == 3
+    assert not main.stream_slots.locked()

@@ -58,7 +58,7 @@ async def security_headers(request: Request, call_next):
         "img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; "
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     )
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=()"
     return response
 
 
@@ -209,8 +209,8 @@ async def schedule_book(body: BookRequest):
     return result if ok else JSONResponse(result, status_code=409)
 
 
-LIVE_MAX_SECONDS = 600
-LIVE_MAX_BYTES = 20 * 1024 * 1024
+LIVE_MAX_SECONDS = 3 * 3600  # per socket; the page reconnects to continue
+LIVE_MAX_BYTES = 400 * 1024 * 1024
 
 
 def live_url(source: str) -> str:
@@ -279,7 +279,10 @@ async def live_transcribe(client: WebSocket):
                     while True:
                         message = await client.receive()
                         if message["type"] == "websocket.disconnect":
-                            break
+                            # Browser left (reload, network drop, reconnect): release Deepgram and the slot now.
+                            state["closing"] = True
+                            await deepgram.close()
+                            return
                         data = message.get("bytes")
                         if data is not None:
                             state["bytes"] += len(data)
@@ -308,7 +311,11 @@ async def live_transcribe(client: WebSocket):
                         except ValueError:
                             continue
                         if simple:
-                            await client.send_json(simple)
+                            try:
+                                await client.send_json(simple)
+                            except (WebSocketDisconnect, RuntimeError):
+                                await deepgram.close()
+                                return
 
                 tasks = [asyncio.create_task(upstream()), asyncio.create_task(keepalive())]
                 try:

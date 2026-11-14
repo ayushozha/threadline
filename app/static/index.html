@@ -68,6 +68,7 @@
             <button type="button" id="band-disconnect" class="text-button" disabled>Disconnect</button>
           </div>
           <p id="band-state" class="caption" role="status">Band not connected.</p>
+          <label class="check"><input id="cam-on" type="checkbox"><span>Also record video from my camera. It stays in this browser and is never uploaded.</span></label>
           <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram while capture is on.</span></label>
           <div class="row">
             <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start live capture</button>
@@ -77,9 +78,19 @@
           <p id="rec-state" class="rec-state" role="status">Not recording.</p>
           <div id="live" class="live-transcript" hidden aria-live="polite">
             <div class="live-head"><span id="live-source" class="badge mic"></span><span id="live-timer" class="caption"></span></div>
+            <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
+            <div id="signals" class="signals" hidden aria-label="Band signals">
+              <div class="sig"><span class="sig-k">Loudness</span><span class="meter"><span id="sig-loud"></span></span></div>
+              <div class="sig"><span class="sig-k">Movement</span><span id="sig-activity" class="sig-v">—</span></div>
+              <div class="sig"><span class="sig-k">Steps</span><span id="sig-steps" class="sig-v">—</span></div>
+              <div class="sig"><span class="sig-k">Marks</span><span id="sig-taps" class="sig-v">0</span></div>
+              <div class="sig"><span class="sig-k">Battery</span><span id="sig-battery" class="sig-v">—</span></div>
+              <p class="sig-note">Tap the band once to mark a moment. Signals describe the band (sound level, movement), not your feelings.</p>
+            </div>
             <ol id="live-lines"></ol>
             <p id="live-interim" class="interim"></p>
           </div>
+          <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
           <details class="audio-option">
             <summary>Other ways to add a conversation</summary>
             <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
@@ -97,6 +108,12 @@
           <ol id="segments" class="segments"></ol>
           <div class="row"><button type="button" id="review-save" class="secondary">Save my statements</button><button type="button" id="review-discard" class="text-button">Discard all</button></div>
           <p class="caption">Only segments marked “Me” are saved. Other people's speech is dropped, not stored.</p>
+        </section>
+
+        <section class="block" aria-labelledby="archive-heading">
+          <div class="section-top"><h3 id="archive-heading">Transcripts</h3><button type="button" id="archive-clear" class="text-button">Delete all</button></div>
+          <p class="caption" id="archive-caption">Every captured session's full transcript, stored in this browser for this band. Nothing is stored on the server.</p>
+          <ol id="archive" class="archive"></ol>
         </section>
 
         <form id="note-form" class="block">
@@ -117,6 +134,16 @@
         </form>
         <p id="status" class="status" role="status">Local demo · no AI request</p>
         <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div>
+
+        <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
+          <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>
+          <div class="row tight" role="radiogroup" aria-label="Graph engine">
+            <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
+            <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
+          </div>
+          <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
+          <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
+        </section>
       </section>
     </div>
     <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
