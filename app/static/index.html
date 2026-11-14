@@ -3,17 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f4f0e7">
+  <meta name="theme-color" content="#f4f4f1">
   <title>Threadline — a little context, kept close</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <main class="shell">
-    <header class="masthead"><a href="/" class="brand">threadline<span aria-hidden="true">↗</span></a><span class="tag">Prototype · VexoHacks</span></header>
+    <header class="masthead">
+      <a href="/" class="brand" aria-label="Threadline home">
+        <svg width="28" height="28" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M5 15c3-5 6 3 9-2s5-1 7-3" fill="none" stroke="#E8452C" stroke-width="2.2" stroke-linecap="round"></path></svg>
+        <span>threadline</span>
+      </a>
+      <span class="tag">VexoHacks · prototype</span>
+    </header>
     <section class="intro">
-      <p class="eyebrow">A little context, kept close.</p>
-      <h1>Pick up your<br><em>thread.</em></h1>
+      <h1>Pick up your <em>thread.</em></h1>
       <p class="lead">Your own words, kept with their source. Support you chose, offered only when it fits.</p>
     </section>
     <div class="modes" role="group" aria-label="Choose a demo">
@@ -34,108 +39,92 @@
     </details>
 
     <div class="workspace">
-      <section class="notes-panel" aria-labelledby="notes-heading">
-        <div class="section-top"><h2 id="notes-heading">Your thread</h2><button type="button" id="clear" class="text-button">Clear session</button></div>
-        <p class="caption" id="sample-label"></p>
-        <ol id="timeline" class="timeline"></ol>
+      <aside class="devices-col" aria-label="Devices">
+        <h2 class="col-title">Devices</h2>
+          <div class="pair" id="pair" data-state="idle">
+          <div class="pair-head">
+            <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
+              <rect x="10" y="2" width="44" height="100" rx="22" class="band-body"></rect>
+              <rect x="17" y="28" width="30" height="48" rx="13" class="band-face"></rect>
+              <circle cx="32" cy="52" r="13" class="band-glow"></circle>
+              <circle cx="32" cy="52" r="6" class="band-led"></circle>
+            </svg>
+            <div class="pair-id">
+              <span class="pair-eyebrow">Vexo band</span>
+              <span id="pair-name" class="pair-name">No band chosen</span>
+              <span id="pair-status" class="pair-status" role="status" aria-live="polite">Not connected</span>
+            </div>
+          </div>
 
-        <section id="prefs-section" class="block" aria-labelledby="prefs-heading">
-          <h3 id="prefs-heading">Support preferences you saved</h3>
-          <p class="caption">Threadline only offers help you asked for, and only when your own words match.</p>
-          <ul id="prefs" class="prefs"></ul>
-          <details class="add-pref">
-            <summary>Save a new preference</summary>
-            <label for="pref-text">When I say something like…</label>
-            <textarea id="pref-text" rows="2" maxlength="300" placeholder="When I describe feeling overloaded, offer to help make space in my schedule."></textarea>
-            <label for="pref-triggers">Words that should match (comma-separated)</label>
-            <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
-            <label for="pref-action">Then</label>
-            <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="remind">Only show what I said before</option></select>
-            <button type="button" id="pref-save" class="secondary">Save preference</button>
-          </details>
-        </section>
+          <form id="pick-form" class="pick">
+            <label for="pick-number">Which band? Type the number written on your band's bag</label>
+            <div class="pick-row">
+              <span class="pick-prefix" aria-hidden="true">Vexo-HACK-</span>
+              <input id="pick-number" class="pick-number" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="42" autocomplete="off" required>
+              <button type="submit" class="secondary">Use this band</button>
+            </div>
+            <p id="pick-message" class="pair-msg error" role="status" aria-live="polite"></p>
+            <div id="recent-bands" class="recent" aria-label="Bands paired on this computer"></div>
+          </form>
 
+          <ol id="connect-steps" class="steps">
+            <li><b>Double-tap</b> your band to wake it up. Its light blinks blue.</li>
+            <li>Press <b>Connect</b> and pick <b id="step-name">your band</b> from the list.</li>
+            <li>Watch the band <b>flash</b>.</li>
+          </ol>
+          <div id="band-controls" class="pair-buttons">
+            <button type="button" id="btn-ble" class="primary-sm">Connect</button>
+            <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
+            <button type="button" id="btn-sim" class="text-button">Try without a band</button>
+            <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
+            <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
+          </div>
+          <p id="no-ble" class="pair-hint" hidden></p>
+          <p id="usb-help" class="pair-hint"><b>By USB cable:</b> the browser lists every port on this computer. Pick <b>Vexo Open band</b> — <b>cu.usbmodem…</b> on a Mac, <b>COM</b> and a number on Windows (maybe "USB Serial Device"). Not "Bluetooth-Incoming-Port". No band in the list? Try another cable; some only charge.</p>
+          <p id="band-state" class="pair-msg" role="status" aria-live="polite"></p>
+          <dl id="band-info" class="band-info" hidden>
+            <div><dt>Link</dt><dd id="info-link">—</dd></div>
+            <div><dt>Battery</dt><dd id="info-battery">—</dd></div>
+            <div><dt>Firmware</dt><dd id="info-fw">—</dd></div>
+          </dl>
+          <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
+        </div>
+
+        <div class="pair watch" id="watch-pair" data-state="idle">
+          <div class="pair-head">
+            <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
+              <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
+              <rect x="20" y="82" width="30" height="22" rx="6" class="strap"></rect>
+              <rect x="8" y="16" width="52" height="72" rx="16" class="case"></rect>
+              <rect x="61" y="36" width="5" height="14" rx="2.5" class="crown"></rect>
+              <rect x="13" y="21" width="42" height="62" rx="11" class="screen"></rect>
+              <circle cx="34" cy="52" r="12" class="watch-ring"></circle>
+              <circle cx="34" cy="52" r="6" class="watch-dot"></circle>
+            </svg>
+            <div class="pair-id">
+              <span class="pair-eyebrow">Apple Watch</span>
+              <span class="pair-name">Pair with a code</span>
+              <span id="watch-status" class="pair-status" role="status" aria-live="polite">Not paired</span>
+            </div>
+          </div>
+          <div id="watch-code-box" class="watch-code-box" hidden>
+            <span class="caption">Enter this code in Threadline on your watch</span>
+            <output id="watch-code" class="watch-code">——————</output>
+            <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Record</b>. The transcript appears here.</li></ol>
+          </div>
+          <div class="pair-buttons">
+            <button type="button" id="watch-pair-btn" class="primary-sm">Pair Apple Watch</button>
+            <button type="button" id="watch-unpair" class="secondary" hidden>Unpair</button>
+          </div>
+          <p id="watch-msg" class="pair-msg" role="status" aria-live="polite"></p>
+          <p class="pair-hint">A web page cannot reach a watch directly: the Threadline watch app streams its microphone to this server, and the code links it to this page.</p>
+        </div>
+
+      </aside>
+
+      <section class="notes-panel" aria-labelledby="capture-heading">
         <section class="block capture" aria-labelledby="capture-heading">
           <h3 id="capture-heading">Capture</h3>
-          <div class="pair" id="pair" data-state="idle">
-            <div class="pair-head">
-              <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
-                <rect x="10" y="2" width="44" height="100" rx="22" class="band-body"></rect>
-                <rect x="17" y="28" width="30" height="48" rx="13" class="band-face"></rect>
-                <circle cx="32" cy="52" r="13" class="band-glow"></circle>
-                <circle cx="32" cy="52" r="6" class="band-led"></circle>
-              </svg>
-              <div class="pair-id">
-                <span class="pair-eyebrow">Vexo band</span>
-                <span id="pair-name" class="pair-name">No band chosen</span>
-                <span id="pair-status" class="pair-status" role="status" aria-live="polite">Not connected</span>
-              </div>
-            </div>
-
-            <form id="pick-form" class="pick">
-              <label for="pick-number">Which band? Type the number written on your band's bag</label>
-              <div class="pick-row">
-                <span class="pick-prefix" aria-hidden="true">Vexo-HACK-</span>
-                <input id="pick-number" class="pick-number" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="42" autocomplete="off" required>
-                <button type="submit" class="secondary">Use this band</button>
-              </div>
-              <p id="pick-message" class="pair-msg error" role="status" aria-live="polite"></p>
-              <div id="recent-bands" class="recent" aria-label="Bands paired on this computer"></div>
-            </form>
-
-            <ol id="connect-steps" class="steps">
-              <li><b>Double-tap</b> your band to wake it up. Its light blinks blue.</li>
-              <li>Press <b>Connect</b> and pick <b id="step-name">your band</b> from the list.</li>
-              <li>Watch the band <b>flash</b>.</li>
-            </ol>
-            <div id="band-controls" class="pair-buttons">
-              <button type="button" id="btn-ble" class="primary-sm">Connect</button>
-              <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
-              <button type="button" id="btn-sim" class="text-button">Try without a band</button>
-              <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
-              <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
-            </div>
-            <p id="no-ble" class="pair-hint" hidden></p>
-            <p id="usb-help" class="pair-hint"><b>By USB cable:</b> the browser lists every port on this computer. Pick <b>Vexo Open band</b> — <b>cu.usbmodem…</b> on a Mac, <b>COM</b> and a number on Windows (maybe "USB Serial Device"). Not "Bluetooth-Incoming-Port". No band in the list? Try another cable; some only charge.</p>
-            <p id="band-state" class="pair-msg" role="status" aria-live="polite"></p>
-            <dl id="band-info" class="band-info" hidden>
-              <div><dt>Link</dt><dd id="info-link">—</dd></div>
-              <div><dt>Battery</dt><dd id="info-battery">—</dd></div>
-              <div><dt>Firmware</dt><dd id="info-fw">—</dd></div>
-            </dl>
-            <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
-          </div>
-
-          <div class="pair watch" id="watch-pair" data-state="idle">
-            <div class="pair-head">
-              <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
-                <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
-                <rect x="20" y="82" width="30" height="22" rx="6" class="strap"></rect>
-                <rect x="8" y="16" width="52" height="72" rx="16" class="case"></rect>
-                <rect x="61" y="36" width="5" height="14" rx="2.5" class="crown"></rect>
-                <rect x="13" y="21" width="42" height="62" rx="11" class="screen"></rect>
-                <circle cx="34" cy="52" r="12" class="watch-ring"></circle>
-                <circle cx="34" cy="52" r="6" class="watch-dot"></circle>
-              </svg>
-              <div class="pair-id">
-                <span class="pair-eyebrow">Apple Watch</span>
-                <span class="pair-name">Pair with a code</span>
-                <span id="watch-status" class="pair-status" role="status" aria-live="polite">Not paired</span>
-              </div>
-            </div>
-            <div id="watch-code-box" class="watch-code-box" hidden>
-              <span class="caption">Enter this code in Threadline on your watch</span>
-              <output id="watch-code" class="watch-code">——————</output>
-              <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Record</b>. The transcript appears here.</li></ol>
-            </div>
-            <div class="pair-buttons">
-              <button type="button" id="watch-pair-btn" class="primary-sm">Pair Apple Watch</button>
-              <button type="button" id="watch-unpair" class="secondary" hidden>Unpair</button>
-            </div>
-            <p id="watch-msg" class="pair-msg" role="status" aria-live="polite"></p>
-            <p class="pair-hint">A web page cannot reach a watch directly: the Threadline watch app streams its microphone to this server, and the code links it to this page.</p>
-          </div>
-
           <label for="source">Record from</label>
           <select id="source">
             <option value="vexo">The Vexo band above</option>
@@ -189,18 +178,39 @@
           <ol id="archive" class="archive"></ol>
         </section>
 
+        <section class="block thread" aria-labelledby="notes-heading">
+        <div class="section-top"><h2 id="notes-heading">Your thread</h2><button type="button" id="clear" class="text-button">Clear session</button></div>
+          <p class="caption" id="sample-label"></p>
+          <ol id="timeline" class="timeline"></ol>
+  
+          <section id="prefs-section" class="block" aria-labelledby="prefs-heading">
+            <h3 id="prefs-heading">Support preferences you saved</h3>
+            <p class="caption">Threadline only offers help you asked for, and only when your own words match.</p>
+            <ul id="prefs" class="prefs"></ul>
+            <details class="add-pref">
+              <summary>Save a new preference</summary>
+              <label for="pref-text">When I say something like…</label>
+              <textarea id="pref-text" rows="2" maxlength="300" placeholder="When I describe feeling overloaded, offer to help make space in my schedule."></textarea>
+              <label for="pref-triggers">Words that should match (comma-separated)</label>
+              <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
+              <label for="pref-action">Then</label>
+              <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="remind">Only show what I said before</option></select>
+              <button type="button" id="pref-save" class="secondary">Save preference</button>
+            </details>
+          </section>
         <form id="note-form" class="block">
           <label for="note">Or type a note</label>
           <textarea id="note" rows="2" maxlength="4000" placeholder="Something you want to remember…" required></textarea>
           <div class="capture-row"><span class="caption">Timestamp added automatically</span><button type="submit" class="secondary">Add note <span aria-hidden="true">+</span></button></div>
         </form>
+        </section>
       </section>
 
       <section class="reflection-panel" aria-labelledby="ask-heading">
         <div id="support" class="support" hidden></div>
         <div id="calendar" class="calendar" hidden></div>
 
-        <p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like<br>to revisit?</h2>
+        <p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like to revisit?</h2>
         <form id="question-form">
           <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required></textarea>
           <button id="run" type="submit" class="primary">Revisit my notes <span aria-hidden="true">↗</span></button>
