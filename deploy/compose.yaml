@@ -1,0 +1,44 @@
+name: threadline
+
+services:
+  threadline:
+    image: ${THREADLINE_IMAGE:?Set THREADLINE_IMAGE to a built commit-tagged image}
+    container_name: threadline-web
+    restart: unless-stopped
+    init: true
+    env_file:
+      - /home/ayush/threadline/secrets/runtime.env
+    environment:
+      PORT: "3000"
+    expose:
+      - "3000"
+    networks:
+      - coolify
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: coolify
+      traefik.http.middlewares.threadline-redirect.redirectscheme.scheme: https
+      traefik.http.routers.threadline-http.entrypoints: http
+      traefik.http.routers.threadline-http.rule: Host(`threadline.ayushojha.com`)
+      traefik.http.routers.threadline-http.middlewares: threadline-redirect
+      traefik.http.routers.threadline-http.service: threadline-web
+      traefik.http.routers.threadline-https.entrypoints: https
+      traefik.http.routers.threadline-https.rule: Host(`threadline.ayushojha.com`)
+      traefik.http.routers.threadline-https.service: threadline-web
+      traefik.http.routers.threadline-https.tls: "true"
+      traefik.http.routers.threadline-https.tls.certresolver: letsencrypt
+      traefik.http.services.threadline-web.loadbalancer.server.port: "3000"
+
+networks:
+  coolify:
+    external: true
+    name: coolify
