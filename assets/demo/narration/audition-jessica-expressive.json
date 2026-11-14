@@ -1,0 +1,18 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "cgSgspJ2msm6clMCkdW9",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\narration\\expressive-audition.txt",
+  "text_sha256": "95c63f1c8bbf20f5d100c66e6ac082966617e6fd79bedcc4e5f52184e4e8d646",
+  "characters": 287,
+  "audio_bytes": 249564,
+  "request_id": "ZZTe1ZQXTuelt5jf45y3",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.3,
+    "similarity_boost": 0.65
+  },
+  "assembled_video": false,
+  "quality_review": "Technical validation pending; subjective listening not performed."
+}

@@ -1,0 +1,10 @@
+{
+  "provider": "ElevenLabs",
+  "voice_id": "hpp4J3VqNfWAUOO0d1Us",
+  "model": "eleven_multilingual_v2",
+  "text_file": "assets\\demo\\narration\\narration.txt",
+  "text_sha256": "a791f21ffeaacabd02e7416610dee02c10997f4cb2b3c5c705517390575c945b",
+  "audio_bytes": 877757,
+  "request_id": "e7w0zQiQRCviNst099E8",
+  "assembled_video": false
+}

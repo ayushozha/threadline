@@ -1,0 +1,23 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "cgSgspJ2msm6clMCkdW9",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\narration\\narration-expressive-directed.txt",
+  "text_sha256": "b015c4afa67ca9ac9de904621572ecdccb0c5897bf4312fc546ea94602334a8b",
+  "characters": 755,
+  "audio_bytes": 665434,
+  "request_id": "vflWZxjMp9Ka2tuFW6HY",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.3,
+    "similarity_boost": 0.65
+  },
+  "assembled_video": false,
+  "quality_review": "Revised after user rejected flat Bella delivery. Directed Jessica take, subjective user audition pending.",
+  "duration_seconds": 41.52,
+  "peak_volume_dbfs": -3.2,
+  "mean_volume_dbfs": -24.6,
+  "decode_check": "Complete ffmpeg decode passed.",
+  "caption_text_file": "assets/demo/narration/narration-expressive.txt"
+}

@@ -1,0 +1,23 @@
+{
+  "scene": "quiet-evening-desk",
+  "synthetic": true,
+  "model_file": "minimax_h3_image_pruned_w4a8.safetensors",
+  "encoder_file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  "vae_file": "minimax_h3_image_vae_fp16.safetensors",
+  "width": 1536,
+  "height": 864,
+  "seed": 816,
+  "prompt": "A fictional photorealistic editorial photograph of an adult woman in her thirties sitting at a modest oak desk in a cozy apartment after sunset. She is on the right side of the wide image, seen in natural three-quarter profile, pausing thoughtfully with a closed cream notebook and a ceramic mug nearby. Her hands rest comfortably on the desk with anatomically natural fingers. A warm shaded desk lamp illuminates her face while cool evening window light falls behind her. Muted sage, beige, and amber palette, relaxed posture, gentle serious expression, realistic skin, subtle film grain, ample quiet negative space on the left. No wearable device, visible computer screen, medical equipment, text, logos, or graphics.",
+  "status": "completed",
+  "elapsed_seconds": 9.05,
+  "bytes": 2072650,
+  "output": "quiet-evening-desk.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Visually inspected: plausible face, hands, lamp and notebook, calm composition; suitable fictional reflection vignette.",
+  "purpose": "Fictional editorial illustration, not recorded patient data"
+}

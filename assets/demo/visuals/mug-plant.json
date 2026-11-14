@@ -1,0 +1,23 @@
+{
+  "scene": "mug-plant",
+  "synthetic": true,
+  "model_file": "minimax_h3_image_pruned_w4a8.safetensors",
+  "encoder_file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  "vae_file": "minimax_h3_image_vae_fp16.safetensors",
+  "width": 1536,
+  "height": 864,
+  "seed": 814,
+  "prompt": "A quiet, photorealistic editorial still life photographed on a full-frame camera with a natural 50mm lens. A single matte ivory ceramic mug stands beside a small leafy pothos plant in a simple terracotta pot on a warm oak side table. Soft morning window light enters from the left, casting gentle long shadows across the wood grain. A cream curtain and pale sage wall are softly blurred in the background. Muted earthy colors, subtle film grain, believable material textures. Landscape composition with the mug and plant on the right half and calm negative space on the left. There are no people, hands, screens, logos, writing, or graphics.",
+  "status": "completed",
+  "elapsed_seconds": 33.07,
+  "bytes": 1731405,
+  "output": "mug-plant.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Visually inspected: coherent mug/pot geometry, warm light, clear left-side title space; suitable establishing still.",
+  "purpose": "Fictional editorial illustration, not recorded patient data"
+}

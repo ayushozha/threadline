@@ -1,0 +1,532 @@
+{
+  "project": "Threadline",
+  "assembled_video": false,
+  "target_edit_seconds": "60–70",
+  "primary_narration": "narration/narration-jessica-expressive.mp3",
+  "images_generated": 3,
+  "limitations": [
+    "Fictional examples; no medical assessment or validated clinical effect.",
+    "UI captures show local keyword retrieval, not live AI.",
+    "Narration is editorial voiceover, not connected app speech.",
+    "Wearable capture and external agent actions are not implemented."
+  ],
+  "assets": [
+    {
+      "path": "audio/end-resolve.wav",
+      "bytes": 172844,
+      "sha256": "95045bf559a4a3a0de105ca815594cdb2abb0f8a6276ec53a5d2666470262581",
+      "provenance": "Original procedural sound cue",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "1.800000"
+      }
+    },
+    {
+      "path": "audio/soft-transition.wav",
+      "bytes": 105644,
+      "sha256": "dd847edd935c46d65773d0316461ff5c780e33d37953289b42addaec4ec68c2a",
+      "provenance": "Original procedural sound cue",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "1.100000"
+      }
+    },
+    {
+      "path": "motion/memory-alpha-poster.png",
+      "bytes": 102945,
+      "sha256": "88beb324fa4762f4e8469dd648a71c8daa383d21cba70e652a1de769ab29bd34",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/memory-alpha.webm",
+      "bytes": 371546,
+      "sha256": "40a4d81ae9133c3eb15bd7899ec2b1e168565ee599767546eb91657b0b2e1942",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1920,
+          "height": 1080,
+          "tags": {
+            "alpha_mode": "1"
+          }
+        }
+      ],
+      "format": {
+        "duration": "8.000000"
+      }
+    },
+    {
+      "path": "motion/modes-alpha-poster.png",
+      "bytes": 64689,
+      "sha256": "a3dea1256ad804ef22fc2b50258fe8ff134444bfd932d5c8cbc1e5dab96c04b3",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/modes-alpha.webm",
+      "bytes": 260515,
+      "sha256": "c23e6005439272694c890f827fdaab487c74d28cd28a414a019fba119918460a",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1920,
+          "height": 1080,
+          "tags": {
+            "alpha_mode": "1"
+          }
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    {
+      "path": "motion/title-alpha-poster.png",
+      "bytes": 58668,
+      "sha256": "4f075c5f399790b7c5e1aebc0ca43c169495f5cf11feb4ba809e5b508244c9f1",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/title-alpha.webm",
+      "bytes": 222446,
+      "sha256": "bb5f7b83b2f587324b57951f07ced020a68b2842b9f02850bcfb5390d8cc9639",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1920,
+          "height": 1080,
+          "tags": {
+            "alpha_mode": "1"
+          }
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    {
+      "path": "motion/ui-reflection-answer.png",
+      "bytes": 309808,
+      "sha256": "d792afdc3f00cadff4668c22679af6fd9e8bd4a3055f9e80ecdeef88b2a01f1b",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/ui-reflection-poster.png",
+      "bytes": 100262,
+      "sha256": "71dd6b66a9a5b4e6d269ec1a6b6c6745ca47c1f8c28d1ef35661c40d4b19adac",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/ui-reflection.mp4",
+      "bytes": 929528,
+      "sha256": "1e956cc6fa43f4282eca93a12823e3d05845d803c7167c8b9fbbb121ea29b087",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "tags": {}
+        }
+      ],
+      "format": {
+        "duration": "22.000000"
+      }
+    },
+    {
+      "path": "motion/ui-routine-answer.png",
+      "bytes": 272568,
+      "sha256": "91bbe511658c53e0e1aa1ac1637f3017446a7562b438765eb6c813bf0c3581bc",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/ui-routine-poster.png",
+      "bytes": 85228,
+      "sha256": "45d2fb80231e74dc895663a8e9ce5dea3b7cd759b3fe4bae7c3490efcdd5263d",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/ui-routine.mp4",
+      "bytes": 1026635,
+      "sha256": "f637473454f01a1e409eff0f6c2e548e2e2d0fadb805a9c786cc0f30fbdb9288",
+      "provenance": "Actual deployed app capture with fictional notes and local retrieval",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "tags": {}
+        }
+      ],
+      "format": {
+        "duration": "16.000000"
+      }
+    },
+    {
+      "path": "motion/waveform-alpha-poster.png",
+      "bytes": 69004,
+      "sha256": "850453e127cdaec7bda86e153fd168473d3fd5104664cd0530865390b1297a6d",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "motion/waveform-alpha.webm",
+      "bytes": 603349,
+      "sha256": "aec7856d2c1c83400ba3a8beaadbbd9f25427a494802a315094e9efbf9608fe8",
+      "provenance": "Original SVG/CSS editorial graphic or browser preview",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "width": 1920,
+          "height": 1080,
+          "tags": {
+            "alpha_mode": "1"
+          }
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    {
+      "path": "narration/audition-bella.mp3",
+      "bytes": 137133,
+      "sha256": "f3addcfa9a7dbf034d2c1edd5d868114d6f512d75d6ddcbe9b486177f9135551",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "8.498503"
+      }
+    },
+    {
+      "path": "narration/audition-jessica-expressive.mp3",
+      "bytes": 249564,
+      "sha256": "0c93a38b7eee46620758a2c13c259b99b8a2c696f0772f004d9d6e13d6f1dadf",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "15.520000"
+      }
+    },
+    {
+      "path": "narration/audition-lily-expressive.mp3",
+      "bytes": 254580,
+      "sha256": "0f084b754f3347fdd4a000fca8f576d7b3d1ffd328c4b9afe5d8dbae6b8d4e73",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "15.840000"
+      }
+    },
+    {
+      "path": "narration/audition-sarah.mp3",
+      "bytes": 148000,
+      "sha256": "5c0426b9f90657d8ac7e0b8495a894a5011d9d6d08f68a47b02fda328dcb366c",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "9.195102"
+      }
+    },
+    {
+      "path": "narration/narration-bella-v1.mp3",
+      "bytes": 877757,
+      "sha256": "30ebdd89d3e88297255166389daa4af4492bc93e27aa854a8ff918e98eebc09f",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "54.799093"
+      }
+    },
+    {
+      "path": "narration/narration-bella-v4.mp3",
+      "bytes": 899491,
+      "sha256": "7747d9439da8cd6f55eb45d0aff73027e6051e7a56c08a7a950db13c75190bf0",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "56.160000"
+      }
+    },
+    {
+      "path": "narration/narration-jessica-expressive.mp3",
+      "bytes": 665434,
+      "sha256": "2ce1b2ffa52952f270874e23283e42c548f9d7de6c72a40de6cc6326be109304",
+      "provenance": "ElevenLabs stock female voice; synthetic editorial narration",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mp3",
+          "sample_rate": "44100",
+          "channels": 1
+        }
+      ],
+      "format": {
+        "duration": "41.520000"
+      }
+    },
+    {
+      "path": "visuals/mug-plant-motion.mp4",
+      "bytes": 1393999,
+      "sha256": "248717e1d1fec7acb4947715a884c9dcc6dda109c9c7f0e44885edb52f424e18",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "tags": {}
+        }
+      ],
+      "format": {
+        "duration": "5.000000"
+      }
+    },
+    {
+      "path": "visuals/mug-plant.png",
+      "bytes": 1731405,
+      "sha256": "4a3156dafe03835fb6af43b14a1a1582a1da9808a860dd660f63b0db3987d643",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1536,
+          "height": 864
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "visuals/older-hands-plant-motion.mp4",
+      "bytes": 1267205,
+      "sha256": "396b1955675e57ab86cdff0ab331bb54308125fc1d0ab4888a3859d8ef20f7e8",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "tags": {}
+        }
+      ],
+      "format": {
+        "duration": "5.000000"
+      }
+    },
+    {
+      "path": "visuals/older-hands-plant.png",
+      "bytes": 1730049,
+      "sha256": "21da1bfbdf9adb5b1f93efb70ce222ce378a8b65771d6d9eab1669b56a352cfd",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1536,
+          "height": 864
+        }
+      ],
+      "format": {}
+    },
+    {
+      "path": "visuals/quiet-evening-desk-motion.mp4",
+      "bytes": 1663721,
+      "sha256": "f44ee5bc923cb4b3bc5def4099b71059808af9c645b5fe7f4fc68acaeb382971",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "width": 1920,
+          "height": 1080,
+          "tags": {}
+        }
+      ],
+      "format": {
+        "duration": "5.000000"
+      }
+    },
+    {
+      "path": "visuals/quiet-evening-desk.png",
+      "bytes": 2072650,
+      "sha256": "445bd30e8db91e78ad46130441071c372230f685ed5642c9d3263d298ff3bd5b",
+      "provenance": "MiniMax local image generation; fictional editorial scene",
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "png",
+          "width": 1536,
+          "height": 864
+        }
+      ],
+      "format": {}
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "scene": "older-hands-plant",
+  "synthetic": true,
+  "model_file": "minimax_h3_image_pruned_w4a8.safetensors",
+  "encoder_file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+  "vae_file": "minimax_h3_image_vae_fp16.safetensors",
+  "width": 1536,
+  "height": 864,
+  "seed": 815,
+  "prompt": "A fictional photorealistic editorial photograph of an older South Asian woman's two natural hands gently touching the leaves of a small houseplant on a wooden table beside a window in her home. Only her forearms and hands enter from the left of the image; her face and body are outside the frame. She wears a plain soft cream cardigan with sleeves ending just above the wrists. Her left hand rests naturally on the table and her right fingertips lightly touch one leaf; both hands have five anatomically plausible fingers. Warm morning window light, muted sage leaves and terracotta pot, authentic lived-in household details, dignified everyday life, natural skin texture, shallow depth of field, landscape composition. No wristband, electronic device, medical equipment, text, logos, or graphics.",
+  "status": "completed",
+  "elapsed_seconds": 9.02,
+  "bytes": 1730049,
+  "output": "older-hands-plant.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Visually inspected: plausible hands and leaves, no visible text or devices; suitable routine editorial detail. Not a recorded patient.",
+  "purpose": "Fictional editorial illustration, not recorded patient data"
+}

@@ -1,0 +1,51 @@
+[
+  {
+    "mode": "reflection",
+    "url": "https://threadline.ayushojha.com/",
+    "output": "C:\\Users\\ayush\\Desktop\\Hackathons\\YC\\11-14-2026\\assets\\demo\\motion\\ui-reflection.mp4",
+    "seconds": 22,
+    "fps": 15,
+    "resolution": "1920x1080",
+    "capturedAt": "2026-11-14T21:56:17.933Z",
+    "browserZoom": "1536x864 CSS pixels at device scale 1.25",
+    "interface": {
+      "status": "Note added to this session.",
+      "question": "What helped me feel less rushed last time?",
+      "answer": "Notes matching words in your question:\n\n“Fictional demo entry: Before my last period, I felt rushed. Leaving one evening free helped me feel less overwhelmed.”\n\n“Fictional demo entry: I want to remember what I said helped, rather than assume every cycle is the same.”\n\nLocal keyword retrieval only; no AI interpretation or medical inference.Source: n-e2e3f77e-e17b-45da-b79c-89f488eb9ff4Source: n-a675c48f-1273-48e7-8958-e3517ed3799b",
+      "notes": [
+        "Fictional demo entry: Before my last period, I felt rushed. Leaving one evening free helped me feel less overwhelmed.",
+        "Fictional demo entry: I want to remember what I said helped, rather than assume every cycle is the same.",
+        "Fictional demo entry: This time, I want to make space for one quieter evening and see whether it helps."
+      ],
+      "sources": [
+        "Source: n-e2e3f77e-e17b-45da-b79c-89f488eb9ff4",
+        "Source: n-a675c48f-1273-48e7-8958-e3517ed3799b"
+      ]
+    },
+    "note": "Actual deployed interface, fictional sample notes, local keyword retrieval. No provider calls, token, narration, or simulated AI answers."
+  },
+  {
+    "mode": "routine",
+    "url": "https://threadline.ayushojha.com/",
+    "output": "C:\\Users\\ayush\\Desktop\\Hackathons\\YC\\11-14-2026\\assets\\demo\\motion\\ui-routine.mp4",
+    "seconds": 16,
+    "fps": 15,
+    "resolution": "1920x1080",
+    "capturedAt": "2026-11-14T21:56:37.199Z",
+    "browserZoom": "1536x864 CSS pixels at device scale 1.25",
+    "interface": {
+      "status": "Local demo · no data sent",
+      "question": "What was my next planned step?",
+      "answer": "Notes matching words in your question:\n\n“My next planned step is to water the plant by the window.”\n\nLocal keyword retrieval only; no AI interpretation or medical inference.Source: routine-3",
+      "notes": [
+        "I finished breakfast and put my mug beside the sink.",
+        "I left my keys in the blue bowl by the front door.",
+        "My next planned step is to water the plant by the window."
+      ],
+      "sources": [
+        "Source: routine-3"
+      ]
+    },
+    "note": "Actual deployed interface, fictional sample notes, local keyword retrieval. No provider calls, token, narration, or simulated AI answers."
+  }
+]

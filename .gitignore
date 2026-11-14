@@ -8,6 +8,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 artifacts/
+.artifacts/
+.models/
+assets/demo/motion/*-frames/
+assets/demo/motion/.render-profile-*/
 .playwright-mcp/
 output/
 *.log

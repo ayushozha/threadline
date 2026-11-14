@@ -1,0 +1,38 @@
+{
+  "repository": "Comfy-Org/MiniMax-H3-Image",
+  "revision": "0bb149f51e3156ed4b90dd45d5620346bfe1df8f",
+  "created_at": "2026-11-14T21:56:00.561837+00:00",
+  "purpose": "Local MiniMax H3 Image generation for Threadline demo assets",
+  "authorization": "User confirmed separate MiniMax sponsor permission for US local use; this manifest is not a license grant.",
+  "readme": {
+    "source_url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/raw/0bb149f51e3156ed4b90dd45d5620346bfe1df8f/README.md",
+    "sha256": "7c200c0c244c1800f84b5b8948581e6dfcf208a8e9bbb524cb40bd41e7bc70b4",
+    "bytes": 3062
+  },
+  "files": [
+    {
+      "repository_path": "diffusion_models/minimax_h3_image_pruned_w4a8.safetensors",
+      "expected_bytes": 12549794530,
+      "expected_sha256": "517cc19b85348386f4df7c806dce80d839d0899e7cdaa3e1dbb09de964381dbb",
+      "local_path": ".models/ComfyUI/diffusion_models/minimax_h3_image_pruned_w4a8.safetensors",
+      "actual_bytes": 12549794530,
+      "actual_sha256": "517cc19b85348386f4df7c806dce80d839d0899e7cdaa3e1dbb09de964381dbb",
+      "verified": true,
+      "verified_at": "2026-11-14T21:58:25.125707+00:00",
+      "source_url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/0bb149f51e3156ed4b90dd45d5620346bfe1df8f/diffusion_models/minimax_h3_image_pruned_w4a8.safetensors"
+    },
+    {
+      "repository_path": "vae/minimax_h3_image_vae_fp16.safetensors",
+      "expected_bytes": 1168505312,
+      "expected_sha256": "d80e9c2e5cfc9844869961ff5a58c9a9e52182df6bfb30b26018dd7f348721af",
+      "local_path": ".models/ComfyUI/vae/minimax_h3_image_vae_fp16.safetensors",
+      "actual_bytes": 1168505312,
+      "actual_sha256": "d80e9c2e5cfc9844869961ff5a58c9a9e52182df6bfb30b26018dd7f348721af",
+      "verified": true,
+      "verified_at": "2026-11-14T21:57:51.979285+00:00",
+      "source_url": "https://huggingface.co/Comfy-Org/MiniMax-H3-Image/resolve/0bb149f51e3156ed4b90dd45d5620346bfe1df8f/vae/minimax_h3_image_vae_fp16.safetensors"
+    }
+  ],
+  "status": "verified",
+  "completed_at": "2026-11-14T21:58:25.127222+00:00"
+}

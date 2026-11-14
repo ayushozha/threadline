@@ -1,0 +1,21 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "hpp4J3VqNfWAUOO0d1Us",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\narration\\narration.txt",
+  "text_sha256": "a791f21ffeaacabd02e7416610dee02c10997f4cb2b3c5c705517390575c945b",
+  "characters": 857,
+  "audio_bytes": 899491,
+  "request_id": "wmSbP1WCWMymVRZ78f6s",
+  "audio_tags_added": false,
+  "assembled_video": false,
+  "quality_review": "Technical decode and level checks passed. Subjective listening not performed; no claim that this is superior to the existing take.",
+  "duration_seconds": 56.16,
+  "sample_rate_hz": 44100,
+  "channels": 1,
+  "mean_volume_dbfs": -21.6,
+  "peak_volume_dbfs": -1.4,
+  "decode_check": "ffmpeg decode completed with exit 0",
+  "delivery": "Exact narration text with default Text to Dialogue voice settings; no added direction tags or voice cloning."
+}

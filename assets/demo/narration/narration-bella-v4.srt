@@ -1,0 +1,77 @@
+1
+00:00:00,120 --> 00:00:03,400
+Some days, the hardest part is finding your
+place again.
+
+2
+00:00:03,940 --> 00:00:06,540
+Threadline keeps the context in your own
+words.
+
+3
+00:00:07,220 --> 00:00:11,640
+In this dementia-support scenario, an
+interruption breaks a familiar routine.
+
+4
+00:00:12,160 --> 00:00:13,800
+“What was my next planned step?”
+
+5
+00:00:14,260 --> 00:00:17,500
+Threadline brings back the person’s note:
+“My next planned
+
+6
+00:00:17,580 --> 00:00:19,820
+step is to water the plant by the window.”
+
+7
+00:00:20,260 --> 00:00:23,760
+The note is a reminder, not proof that an
+action happened.
+
+8
+00:00:24,420 --> 00:00:28,420
+Now, a different moment: reflecting on the
+days before a period.
+
+9
+00:00:28,880 --> 00:00:31,280
+“What helped me feel less rushed last time?”
+
+10
+00:00:31,700 --> 00:00:36,460
+Threadline retrieves a personal observation:
+leaving one evening free helped.
+
+11
+00:00:36,980 --> 00:00:41,000
+It doesn’t decide how someone feels, or
+claim that hormones caused it.
+
+12
+00:00:41,540 --> 00:00:43,440
+They can revisit the source and add
+
+13
+00:00:43,460 --> 00:00:45,000
+what they want to remember next.
+
+14
+00:00:45,680 --> 00:00:48,600
+These are fictional demonstrations of
+today’s prototype.
+
+15
+00:00:49,180 --> 00:00:52,120
+Live voice and wearable capture are the next
+step.
+
+16
+00:00:52,740 --> 00:00:53,340
+Threadline.
+
+17
+00:00:53,900 --> 00:00:55,960
+A little context, kept close.

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Threadline · motion studies</title>
+  <link rel="stylesheet" href="motion.css">
+  <script src="motion.js" defer></script>
+</head>
+<body>
+  <nav aria-label="Motion scenes">
+    <a href="?scene=title">01 Title</a><a href="?scene=memory">02 Memory</a><a href="?scene=modes">03 Modes</a><a href="?scene=waveform">04 Waveform</a>
+    <button id="replay" type="button">Replay</button>
+    <span>Illustrative graphics · no audio · not product footage</span>
+  </nav>
+  <main>
+    <svg id="stage" viewBox="0 0 1920 1080" role="img" aria-labelledby="scene-title scene-description" xmlns="http://www.w3.org/2000/svg">
+      <title id="scene-title">Threadline motion studies</title>
+      <desc id="scene-description">A calm, cream, ink and coral graphic composition. These are illustrative assets, not recordings or measurements.</desc>
+      <rect id="background" width="1920" height="1080" fill="#f4f0e7"/>
+      <g id="title" class="scene">
+        <text class="eyebrow" x="144" y="230">A LITTLE CONTEXT, KEPT CLOSE.</text>
+        <g id="wordmark"><text class="display title" x="132" y="525">Threadline<tspan class="coral">.</tspan></text></g>
+        <text id="tagline" class="subtitle" x="145" y="624">Pick up your thread.</text>
+        <path id="title-thread" class="thread" d="M144 748 H1140 C1270 748 1270 666 1380 666 C1490 666 1490 808 1596 808 C1700 808 1710 748 1776 748"/>
+        <circle id="title-node" cx="1776" cy="748" r="8" fill="#b44630"/>
+      </g>
+      <g id="memory" class="scene">
+        <text class="eyebrow" x="144" y="176">A THREAD THROUGH YOUR DAY</text>
+        <text class="display section" x="140" y="290">Small moments. Shared context.</text>
+        <path id="memory-thread" class="thread" d="M144 537 H472 C615 537 615 603 756 603 H1090 C1225 603 1225 513 1360 513 H1776"/>
+        <g id="card-one" class="source-card">
+          <rect x="144" y="380" width="480" height="256" rx="3"/>
+          <text class="date" x="178" y="426">12 NOV · 08:15</text><text class="quote" x="178" y="491">“I slept about</text><text class="quote" x="178" y="541">six hours.”</text>
+          <text class="source" x="178" y="597">FICTIONAL NOTE 01</text><circle cx="624" cy="537" r="8" class="node"/>
+        </g>
+        <g id="card-two" class="source-card">
+          <rect x="720" y="455" width="480" height="285" rx="3"/>
+          <text class="date" x="754" y="501">12 NOV · 09:40</text><text class="quote" x="754" y="566">“My keys are in</text><text class="quote" x="754" y="616">the blue bowl.”</text>
+          <text class="source" x="754" y="700">FICTIONAL NOTE 02</text><circle cx="1200" cy="603" r="8" class="node"/>
+        </g>
+        <g id="card-three" class="source-card">
+          <rect x="1296" y="355" width="480" height="285" rx="3"/>
+          <text class="date" x="1330" y="401">12 NOV · 17:10</text><text class="quote" x="1330" y="466">“I wanted to</text><text class="quote" x="1330" y="516">revisit this later.”</text>
+          <text class="source" x="1330" y="600">FICTIONAL NOTE 03</text><circle cx="1776" cy="513" r="8" class="node"/>
+        </g>
+        <text id="memory-caption" class="subtitle" x="144" y="860">Return to the words you recorded.</text>
+      </g>
+      <g id="modes" class="scene">
+        <text class="eyebrow" x="144" y="175">TWO WAYS TO PICK UP YOUR THREAD</text>
+        <path id="mode-rule" d="M960 286 V844" fill="none" stroke="#b44630" stroke-width="2"/>
+        <g id="mode-reflection"><text class="number" x="144" y="369">01</text><text class="display mode-title" x="140" y="489">Personal</text><text class="display mode-title" x="140" y="585">reflection</text><text class="body" x="144" y="705">Notice what you recorded over time.</text></g>
+        <g id="mode-routine"><text class="number" x="1060" y="369">02</text><text class="display mode-title" x="1056" y="489">Resume</text><text class="display mode-title" x="1056" y="585">a routine</text><text class="body" x="1060" y="705">Find your last recorded step.</text></g>
+      </g>
+      <g id="waveform" class="scene">
+        <text class="eyebrow" x="144" y="175">MAKE ROOM FOR A MOMENT</text>
+        <text class="display section" x="140" y="298">Your words are a starting point.</text>
+        <line x1="144" y1="561" x2="1776" y2="561" stroke="#d9d9cc" stroke-width="2"/>
+        <g id="wave-bars"></g>
+        <text class="subtitle" x="144" y="819">A note now. Something to return to later.</text>
+        <text class="source" x="144" y="889">DECORATIVE WAVEFORM · NOT A RECORDING OR MEASUREMENT</text>
+      </g>
+      <text class="footer" x="144" y="1000">THREADLINE / ILLUSTRATIVE MOTION GRAPHIC / NOT PRODUCT CAPTURE</text>
+    </svg>
+  </main>
+</body>
+</html>

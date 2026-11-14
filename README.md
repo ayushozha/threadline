@@ -2,7 +2,7 @@
 
 Personal memory, with the thread still attached. A VexoHacks starter for exploring lived-experience reflection and resuming interrupted routines.
 
-[Live prototype](https://threadline.ayushojha.com) · [API setup](docs/API_SETUP.md) · [Deployment](deploy/README.md)
+[Live prototype](https://threadline.ayushojha.com) · [API setup](docs/API_SETUP.md) · [Deployment](deploy/README.md) · [Demo assets](assets/demo/index.html)
 
 ## Status
 
