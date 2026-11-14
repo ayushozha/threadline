@@ -25,7 +25,7 @@
     <details class="live-settings strip">
       <summary>Live providers <span id="provider-summary" class="caption">· off — local demo only</span></summary>
       <div class="strip-body">
-        <label class="check"><input id="live" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
+        <label class="check"><input id="live-on" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
         <label for="token">App access token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Provided by your app operator">
         <label class="check"><input id="consent" type="checkbox"><span>I have permission to send these notes and any recorded or uploaded audio to the configured providers.</span></label>
         <div class="row"><button type="button" id="check-config" class="secondary">Check provider status</button><span id="config-result" class="caption"></span></div>
@@ -57,21 +57,33 @@
 
         <section class="block capture" aria-labelledby="capture-heading">
           <h3 id="capture-heading">Capture</h3>
-          <p class="caption" id="source-line">Audio source: this browser's microphone. Vexo band: not connected — awaiting the event Bluetooth contract.</p>
-          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed.</span></label>
+          <label for="source">Audio source</label>
+          <select id="source">
+            <option value="vexo-usb">Vexo band · USB cable</option>
+            <option value="vexo-ble">Vexo band · Bluetooth</option>
+            <option value="browser">This browser's microphone</option>
+          </select>
+          <div id="band-controls" class="row">
+            <button type="button" id="band-connect" class="secondary">Connect band</button>
+            <button type="button" id="band-disconnect" class="text-button" disabled>Disconnect</button>
+          </div>
+          <p id="band-state" class="caption" role="status">Band not connected.</p>
+          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram while capture is on.</span></label>
           <div class="row">
-            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start recording</button>
+            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start live capture</button>
             <button type="button" id="rec-stop" class="secondary" disabled>Stop</button>
-            <button type="button" id="rec-delete" class="text-button" disabled>Delete recording</button>
           </div>
           <p id="rec-state" class="rec-state" role="status">Not recording.</p>
-          <audio id="rec-audio" controls hidden></audio>
-          <div class="row"><button type="button" id="rec-transcribe" class="secondary" disabled>Transcribe recording (live)</button></div>
+          <div id="live" class="live-transcript" hidden aria-live="polite">
+            <div class="live-head"><span id="live-source" class="badge mic"></span><span id="live-timer" class="caption"></span></div>
+            <ol id="live-lines"></ol>
+            <p id="live-interim" class="interim"></p>
+          </div>
           <details class="audio-option">
             <summary>Other ways to add a conversation</summary>
             <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
             <button type="button" id="transcribe" class="secondary">Transcribe file</button>
-            <p class="caption">No microphone or keys? Load a short scripted conversation. It is labeled as scripted, not captured audio.</p>
+            <p class="caption">No band or keys? Load a short scripted conversation. It is labeled as scripted, not captured audio.</p>
             <button type="button" id="scripted" class="secondary">Load scripted demo conversation</button>
           </details>
         </section>

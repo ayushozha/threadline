@@ -26,8 +26,10 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 | Scripted demo conversation for use without microphone or keys | Implemented; labeled as scripted |
 | Gemini grounded-response adapter | Implemented; requires your API key and accessible model |
 | Deepgram audio-file transcription | Implemented; requires your API key |
-| Vexo live BLE audio and motion | Pending the event Bluetooth contract |
-| Pipecat streaming voice, ElevenLabs playback | Planned; not connected |
+| Vexo band 73 live audio (USB cable or Bluetooth) via the official Vexo Open kit | Implemented; band audio streams through the server to Deepgram with a live transcript. Verified end-to-end with the kit's recorded band audio on a pretend band; needs a check on the physical band |
+| Live transcript for the browser microphone | Implemented (Deepgram streaming via server relay) |
+| Double-tap the band to start/stop capture | Implemented; needs a check on the physical band |
+| Pipecat pipeline, ElevenLabs playback | Not connected. The band has no speaker or haptics; any voice output must play on the laptop |
 | Google/real calendar, purchases, messages, health assessment | Not implemented |
 
 ## Run locally (PowerShell)
@@ -55,7 +57,13 @@ Browser memory and consent controls → authenticated FastAPI adapters → Gemin
 - `POST /api/reflect`: `{mode, question, notes:[{id,text,at}]}`; requires token. Stateless grounded response.
 - `POST /api/schedule/find-slot`: `{events, date, window_start, window_end, duration_minutes, skip}`; public, stateless. Returns the first free slot and every time it checked. Operates only on the demo calendar the browser sends.
 - `POST /api/schedule/book`: `{events, event}`; public, stateless. Re-checks for conflicts and returns `409` with the conflicting events, or the created event. Nothing is stored server-side.
+- `GET /api/device`: public; the configured `VEXO_BAND_NUMBER`.
+- `WS /api/live-transcribe`: first message `{token, source: "vexo"|"browser"}`, then binary audio (one band Opus packet per message, or browser WebM chunks), `{"type":"stop"}` to finish. Relays to Deepgram streaming with the server's key; returns interim/final results with word timings and speaker labels. Nothing is stored.
 - `POST /api/transcribe`: raw audio body and supported `audio/*` content type, maximum 10 MB; requires token. Speaker labels are not identity verification. Automatic live BLE capture is not connected.
+
+## Vexo band
+
+Set `VEXO_BAND_NUMBER` in `.env` to your team's band (ours is 73, `Vexo-HACK-73`). In Capture, choose **Vexo band · USB cable** or **· Bluetooth**, press **Connect band**, and pick only your band. Close the Vexo dashboard first: a band serves one program per link. The browser library in `app/static/vendor/vexo-open/` is the official [Vexo Open kit](https://github.com/VexoAI-Org/vexo-open-kit) (MIT), copied unchanged; `UPSTREAM_COMMIT` records the version. The library refuses any band whose number does not match.
 
 ## Repository
 

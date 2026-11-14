@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
+from websockets.asyncio.client import connect as ws_connect
+from websockets.exceptions import WebSocketException
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -21,6 +23,7 @@ load_dotenv(ROOT.parent / ".env")
 
 app = FastAPI(title="Threadline", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 provider_slots = asyncio.Semaphore(3)
+stream_slots = asyncio.Semaphore(2)
 
 
 def authorize(x_app_token: str = Header(default="")) -> None:
@@ -58,6 +61,14 @@ async def config():
         "transcription_ready": bool(os.getenv("DEEPGRAM_API_KEY") and os.getenv("DEEPGRAM_MODEL")),
         "wearable_connected": False,
     }
+
+
+@app.get("/api/device")
+async def device():
+    """Public: the team's assigned Vexo band number (not a secret), or null if unset."""
+    raw = os.getenv("VEXO_BAND_NUMBER", "").strip()
+    number = int(raw) if raw.isdigit() and 1 <= int(raw) <= 999 else None
+    return {"vexo_band_number": number}
 
 
 class Note(BaseModel):
@@ -170,6 +181,114 @@ async def schedule_book(body: BookRequest):
     """Re-check availability, then return the demo calendar with the approved event."""
     ok, result = book(body)
     return result if ok else JSONResponse(result, status_code=409)
+
+
+LIVE_MAX_SECONDS = 600
+LIVE_MAX_BYTES = 20 * 1024 * 1024
+
+
+def live_url(source: str) -> str:
+    params = {
+        "model": os.getenv("DEEPGRAM_MODEL", ""), "language": "en", "interim_results": "true",
+        "smart_format": "true", "punctuate": "true", "diarize": "true", "endpointing": "300",
+        "utterance_end_ms": "1000", "mip_opt_out": "true",
+    }
+    if source == "vexo":  # The band sends raw Opus packets: 16 kHz mono, 20 ms each, one per message.
+        params.update(encoding="opus", sample_rate="16000", channels="1")
+    return "wss://api.deepgram.com/v1/listen?" + str(httpx.QueryParams(params))
+
+
+def simplify(result: dict) -> dict | None:
+    if result.get("type") == "UtteranceEnd":
+        return {"type": "utterance_end"}
+    if result.get("type") != "Results":
+        return None
+    alternative = (result.get("channel", {}).get("alternatives") or [{}])[0]
+    return {
+        "type": "result", "is_final": bool(result.get("is_final")), "speech_final": bool(result.get("speech_final")),
+        "start": result.get("start", 0), "duration": result.get("duration", 0),
+        "transcript": alternative.get("transcript", ""),
+        "words": [{k: w.get(k) for k in ("punctuated_word", "word", "start", "end", "speaker")} for w in alternative.get("words", [])],
+    }
+
+
+@app.websocket("/api/live-transcribe")
+async def live_transcribe(client: WebSocket):
+    """Relay one consented audio stream to Deepgram. The key stays on the server; nothing is stored."""
+    await client.accept()
+
+    async def fail(message: str, code: int = 1008):
+        await client.send_json({"type": "error", "message": message})
+        await client.close(code)
+
+    try:
+        hello = await asyncio.wait_for(client.receive_json(), timeout=10)
+    except (asyncio.TimeoutError, WebSocketDisconnect, ValueError, KeyError):
+        return await fail("Start message missing.")
+    expected = os.getenv("APP_ACCESS_TOKEN", "")
+    token = str(hello.get("token", ""))
+    if not expected or not secrets.compare_digest(token.encode(), expected.encode()):
+        return await fail("Enter the project access token to use live providers.")
+    source = hello.get("source")
+    if source not in {"vexo", "browser"}:
+        return await fail("Unknown audio source.")
+    key, model = os.getenv("DEEPGRAM_API_KEY"), os.getenv("DEEPGRAM_MODEL")
+    if not key or not model:
+        return await fail("Set DEEPGRAM_API_KEY and DEEPGRAM_MODEL to transcribe audio.", 1011)
+    if stream_slots.locked():
+        return await fail("Another live transcript is running. Stop it first.", 1013)
+
+    async with stream_slots:
+        try:
+            async with ws_connect(live_url(source), additional_headers={"Authorization": f"Token {key}"}, open_timeout=10) as deepgram:
+                await client.send_json({"type": "ready", "source": source})
+                loop = asyncio.get_running_loop()
+                state = {"bytes": 0, "last": loop.time(), "started": loop.time(), "closing": False}
+
+                async def upstream():
+                    while True:
+                        try:
+                            message = await asyncio.wait_for(client.receive(), timeout=4)
+                        except asyncio.TimeoutError:
+                            if not state["closing"]:
+                                await deepgram.send(json.dumps({"type": "KeepAlive"}))
+                            continue
+                        if message["type"] == "websocket.disconnect":
+                            break
+                        if (data := message.get("bytes")) is not None:
+                            state["bytes"] += len(data)
+                            if state["bytes"] > LIVE_MAX_BYTES or loop.time() - state["started"] > LIVE_MAX_SECONDS:
+                                await client.send_json({"type": "error", "message": "Live session limit reached; stopping."})
+                                data = None
+                            else:
+                                await deepgram.send(data)
+                                continue
+                        if data is None or "stop" in (message.get("text") or ""):
+                            state["closing"] = True
+                            await deepgram.send(json.dumps({"type": "Finalize"}))  # flush the words still in progress
+                            await asyncio.sleep(1.5)
+                            await deepgram.send(json.dumps({"type": "CloseStream"}))
+                            return
+
+                async def downstream():
+                    async for raw in deepgram:
+                        try:
+                            simple = simplify(json.loads(raw))
+                        except ValueError:
+                            continue
+                        if simple:
+                            await client.send_json(simple)
+
+                sender = asyncio.create_task(upstream())
+                await downstream()
+                sender.cancel()
+                await client.send_json({"type": "closed"})
+                await client.close()
+        except WebSocketDisconnect:
+            return
+        except (WebSocketException, OSError, asyncio.TimeoutError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            await fail(f"Deepgram live connection failed{f' ({status})' if status else ''}. Check server configuration.", 1011)
 
 
 @app.get("/")

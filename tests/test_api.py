@@ -97,3 +97,26 @@ def test_booking_rechecks_conflicts_before_creating(client):
 def test_schedule_rejects_malformed_times(client):
     response = client.post("/api/schedule/find-slot", json={"events": [], "date": DAY, "window_start": "25:00"})
     assert response.status_code == 422
+
+
+def test_device_reports_configured_band_only(client, monkeypatch):
+    monkeypatch.setenv("VEXO_BAND_NUMBER", "73")
+    assert client.get("/api/device").json() == {"vexo_band_number": 73}
+    monkeypatch.setenv("VEXO_BAND_NUMBER", "not-a-band")
+    assert client.get("/api/device").json() == {"vexo_band_number": None}
+
+
+def test_live_transcribe_rejects_bad_token_before_contacting_provider(client, monkeypatch):
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-only-key")
+    monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")
+    with client.websocket_connect("/api/live-transcribe") as ws:
+        ws.send_json({"token": "wrong", "source": "vexo"})
+        assert ws.receive_json()["type"] == "error"
+
+
+def test_live_url_uses_band_opus_format_and_env_model(monkeypatch):
+    monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")
+    url = main.live_url("vexo")
+    assert "encoding=opus" in url and "sample_rate=16000" in url and "model=test-model" in url
+    assert "mip_opt_out=true" in url
+    assert "encoding" not in main.live_url("browser")

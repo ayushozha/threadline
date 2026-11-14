@@ -12,7 +12,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const fmtWhen = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-const SOURCE_LABELS = { fictional: "Fictional demo history", typed: "Typed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", scripted: "Scripted demo transcript" };
+const SOURCE_LABELS = { fictional: "Fictional demo history", typed: "Typed", vexo: "Vexo band · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", scripted: "Scripted demo transcript" };
 
 const demos = {
   reflection: {
@@ -53,7 +53,7 @@ const sessions = Object.fromEntries(Object.entries(demos).map(([key, demo]) => [
   prefs: demo.prefs.map((p, i) => ({ id: `pref-${i + 1}`, ...p })),
 }]));
 const agent = { offer: null, events: seedCalendar(), proposal: null, skip: [], log: [], created: null, duration: 30, window: "afternoon" };
-const capture = { recorder: null, chunks: [], blob: null, url: "", startedAt: null, timer: 0, review: null };
+const capture = { band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
 
 function message(text, error = false) { $("status").textContent = text; $("status").classList.toggle("error", error); }
 function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; }
@@ -239,42 +239,132 @@ function renderCalendar() {
 async function run(task) { if (busy) return; setBusy(true); try { await task(); } catch (error) { message(error.message || "Something went wrong.", true); } finally { setBusy(false); renderCalendar(); } }
 
 /* ---------- Capture & review ---------- */
-function setRecUI() {
-  const recording = capture.recorder?.state === "recording";
-  $("rec-start").disabled = busy || recording;
-  $("rec-stop").disabled = !recording;
-  $("rec-delete").disabled = busy || recording || !capture.blob;
-  $("rec-transcribe").disabled = busy || recording || !capture.blob;
-  $("rec-start").classList.toggle("recording", recording);
+// Live capture: Vexo band (USB or Bluetooth, official Vexo Open kit library) or this browser's microphone.
+// Audio streams through Threadline's server to Deepgram; the provider key never reaches the page.
+const SOURCE_LABELS_LIVE = { "vexo-usb": "Vexo band · USB", "vexo-ble": "Vexo band · Bluetooth", browser: "Browser microphone" };
+let kit = null, bandNumber = null;
+fetch("/api/device").then((r) => r.json()).then((d) => { bandNumber = d.vexo_band_number; bandStatus(); }).catch(() => bandStatus());
+const isVexo = () => $("source").value.startsWith("vexo");
+function bandStatus(text, error = false) {
+  const name = bandNumber ? `Vexo-HACK-${String(bandNumber).padStart(2, "0")}` : "";
+  $("band-state").textContent = text || (capture.band ? `Connected: ${capture.band.name} over ${({ serial: "USB cable", ble: "Bluetooth", sim: "a pretend band (simulator)" })[capture.band.transportKind] || capture.band.transportKind}. Double-tap the band to start or stop capture.` : bandNumber ? `${name} not connected.` : "No band number configured (VEXO_BAND_NUMBER). Use the browser microphone.");
+  $("band-state").classList.toggle("error", error);
 }
-$("rec-start").addEventListener("click", async () => {
-  if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
-  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record audio. Upload a file or use the scripted conversation.", true);
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    deleteRecording();
-    capture.chunks = []; capture.startedAt = new Date();
-    capture.recorder = new MediaRecorder(stream);
-    capture.recorder.ondataavailable = (e) => { if (e.data.size) capture.chunks.push(e.data); };
-    capture.recorder.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop()); clearInterval(capture.timer);
-      capture.blob = new Blob(capture.chunks, { type: capture.recorder.mimeType || "audio/webm" });
-      capture.url = URL.createObjectURL(capture.blob); $("rec-audio").src = capture.url; $("rec-audio").hidden = false;
-      recState(`Recording stopped · ${Math.round(capture.blob.size / 1024)} KB held in this page only. Transcribe it or delete it.`); setRecUI();
-    };
-    capture.recorder.start();
-    capture.timer = setInterval(() => {
-      const s = Math.round((Date.now() - capture.startedAt) / 1000);
-      recState(`● Recording from this browser's microphone · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
-      if (s >= 120) capture.recorder.stop();
-    }, 500);
-    recState("● Recording from this browser's microphone · 0:00"); setRecUI();
-  } catch { recState("Microphone permission was not granted. Nothing was recorded.", true); }
-});
-$("rec-stop").addEventListener("click", () => capture.recorder?.stop());
-$("rec-delete").addEventListener("click", () => { deleteRecording(); recState("Recording deleted from this page."); });
-function deleteRecording() { if (capture.url) URL.revokeObjectURL(capture.url); capture.blob = null; capture.url = ""; $("rec-audio").removeAttribute("src"); $("rec-audio").hidden = true; setRecUI(); }
+function setRecUI() {
+  const live = Boolean(capture.ws), vexo = isVexo();
+  $("band-controls").hidden = !vexo;
+  $("band-connect").disabled = busy || live || Boolean(capture.band) || !bandNumber;
+  $("band-disconnect").disabled = busy || live || !capture.band;
+  $("rec-start").disabled = busy || live || (vexo && !capture.band);
+  $("rec-stop").disabled = !live;
+  $("source").disabled = live;
+  $("rec-start").classList.toggle("recording", live);
+}
 function recState(text, error = false) { $("rec-state").textContent = text; $("rec-state").classList.toggle("error", error); }
+$("source").addEventListener("change", () => { bandStatus(); setRecUI(); });
+
+$("band-connect").addEventListener("click", async () => {
+  if (!bandNumber || capture.band) return;
+  const usb = $("source").value === "vexo-usb";
+  bandStatus(usb ? "Choose the “Vexo Open band” port (cu.usbmodem… on a Mac, COM… on Windows)." : `Double-tap the band, then choose Vexo-HACK-${String(bandNumber).padStart(2, "0")} only.`);
+  try {
+    kit = kit || await import("/static/vendor/vexo-open/src/index.js");
+    const band = await kit.Band.connect(bandNumber, usb ? { transport: "serial" } : {});  // library filters by exact name and checks the number
+    if (band.number !== bandNumber) { await band.disconnect(); throw new Error(`That is band ${band.number}, not ${bandNumber}. Disconnected without changing it.`); }
+    capture.band = band;
+    band.on("disconnect", (e) => {
+      capture.band = null;
+      if (capture.ws) stopLive(`Band link ended (${e.reason}). Capture stopped; what was heard so far is kept for review.`);
+      bandStatus(e.reason === "closed" ? "" : `Band disconnected (${e.reason}).${e.message ? " " + e.message : ""}`, e.reason !== "closed"); setRecUI();
+    });
+    band.on("double-tap", () => { if (capture.ws) stopLive(); else if (!busy) $("rec-start").click(); });
+    await band.configure({ events: true });
+    bandStatus(); setRecUI();
+  } catch (error) { bandStatus(error.message || "Could not connect to the band.", true); setRecUI(); }
+});
+$("band-disconnect").addEventListener("click", async () => { try { await capture.band?.disconnect(); } catch { /* already gone */ } capture.band = null; bandStatus(); setRecUI(); });
+
+$("rec-start").addEventListener("click", async () => {
+  if (capture.ws) return;
+  if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
+  let headers;
+  try { headers = liveHeaders(); } catch (e) { return recState(e.message, true); }
+  const source = $("source").value, vexo = source.startsWith("vexo");
+  if (vexo && !capture.band) return recState("Connect the band first.", true);
+  let stream = null;
+  if (!vexo) {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record audio.", true);
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return recState("Microphone permission was not granted. Nothing was recorded.", true); }
+  }
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
+  ws.binaryType = "arraybuffer";
+  Object.assign(capture, { ws, source, stream, startedAt: new Date(), finals: [], interim: "", stopping: false, packets: 0 });
+  $("live-on").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source];
+  recState("Connecting to Deepgram…"); setRecUI();
+  ws.onopen = () => ws.send(JSON.stringify({ token: headers["X-App-Token"], source: vexo ? "vexo" : "browser" }));
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "ready") {
+      if (vexo) {
+        capture.offAudio = capture.band.on("audio", (a) => { if (ws.readyState === 1 && !capture.stopping) { ws.send(a.opus); capture.packets += 1; } });
+        try { await capture.band.configure({ audio: true }); } catch (e) { return stopLive(`The band refused the microphone: ${e.message}`); }
+      } else {
+        capture.recorder = new MediaRecorder(stream);
+        capture.recorder.ondataavailable = (e) => { if (e.data.size && ws.readyState === 1 && !capture.stopping) ws.send(e.data); };
+        capture.recorder.start(250);
+      }
+      capture.timer = setInterval(() => {
+        const s = Math.round((Date.now() - capture.startedAt) / 1000);
+        $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      }, 500);
+      recState(vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
+    } else if (msg.type === "result") {
+      if (msg.is_final) {
+        if (msg.transcript.trim()) { capture.finals.push(msg); addLiveLine(msg); }
+        $("live-interim").textContent = "";
+      } else $("live-interim").textContent = msg.transcript;
+    } else if (msg.type === "error") {
+      recState(msg.message, true);
+    } else if (msg.type === "closed") finishLive();
+  };
+  ws.onclose = () => finishLive();
+  ws.onerror = () => recState("Live connection failed. Check the access token and server configuration.", true);
+});
+function addLiveLine(msg) {
+  const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
+  const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
+  $("live-lines").append(el("li", {},
+    el("span", { className: "caption", textContent: `${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}` }),
+    el("p", { textContent: msg.transcript })));
+  $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+}
+async function stopLive(reason) {
+  if (!capture.ws || capture.stopping) return;
+  capture.stopping = true;
+  recState(reason || "Stopping… waiting for the last words from Deepgram.");
+  if (capture.offAudio) { capture.offAudio(); capture.offAudio = null; }
+  if (capture.band) { try { await capture.band.configure({ audio: false }); } catch { /* band gone */ } }
+  if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
+  capture.stream?.getTracks().forEach((t) => t.stop());
+  if (capture.ws.readyState === 1) capture.ws.send(JSON.stringify({ type: "stop" }));
+  setTimeout(() => { if (capture.ws) capture.ws.close(); }, 6000);
+}
+$("rec-stop").addEventListener("click", () => stopLive());
+function finishLive() {
+  if (!capture.ws) return;
+  clearInterval(capture.timer); $("live-timer").textContent = "stopped";
+  const { finals, source, startedAt } = capture;
+  if (capture.offAudio) { capture.offAudio(); capture.offAudio = null; }
+  if (capture.band && !capture.stopping) capture.band.configure({ audio: false }).catch(() => {});
+  capture.stream?.getTracks().forEach((t) => t.stop());
+  Object.assign(capture, { ws: null, recorder: null, stream: null, stopping: false });
+  setRecUI();
+  const words = finals.flatMap((f) => f.words);
+  if (!finals.length) return recState("Capture ended. No speech was transcribed; nothing was saved.", Boolean(false));
+  openReview(segmentsFromWords(words, finals.map((f) => f.transcript).join(" ")), source.startsWith("vexo") ? "vexo" : "mic", startedAt,
+    `${SOURCE_LABELS_LIVE[source]} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
+  recState("Capture stopped. Review below: choose which speaker is you before anything is saved.");
+}
 
 function segmentsFromWords(words, text) {
   if (!words?.length) return text ? [{ speaker: null, text, offset: 0 }] : [];
@@ -298,7 +388,6 @@ async function transcribe(blob, source) {
     recState("Transcript ready for review.");
   } finally { setBusy(false); }
 }
-$("rec-transcribe").addEventListener("click", async () => { try { await transcribe(capture.blob, "mic"); } catch (e) { recState(e.message, true); } });
 $("transcribe").addEventListener("click", async () => {
   try { const file = $("audio").files[0]; if (!file) throw new Error("Choose an audio file first."); capture.startedAt = new Date(); await transcribe(file, "upload"); $("audio").value = ""; }
   catch (e) { recState(e.message, true); }
@@ -361,7 +450,7 @@ function setBusy(value) {
   if (!value) setRecUI();
 }
 function liveHeaders() {
-  if (!$("live").checked) throw new Error("Open “Live providers” and enable them to use Deepgram or Gemini.");
+  if (!$("live-on").checked) throw new Error("Open “Live providers” and enable them to use Deepgram or Gemini.");
   if (!$("consent").checked) throw new Error("Confirm permission before sending notes or audio.");
   if (!$("token").value.trim()) throw new Error("Enter the app access token for live processing.");
   return { "X-App-Token": $("token").value.trim() };
@@ -371,8 +460,8 @@ async function request(url, options) {
   if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "The request could not be completed.");
   return data;
 }
-function updateProviderSummary() { $("provider-summary").textContent = $("live").checked ? "· on — requests go to configured providers" : "· off — local demo only"; }
-$("live").addEventListener("change", updateProviderSummary);
+function updateProviderSummary() { $("provider-summary").textContent = $("live-on").checked ? "· on — requests go to configured providers" : "· off — local demo only"; }
+$("live-on").addEventListener("change", updateProviderSummary);
 $("check-config").addEventListener("click", async () => {
   try {
     const token = $("token").value.trim(); if (!token) throw new Error("Enter the access token first.");
@@ -400,7 +489,7 @@ $("question-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const question = $("question").value.trim(), notes = sessions[mode].notes;
   if (busy || !question) return;
   if (!notes.length) return message("Add a note before asking a question.", true);
-  if (!$("live").checked) {
+  if (!$("live-on").checked) {
     const stop = new Set(["what", "did", "the", "and", "when", "last", "time", "where", "was", "with", "that", "this", "for", "about", "felt", "feel"]);
     const words = (question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((w) => !stop.has(w));
     const matches = notes.filter((note) => words.some((word) => note.text.toLowerCase().includes(word)));

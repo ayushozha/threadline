@@ -12,7 +12,7 @@ configured on the server and you have consent to send audio to Deepgram.
 
 ## Story
 
-1. **Capture.** Either tick the recording consent and use **Start recording** / **Stop** (browser microphone, then **Transcribe recording** with live providers on), or open *Other ways to add a conversation* → **Load scripted demo conversation** (labeled as scripted).
+1. **Capture.** With live providers on: choose **Vexo band · USB cable**, **Connect band** (pick Vexo-HACK-73 only), tick recording consent, **Start live capture** (or double-tap the band). The transcript appears live. **Stop** (or double-tap). Or open *Other ways to add a conversation* → **Load scripted demo conversation** (labeled as scripted).
    - She says: “I'm exhausted, and I have something scheduled every evening.”
    - A friend says: “Do you still want to do dinner Thursday?”
 2. **Identify the speaker.** In *Review before saving*, choose **Which speaker is you? → Speaker 0**. Her line is marked Me; the friend's is marked Someone else. Optionally correct a word. Click **Save my statements** — the status says the other speaker's segment was dropped, not stored.
@@ -27,7 +27,7 @@ Optional: switch to **Resume a routine**, ask “Where did I leave off packing?�
 
 ## What to say honestly
 
-- Audio comes from the browser microphone. Vexo BLE audio/IMU is not connected yet — we are waiting for the event's Bluetooth contract and will not guess the protocol.
+- Audio comes from the Vexo band's microphone (or the browser microphone as fallback), streamed through our server to Deepgram. The band has no speaker or vibration motor.
 - No haptics, bracelet speech, camera, or Pipecat streaming are working in this build.
 - Speaker labels separate voices; they do not prove identity. The wearer confirms which one is her.
 - Nothing is stored on the server; refreshing clears the session.
