@@ -468,14 +468,15 @@ function flushBandAudio() {
     catch { capture.audioQueue.unshift(packet); ws.close(); break; }
   }
 }
-async function recoverSpeech() {
-  if (capture.fallbackBusy || !capture.active || !capture.pcmChunks?.length || !$("rec-consent").checked) return;
+function recoverSpeech() {
+  if (capture.fallbackBusy) return capture.fallbackPending;
+  if (!capture.active || !capture.pcmChunks?.length || !$("rec-consent").checked) return;
   const origin = capture.startedAt, chunks = capture.pcmChunks.slice();
   const duration = chunks.reduce((n, chunk) => n + chunk.length, 0) / 16000;
   const start = Math.max(0, (Date.now() - origin) / 1000 - duration);
   capture.fallbackBusy = true; capture.lastFallbackAt = Date.now();
   $("speech-status").textContent = "Checking the last few seconds of speech…";
-  try {
+  capture.fallbackPending = (async () => { try {
     const data = await request("/api/transcribe/fallback", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: pcmWav(chunks) });
     if (!capture.active || capture.startedAt !== origin) return;
     const text = data.text?.trim();
@@ -486,6 +487,8 @@ async function recoverSpeech() {
     $("speech-status").textContent = text ? "Recovered speech shown above. Check it before saving." : "No clear speech recovered. Bring the band closer to your mouth and try again.";
   } catch { $("speech-status").textContent = "Couldn't check recent speech. Live transcription continues."; }
   finally { capture.fallbackBusy = false; }
+  })();
+  return capture.fallbackPending;
 }
 $("recover-speech").addEventListener("click", recoverSpeech);
 $("band-disconnect").addEventListener("click", async () => { try { await capture.band?.disconnect(); } catch { /* already gone */ } capture.band = null; bandStatus("Disconnected."); setRecUI(); });
@@ -509,7 +512,7 @@ $("rec-start").addEventListener("click", async () => {
   }
   Object.assign(capture, { active: true, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now(), lastPacketAt: Date.now(), audioQueue: [], droppedPackets: 0, audioClaimed: false,
-    pcmChunks: [], lastSpeechAt: 0, lastTextAt: Date.now(), lastFallbackAt: Date.now(), fallbackBusy: false, interimCount: 0, archiveId: newId("t") });
+    pcmChunks: [], lastSpeechAt: 0, lastTextAt: Date.now(), lastFallbackAt: Date.now(), fallbackBusy: false, fallbackPending: null, finishing: false, interimCount: 0, archiveId: newId("t") });
   if (vexo && await kit.canDecodeAudio()) capture.decoder = new kit.BandAudio((samples) => {
     if (!capture.active || capture.stopping) return;
     capture.pcmChunks.push(samples.slice());
@@ -541,7 +544,7 @@ function tick() {
   if (capture.vexo && capture.packets) {
     const age = Math.round((Date.now() - capture.lastTextAt) / 1000);
     $("speech-status").textContent = `${capture.interimCount} speech updates · ${capture.finals.length} finished lines${capture.rmsDb != null ? ` · mic ${Math.round(capture.rmsDb)} dBFS` : ""}${age > 10 ? ` · last text ${age}s ago` : ""}`;
-    if (!capture.fallbackBusy && capture.decoder && capture.lastSpeechAt > capture.lastTextAt && Date.now() - capture.lastTextAt > 15000 && Date.now() - capture.lastFallbackAt > 15000) recoverSpeech();
+    if (!capture.fallbackBusy && capture.decoder && capture.lastSpeechAt > capture.lastTextAt && Date.now() - capture.lastTextAt > 8000 && Date.now() - capture.lastFallbackAt > 8000) recoverSpeech();
   }
   if (capture.vexo && capture.ws?.providerReady && Date.now() - (capture.lastPacketAt || capture.audioStarted) > 5000 && !capture.warnedSilent && !capture.band?.reconnecting) {
     capture.warnedSilent = true;
@@ -575,7 +578,7 @@ function openSocket() {
       if (capture.recorder && capture.recorder.state === "inactive") capture.recorder.start(250);
       recState(capture.vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
     } else if (msg.type === "result") {
-      if (msg.transcript?.trim()) capture.lastTextAt = Date.now();
+      if (msg.is_final && msg.transcript?.trim()) capture.lastTextAt = Date.now();
       if (!msg.is_final && msg.transcript?.trim()) capture.interimCount += 1;
       if (msg.is_final) {
         if (msg.transcript.trim()) {
@@ -643,8 +646,13 @@ $("rec-takeback").addEventListener("click", async () => {
     $("rec-takeback").hidden = true; recState("Took the microphone back. Listening through the band.");
   } catch (e) { recState(`Could not take the band back: ${e.message}`, true); }
 });
-function finishLive() {
-  if (!capture.active) return;
+async function finishLive() {
+  if (!capture.active || capture.finishing) return;
+  capture.finishing = true;
+  if (capture.vexo && (capture.fallbackBusy || capture.lastSpeechAt > capture.lastTextAt)) {
+    recState("Checking the last words before opening your transcript…");
+    await recoverSpeech();
+  }
   clearInterval(capture.timer); $("live-timer").textContent = `stopped · ${$("live-timer").textContent.replace("● live · ", "")}`;
   const { finals, source, startedAt } = capture;
   if (finals.length) { archiveSession(finals, { startedAt, source, marks: capture.marks || [], id: capture.archiveId }); const vm = voiceMetrics(finals); if (vm) { life.voice = vm; saveThread(); renderEnergy(); } }
@@ -1228,7 +1236,7 @@ function agentPayload(statement) {
   };
 }
 async function agentDecide(statement) {
-  if (mode !== "reflection" || statement.text.trim().split(/\s+/).length < 3) return;
+  if (mode !== "reflection" || [...statement.text.trim()].length < 4) return;
   // one decision at a time; if lines arrive faster, decide on the newest when free
   if (Date.now() < agentState.busyUntil) { agentState.pending = statement; return; }
   agentState.busyUntil = Date.now() + 2500;
