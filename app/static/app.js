@@ -244,71 +244,146 @@ async function run(task) { if (busy) return; setBusy(true); try { await task(); 
 // microphone, with optional camera video kept in this browser. Audio streams through Threadline's server to
 // Deepgram; the provider key never reaches the page. If Deepgram or the band link drops, capture reconnects
 // by itself and keeps everything heard so far.
-const SOURCE_LABELS_LIVE = { "vexo-usb": "Vexo band · USB", "vexo-ble": "Vexo band · Bluetooth", browser: "Browser microphone" };
-let kit = null, bandNumber = null, tokenRequired = true;
+const SOURCE_LABELS_LIVE = { vexo: "Vexo band", browser: "Browser microphone" };
+let kit = null, logic = null, bandNumber = null, tokenRequired = true, configuredBand = null;
+const loadKit = async () => {
+  kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
+  logic = logic || await import("/static/vendor/vexo-open/dashboard/logic.js");  // the dashboard's own wording
+  return kit;
+};
+const RECENT_KEY = "threadline.bands.v1";
+const recentBands = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
+function rememberBand(number) { try { localStorage.setItem(RECENT_KEY, JSON.stringify([number, ...recentBands().filter((n) => n !== number)].slice(0, 6))); } catch { /* storage off */ } }
+const bandLabel = (n = bandNumber) => `Vexo-HACK-${String(n).padStart(2, "0")}`;
+const pair = { state: "idle", attempt: 0, busy: false, slow: 0 };
+
 fetch("/api/device").then((r) => r.json()).then((d) => {
-  bandNumber = d.vexo_band_number; tokenRequired = d.token_required !== false;
+  configuredBand = d.vexo_band_number; tokenRequired = d.token_required !== false;
   if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
-  bandStatus(); setRecUI(); renderArchive();
-}).catch(() => bandStatus());
-const isVexo = () => $("source").value.startsWith("vexo");
-const bandLabel = () => `Vexo-HACK-${String(bandNumber).padStart(2, "0")}`;
-function bandStatus(text, error = false) {
-  const link = capture.band ? ({ serial: "USB cable", ble: "Bluetooth", sim: "a pretend band (simulator)" })[capture.band.transportKind] || capture.band.transportKind : "";
-  $("band-state").textContent = text || (capture.band ? `Connected: ${capture.band.name} over ${link}. Double-tap the band to start or stop capture.` : bandNumber ? `${bandLabel()} not connected.` : "No band number configured (VEXO_BAND_NUMBER). Use the browser microphone.");
-  $("band-state").classList.toggle("error", error);
+  const fromUrl = new URLSearchParams(location.search).get("band");
+  const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : recentBands()[0] || configuredBand;
+  if (start) chooseBand(start, false);
+  renderPair(); setRecUI();
+}).catch(() => renderPair());
+
+function chooseBand(number, remember = true) {
+  if (capture.band || pair.busy) return;
+  bandNumber = number;
+  $("pick-number").value = String(number).padStart(2, "0");
+  if (remember) rememberBand(number);
+  const url = new URL(location.href); url.searchParams.set("band", String(number).padStart(2, "0")); history.replaceState(null, "", url);
+  renderPair(); renderArchive(); bandStatus("");
 }
+$("pick-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const raw = $("pick-number").value.trim();
+  if (!/^\d{1,3}$/.test(raw) || Number(raw) < 1) { $("pick-message").textContent = "A band number is one to three digits, like 07 or 42."; return; }
+  $("pick-message").textContent = ""; chooseBand(Number(raw));
+});
+function setPairState(state, text) { pair.state = state; $("pair").dataset.state = state; $("pair-status").textContent = text; }
+function renderPair() {
+  const linked = Boolean(capture.band), recon = capture.band?.reconnecting;
+  $("pair-name").textContent = bandNumber ? bandLabel() : "No band chosen";
+  $("step-name").textContent = bandNumber ? bandLabel() : "your band";
+  if (!pair.busy) setPairState(linked ? (recon ? "busy" : capture.band.transportKind === "sim" ? "sim" : "connected") : "idle",
+    linked ? (recon ? "Reconnecting…" : capture.band.transportKind === "sim" ? "Pretend band · kit sample recording" : capture.band.transportKind === "serial" ? "Connected by USB" : "Connected by Bluetooth") : "Not connected");
+  if (capture.active && linked && !recon) { $("pair").dataset.state = "mic"; }
+  $("pick-form").hidden = linked || pair.busy;
+  $("connect-steps").hidden = linked;
+  $("btn-ble").hidden = $("btn-serial").hidden = $("btn-sim").hidden = linked || pair.busy;
+  $("btn-ble").disabled = $("btn-serial").disabled = $("btn-sim").disabled = !bandNumber;
+  $("btn-cancel").hidden = !pair.busy;
+  $("band-disconnect").hidden = !linked;
+  $("usb-help").hidden = linked;
+  $("band-info").hidden = !linked;
+  const recent = recentBands().filter((n) => n !== bandNumber);
+  $("recent-bands").replaceChildren(...(recent.length ? [el("span", { className: "caption", textContent: "Paired here before:" })] : []),
+    ...recent.map((n) => { const b = el("button", { type: "button", className: "chip", textContent: bandLabel(n) }); b.addEventListener("click", () => chooseBand(n)); return b; }));
+}
+function bandStatus(text, error = false) { $("band-state").textContent = text || ""; $("band-state").classList.toggle("error", error); renderPair(); }
+const isVexo = () => $("source").value === "vexo";
 function setRecUI() {
   const live = capture.active, vexo = isVexo();
-  $("band-controls").hidden = !vexo;
-  $("band-connect").disabled = busy || live || Boolean(capture.band) || !bandNumber;
-  $("band-disconnect").disabled = busy || live || !capture.band;
-  $("rec-start").disabled = busy || live || (vexo && !capture.band);
+  $("rec-start").disabled = busy || live || (vexo && (!capture.band || capture.band.reconnecting));
   $("rec-stop").disabled = !live;
   $("source").disabled = live; $("cam-on").disabled = live;
+  $("band-disconnect").disabled = live;
   $("rec-start").classList.toggle("recording", live);
+  renderPair();
 }
 function recState(text, error = false) { $("rec-state").textContent = text; $("rec-state").classList.toggle("error", error); }
-$("source").addEventListener("change", () => { bandStatus(); setRecUI(); });
+$("source").addEventListener("change", () => setRecUI());
 
-$("band-connect").addEventListener("click", async () => {
-  if (!bandNumber || capture.band) return;
-  const usb = $("source").value === "vexo-usb";
-  bandStatus(usb ? "Choose the “Vexo Open band” port (cu.usbmodem… on a Mac, COM… on Windows)." : `Double-tap the band, then choose ${bandLabel()} only.`);
+(async () => {  // what this browser can do, worded like the dashboard
   try {
-    kit = kit || await import("/static/vendor/vexo-open/src/index.js");
-    // The library filters by the exact band name and refuses a band whose number differs.
-    const band = await kit.Band.connect(bandNumber, { autoReconnect: true, ...(usb ? { transport: "serial" } : {}) });
-    if (band.number !== bandNumber) { await band.disconnect(); throw new Error(`That is band ${band.number}, not ${bandNumber}. Disconnected without changing it.`); }
-    attachBand(band);
-    await band.configure({ events: true });
-    bandStatus(); setRecUI();
-  } catch (error) { bandStatus(error.message || "Could not connect to the band.", true); setRecUI(); }
-});
+    await loadKit();
+    const noBle = logic.bluetoothProblem({ reason: kit.WebBluetoothTransport.unavailableReason(), secure: window.isSecureContext, iOS: /iPhone|iPad|iPod/.test(navigator.userAgent) });
+    if (noBle) { $("no-ble").hidden = false; $("no-ble").textContent = noBle; $("btn-ble").disabled = true; }
+    if (kit.WebSerialTransport.unavailableReason()) { $("btn-serial").disabled = true; $("usb-help").textContent = "USB cable connection needs Chrome or Edge on a laptop."; }
+  } catch { /* kit failed to load: buttons will report it */ }
+})();
+
+async function connectBand(kind) {
+  if (!bandNumber || capture.band || pair.busy) return;
+  const mine = ++pair.attempt, wanted = bandLabel();
+  pair.busy = true;
+  setPairState("busy", "Connecting…");
+  bandStatus(kind === "ble" ? `Pick ${wanted} in the list, then press Pair.` : kind === "serial" ? "Pick “Vexo Open band” in the list, then press Connect." : "Starting the pretend band…");
+  let connected = null;
+  try {
+    await loadKit();
+    pair.slow = setTimeout(() => { if (mine === pair.attempt && pair.busy) bandStatus(logic.stillConnectingMessage(kind, wanted)); }, logic.STILL_CONNECTING_MS);
+    let transport = kind;
+    if (kind === "sim") {
+      const bytes = new Uint8Array(await (await fetch("/static/vendor/vexo-open/sample-speech.opus")).arrayBuffer());
+      transport = new kit.SimTransport(bandNumber, { audioPackets: kit.oggPackets(bytes) });
+    }
+    // The library filters Bluetooth to this exact name and refuses a band whose number differs.
+    connected = await kit.Band.connect(bandNumber, { transport, autoReconnect: kind !== "sim" });
+    if (connected.number !== bandNumber) { await connected.disconnect(); throw Object.assign(new Error(`That is ${connected.name}, not ${wanted}. Disconnected without changing it.`), { code: "wrong-band" }); }
+  } catch (e) {
+    if (mine === pair.attempt) { pair.busy = false; bandStatus(logic ? logic.connectProblem(e, { kind, wanted }) : e.message, true); }
+  } finally { clearTimeout(pair.slow); }
+  if (mine !== pair.attempt) { connected?.disconnect().catch(() => {}); return; }  // Cancel was pressed meanwhile
+  pair.busy = false;
+  if (!connected) return renderPair();
+  rememberBand(bandNumber);
+  attachBand(connected);
+  bandStatus(kind === "sim" ? "Pretend band: it plays the kit's sample recording as its microphone. Use it to rehearse." : `Connected to ${connected.name}. It flashes white.`);
+  $("info-link").textContent = { serial: "USB cable", ble: "Bluetooth", sim: "Pretend (simulator)" }[connected.transportKind] || connected.transportKind;
+  $("info-fw").textContent = connected.info?.firmware || "—";
+  try { await connected.configure({ events: true, battery: true }); } catch { /* keep going */ }
+  setRecUI();
+}
+$("btn-ble").addEventListener("click", () => connectBand("ble"));
+$("btn-serial").addEventListener("click", () => connectBand("serial"));
+$("btn-sim").addEventListener("click", () => connectBand("sim"));
+$("btn-cancel").addEventListener("click", () => { pair.attempt += 1; pair.busy = false; clearTimeout(pair.slow); bandStatus(logic?.CANCELLED_MESSAGE || "Cancelled."); });
 function attachBand(band) {
   capture.band = band;
   band.on("disconnect", (e) => {
-    capture.band = null;
+    capture.band = null; $("band-info").hidden = true;
     if (capture.active) stopLive(`Band link ended (${e.reason}${e.reconnect ? ", gave up reconnecting" : ""}). Capture stopped; everything heard so far is kept for review.`);
-    bandStatus(e.reason === "closed" ? "" : `Band disconnected (${e.reason}).${e.message ? " " + e.message : ""}`, e.reason !== "closed"); setRecUI();
+    bandStatus(e.reason === "closed" ? "" : (logic ? logic.disconnectMessage(e.reason, band.name) : `Band disconnected (${e.reason}).`), e.reason !== "closed"); setRecUI();
   });
-  band.on("reconnecting", (e) => { bandStatus(`Band link dropped (${e.reason}). Reconnecting for up to ${e.seconds} s — keep it close.`, true); if (capture.active) recState("Band reconnecting… capture continues as soon as it is back.", true); });
-  band.on("reconnected", () => { bandStatus(); if (capture.active) { capture.audioStarted = Date.now(); capture.warnedSilent = false; recState("Band is back. Listening again."); } });
-  band.on("double-tap", () => { if (capture.active) stopLive(); else if (!busy) $("rec-start").click(); });
+  band.on("reconnecting", (e) => { bandStatus(logic ? logic.reconnectingMessage(e.seconds, e.reason) : `Reconnecting for up to ${e.seconds} s.`, true); setRecUI(); if (capture.active) recState("Band reconnecting… capture continues as soon as it is back.", true); });
+  band.on("reconnected", () => { bandStatus("Back. The band reconnected by itself."); setRecUI(); if (capture.active) { capture.audioStarted = Date.now(); capture.warnedSilent = false; recState("Band is back. Listening again."); } });
+  band.on("double-tap", () => { if (band.transportKind === "sim") return;  // the pretend band double-taps by itself
+    if (capture.active) stopLive(); else if (!busy) $("rec-start").click(); });
   band.on("stream-taken", (e) => { recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true); $("rec-takeback").hidden = false; });
   band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
   // Audio goes to whichever Deepgram socket is open right now (sockets are replaced on reconnect).
   attachSignals(band);
   band.on("audio", (a) => { const ws = capture.ws; if (capture.active && !capture.stopping && ws && ws.readyState === 1) { ws.send(a.opus); capture.packets += 1; } });
 }
-$("band-disconnect").addEventListener("click", async () => { try { await capture.band?.disconnect(); } catch { /* already gone */ } capture.band = null; bandStatus(); setRecUI(); });
+$("band-disconnect").addEventListener("click", async () => { try { await capture.band?.disconnect(); } catch { /* already gone */ } capture.band = null; bandStatus("Disconnected."); setRecUI(); });
 
 $("rec-start").addEventListener("click", async () => {
   if (capture.active) return;
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
   const token = $("token").value.trim();
   if (tokenRequired && !token) { $("token").closest("details").open = true; $("token").focus(); return recState("Enter the app access token (Live providers, above) to stream audio.", true); }
-  const source = $("source").value, vexo = source.startsWith("vexo"), camera = $("cam-on").checked;
+  const source = $("source").value, vexo = source === "vexo", camera = $("cam-on").checked;
   if (vexo && !capture.band) return recState("Connect the band first.", true);
   let stream = null;
   if (!vexo || camera) {
@@ -319,7 +394,7 @@ $("rec-start").addEventListener("click", async () => {
   Object.assign(capture, { active: true, token, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now() });
   $("rec-takeback").hidden = true;
-  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source] + (camera ? " + camera" : "");
+  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
   if (camera) startVideo(stream);
   capture.marks = [];
   if (vexo) { try { await capture.band.configure({ audio: true }); await startSignals(); } catch (e) { capture.active = false; setRecUI(); return recState(`The band refused the microphone: ${e.message}`, true); } }
@@ -328,7 +403,7 @@ $("rec-start").addEventListener("click", async () => {
     capture.recorder = new MediaRecorder(audioOnly);
     capture.recorder.ondataavailable = (e) => { const ws = capture.ws; if (e.data.size && ws && ws.readyState === 1 && !capture.stopping) { ws.send(e.data); capture.chunks += 1; } };
   }
-  capture.timer = setInterval(tick, 500);
+  capture.timer = setInterval(tick, 500); renderPair();
   openSocket();
   setRecUI();
 });
@@ -421,7 +496,7 @@ function finishLive() {
   setRecUI();
   if (!capture.vexo) $("signals").hidden = true;
   if (!finals.length) { const err = capture.lastError; capture.lastError = ""; return recState(err ? `Capture ended: ${err}` : "Capture ended. No speech was transcribed; nothing was saved.", Boolean(err)); }
-  openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), source.startsWith("vexo") ? "vexo" : "mic", startedAt,
+  openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), source === "vexo" ? "vexo" : "mic", startedAt,
     `${SOURCE_LABELS_LIVE[source]} · Deepgram live transcript · ${finals.length} lines. Speaker labels separate voices; they do not prove identity.`);
   recState("Capture stopped. Review below: choose which speaker is you before anything is saved.");
 }
@@ -611,7 +686,7 @@ function attachSignals(band) {
     $("sig-activity").textContent = e.state + (e.cadence ? ` · ${e.cadence}/min` : "");
     $("sig-steps").textContent = `${signals.steps} this session`;
   });
-  band.on("battery", (e) => { signals.battery = `${e.percent}%${e.charging ? " · charging" : ""}`; $("sig-battery").textContent = signals.battery; });
+  band.on("battery", (e) => { signals.battery = `${e.percent}%${e.charging ? " · charging" : ""}`; $("sig-battery").textContent = signals.battery; $("info-battery").textContent = signals.battery; });
   band.on("tap", () => {
     if (!capture.active) return;
     signals.taps += 1; $("sig-taps").textContent = String(signals.taps);

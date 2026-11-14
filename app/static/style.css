@@ -27,3 +27,47 @@ h3{font:normal 21px/1.2 Georgia,serif;margin:0 0 8px;letter-spacing:-.3px}select
 .live-transcript li.mark p{color:#f4b23e;font-weight:600}
 .archive{list-style:none;padding:0;margin:12px 0}.archive>li{border:1px solid var(--line);background:var(--white);margin-bottom:8px}.archive summary{padding:10px 12px;font-size:13px}.archive-lines{list-style:none;margin:0;padding:4px 12px 8px;max-height:280px;overflow:auto}.archive-lines li{padding:6px 0;border-top:1px dashed var(--line)}.archive-lines li p{margin:2px 0 0;font-size:14px}.archive-lines li.marked p{font-weight:600}.archive .row{padding:0 8px 8px}.archive>li.empty{border:0;background:none;color:var(--muted);font-style:italic}
 .graph-panel{border-top:1px solid #cecfbf;margin-top:24px;padding-top:18px}.graph-panel h2{font-size:24px;margin:0}.graph-svg{width:100%;height:auto;background:var(--white);border:1px solid #cfd0bf;margin:8px 0}.g-edge{stroke:#c9cabb}.g-node{cursor:pointer}.g-node text{font-size:11px;fill:#262921}.g-node.selected circle{stroke:#262921;stroke-width:3}.g-node:focus{outline:none}.g-node:focus circle{stroke:#b44630;stroke-width:3}.g-empty{font-size:13px;fill:#72766a}.graph-detail h3{margin:0 0 6px}
+/* ---------- Pairing card + animated band ---------- */
+.pair{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:20px;margin:14px 0 20px;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+.pair-head{display:flex;align-items:center;gap:18px;margin-bottom:16px}
+.band-art{width:64px;height:104px;flex:none;overflow:visible}
+.band-body{fill:#16161a}.band-face{fill:#26262d}
+.band-led{fill:#55555e;transition:fill .25s}
+.band-glow{fill:#3b6cf6;opacity:0;transform-box:fill-box;transform-origin:center}
+.pair-id{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pair-eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:650}
+.pair-name{font:600 24px/1.1 Georgia,serif;letter-spacing:-.4px;overflow-wrap:anywhere}
+.pair-status{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-top:4px}
+.pair-status:before{content:"";width:8px;height:8px;border-radius:50%;background:#b9b9b2}
+.pick label{font-size:12px;font-weight:600}
+.pick-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pick-prefix{font:15px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.pick-number{width:84px;font:600 22px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;text-align:center;padding:10px 8px;border:2px solid var(--ink);border-radius:10px;background:var(--white);color:var(--ink)}
+.recent{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.chip{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--paper);min-height:32px}.chip:hover{border-color:var(--ink)}
+.steps{margin:14px 0;padding-left:20px;font-size:14px}.steps li{margin-bottom:5px}
+.pair-buttons{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.primary-sm{border:0;border-radius:10px;padding:11px 20px;background:var(--ink);color:var(--white);font-weight:600;min-height:44px}.primary-sm:hover{background:#3b4bdb}
+.pair-hint{font-size:12px;color:var(--muted);margin:10px 0 0}
+.pair-msg{font-size:13px;margin:10px 0 0;min-height:0}.pair-msg.error{color:#9d2e1c}
+.band-info{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0 0;padding:12px;background:var(--paper);border-radius:12px}.band-info dt{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}.band-info dd{margin:2px 0 0;font-size:14px;font-weight:600}
+/* states */
+.pair[data-state=busy] .band-led{animation:led-blink .9s steps(1) infinite}
+.pair[data-state=busy] .band-glow{animation:ripple 1.6s ease-out infinite}
+.pair[data-state=busy] .band-art{animation:bob 2.4s ease-in-out infinite}
+.pair[data-state=busy] .pair-status:before{background:#3b6cf6;animation:led-blink .9s steps(1) infinite}
+.pair[data-state=connected] .band-led{fill:#7d97ff;animation:flash 1.1s ease-out 1}
+.pair[data-state=connected] .band-glow{animation:flash-glow 1.1s ease-out 1}
+.pair[data-state=connected] .pair-status:before{background:#1f9d55}
+.pair[data-state=sim] .band-led{fill:#f2b33d;animation:flash 1.1s ease-out 1}
+.pair[data-state=sim] .pair-status:before{background:#f2b33d}
+.pair[data-state=mic] .band-led{fill:#3b6cf6}
+.pair[data-state=mic] .band-glow{animation:breathe 2s ease-in-out infinite}
+.pair[data-state=mic] .pair-status:before{background:#e8452c}
+@keyframes led-blink{0%{fill:#3b6cf6;background:#3b6cf6}50%{fill:#1e2a55;background:#c9d3ff}}
+@keyframes ripple{0%{opacity:.45;transform:scale(.5)}100%{opacity:0;transform:scale(2.6)}}
+@keyframes bob{50%{transform:translateY(-4px)}}
+@keyframes flash{0%,35%{fill:#ffffff}100%{}}
+@keyframes flash-glow{0%{opacity:.9;fill:#fff;transform:scale(1)}100%{opacity:0;transform:scale(2.8)}}
+@keyframes breathe{0%,100%{opacity:.18;transform:scale(1)}50%{opacity:.4;transform:scale(1.35)}}
+@media(prefers-reduced-motion:reduce){.pair .band-led,.pair .band-glow,.pair .band-art,.pair .pair-status:before{animation:none!important}.pair[data-state=busy] .band-led{fill:#3b6cf6}}
