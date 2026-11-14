@@ -1,0 +1,132 @@
+[
+  {
+    "kind": "dementia",
+    "source": "http://127.0.0.1:8001/",
+    "capturedAt": "2026-11-14T22:09:01.574Z",
+    "duration": 15,
+    "fps": 15,
+    "resolution": "1920x1080",
+    "steps": [
+      {
+        "label": "Asked exact routine question",
+        "state": {
+          "status": "Local demo · no data sent",
+          "answer": "Local keyword match · not AI · no interpretationNo direct keyword match. Your latest notes:\n\nNov 14 — “I'm packing for the family visit on Saturday: clothes, phone charger, and the gift for Mom.”\n\nNov 14 — “Clothes are in the suitcase.”\n\nNov 14 — “Doorbell — going to get the delivery.”Source: routine-1 · fictionalSource: routine-2 · fictionalSource: routine-3 · fictional",
+          "calendar": "",
+          "reviewSource": ""
+        }
+      },
+      {
+        "label": "Opened the actual plan source",
+        "state": {
+          "status": "Local demo · no data sent",
+          "answer": "Local keyword match · not AI · no interpretationNo direct keyword match. Your latest notes:\n\nNov 14 — “I'm packing for the family visit on Saturday: clothes, phone charger, and the gift for Mom.”\n\nNov 14 — “Clothes are in the suitcase.”\n\nNov 14 — “Doorbell — going to get the delivery.”Source: routine-1 · fictionalSource: routine-2 · fictionalSource: routine-3 · fictional",
+          "calendar": "",
+          "reviewSource": ""
+        }
+      }
+    ],
+    "note": "Actual current local app; synthetic notes, scripted transcript, local matching and real local demo-calendar API calls. No external provider, real calendar, wearable or live microphone shown."
+  },
+  {
+    "kind": "pms",
+    "source": "http://127.0.0.1:8001/",
+    "capturedAt": "2026-11-14T22:09:30.532Z",
+    "duration": 25,
+    "fps": 15,
+    "resolution": "1920x1080",
+    "steps": [
+      {
+        "label": "Retrieved previous words",
+        "state": {
+          "status": "Local demo · no data sent",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "",
+          "reviewSource": ""
+        }
+      },
+      {
+        "label": "Loaded explicitly scripted conversation",
+        "state": {
+          "status": "Local demo · no data sent",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Selected speaker zero as the wearer",
+        "state": {
+          "status": "Local demo · no data sent",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Saved only chosen speaker statements",
+        "state": {
+          "status": "Saved 1 statement as yours. 1 other segment was dropped, not stored.",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Accepted schedule review",
+        "state": {
+          "status": "Saved 1 statement as yours. 1 other segment was dropped, not stored.",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a time",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Queried demo calendar",
+        "state": {
+          "status": "Saved 1 statement as yours. 1 other segment was dropped, not stored.",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a timeChecking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: freeProposed 2:00 PM–2:30 PM. Waiting for your approval.Create quiet time 2:00 PM–2:30 PM ✓Try another timeDemo control: someone else books this slot",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Injected clearly labeled competing booking",
+        "state": {
+          "status": "Calendar changed underneath the proposal. Approve to see Threadline re-check.",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review2:00 PM–2:30 PMCall with landlorddemo conflict3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a timeChecking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: freeProposed 2:00 PM–2:30 PM. Waiting for your approval.(Demo control) “Call with landlord” was added at 2:00 PM by someone else.Create quiet time 2:00 PM–2:30 PM ✓Try another timeDemo control: someone else books this slot",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Approved; backend rechecked and recovered from conflict",
+        "state": {
+          "status": "Calendar changed underneath the proposal. Approve to see Threadline re-check.",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review2:00 PM–2:30 PMCall with landlorddemo conflict3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a timeChecking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: freeProposed 2:00 PM–2:30 PM. Waiting for your approval.(Demo control) “Call with landlord” was added at 2:00 PM by someone else.You approved 2:00 PM–2:30 PM. Re-checking before creating…Conflict: “Call with landlord” now occupies that time. Nothing was created.Your preference and request are unchanged. Looking again…Checking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: busy (Call with landlord)2:30 PM–3:00 PM: freeProposed 2:30 PM–3:00 PM. Waiting for your approval.Create quiet time 2:30 PM–3:00 PM ✓Try another timeDemo control: someone else books this slot",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Approved replacement slot; created demo calendar event",
+        "state": {
+          "status": "Action complete · demo calendar only, no external calendar changed",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review2:00 PM–2:30 PMCall with landlorddemo conflict2:30 PM–3:00 PMQuiet time (protected)created by Threadline3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a timeChecking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: freeProposed 2:00 PM–2:30 PM. Waiting for your approval.(Demo control) “Call with landlord” was added at 2:00 PM by someone else.You approved 2:00 PM–2:30 PM. Re-checking before creating…Conflict: “Call with landlord” now occupies that time. Nothing was created.Your preference and request are unchanged. Looking again…Checking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: busy (Call with landlord)2:30 PM–3:00 PM: freeProposed 2:30 PM–3:00 PM. Waiting for your approval.You approved 2:30 PM–3:00 PM. Re-checking before creating…Created “Quiet time (protected)” 2:30 PM–3:00 PM in the demo calendar.Done: “Quiet time (protected)” is on the demo calendar, 2:30 PM–3:00 PM.Undo — remove the quiet time",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      },
+      {
+        "label": "Undid created demo event",
+        "state": {
+          "status": "Action complete · demo calendar only, no external calendar changed",
+          "answer": "Local keyword match · not AI · no interpretationYour notes that share words with the question:\n\nSep 14 — “Keeping an evening free helped when I felt overloaded.”\n\nOct 15 — “Felt foggy in the afternoon meeting and lost track of what I'd promised. Writing it down after helped.”\n\nOct 16 — “A short walk after work helped more than scrolling.”Source: reflection-1 · fictionalSource: reflection-3 · fictionalSource: reflection-4 · fictional",
+          "calendar": "Approved actionDemo calendar · Sunday, Nov 15Local demo calendar held in this browser. Not connected to Google Calendar or any external calendar.12:00 PM–1:00 PMLunch with Priya1:00 PM–2:00 PMProject review2:00 PM–2:30 PMCall with landlorddemo conflict3:30 PM–4:15 PMDentist6:30 PM–8:30 PMBook clubFind 15 minutesthirty minutes60 minutes tomorrow afternoontomorrow eveningtomorrow morningFind a timeChecking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: freeProposed 2:00 PM–2:30 PM. Waiting for your approval.(Demo control) “Call with landlord” was added at 2:00 PM by someone else.You approved 2:00 PM–2:30 PM. Re-checking before creating…Conflict: “Call with landlord” now occupies that time. Nothing was created.Your preference and request are unchanged. Looking again…Checking the demo calendar for 30 minutes tomorrow afternoon…12:00 PM–12:30 PM: busy (Lunch with Priya)12:30 PM–1:00 PM: busy (Lunch with Priya)1:00 PM–1:30 PM: busy (Project review)1:30 PM–2:00 PM: busy (Project review)2:00 PM–2:30 PM: busy (Call with landlord)2:30 PM–3:00 PM: freeProposed 2:30 PM–3:00 PM. Waiting for your approval.You approved 2:30 PM–3:00 PM. Re-checking before creating…Created “Quiet time (protected)” 2:30 PM–3:00 PM in the demo calendar.Removed the quiet time block from the demo calendar.",
+          "reviewSource": "Scripted demo transcript — typed in advance, not captured audio."
+        }
+      }
+    ],
+    "note": "Actual current local app; synthetic notes, scripted transcript, local matching and real local demo-calendar API calls. No external provider, real calendar, wearable or live microphone shown."
+  }
+]

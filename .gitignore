@@ -12,6 +12,7 @@ artifacts/
 .models/
 assets/demo/motion/*-frames/
 assets/demo/motion/.render-profile-*/
+assets/demo/motion/.current-capture-*/
 .playwright-mcp/
 output/
 *.log

@@ -1,0 +1,23 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "cgSgspJ2msm6clMCkdW9",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\narration\\pms-pitch-directed.txt",
+  "text_sha256": "570e08b3eb365a14c3942d7e6c0287103a2127c96fac05e7a24b72f7f93beba4",
+  "characters": 971,
+  "audio_bytes": 868980,
+  "request_id": "UbCgXpk9pdW7DTd7GFs2",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.3,
+    "similarity_boost": 0.65
+  },
+  "assembled_video": false,
+  "quality_review": "Technical validation pending; subjective listening not performed.",
+  "duration_seconds": 54.24,
+  "peak_dbfs": -2.2,
+  "decode_check": "Full ffmpeg decode passed",
+  "clean_text_file": "assets/demo/narration/pms-pitch.txt",
+  "voice_preference": "Jessica approved by user; new delivery has not yet received separate listening approval."
+}

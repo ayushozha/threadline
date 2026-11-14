@@ -1,16 +1,18 @@
 # Threadline demo asset handoff
 
-Open [the asset gallery](../../assets/demo/index.html) locally. It contains separate assets for an approximately 60–70 second edit; no completed video was assembled. The first Bella voice was rejected as robotic; the current take is a rewritten, directed Jessica performance, with two short auditions for comparison.
+Open [the asset gallery](../../assets/demo/index.html) locally. The current delivery is **two standalone Jessica pitches**, one for dementia and one for PMS, each with six sections. [Scripts and edit guide](TWO_PITCHES.md). Voice masters are 51.12 and 54.24 seconds; target 60–75 seconds per edit including UI-reading pauses. No completed video was assembled. Jessica's voice was approved by the user.
 
 ## Ready assets
 
 | Material | Location | Checked |
 | --- | --- | --- |
-| Main female voiceover | `assets/demo/narration/narration-jessica-expressive.mp3` | 41.52 seconds, 44.1 kHz mono, peak −3.2 dBFS, full decode; user listening review pending |
+| Dementia female voiceover | `assets/demo/narration/dementia-jessica-final.mp3` | 51.12 seconds, 44.1 kHz mono, peak −2.6 dBFS, full decode |
+| PMS female voiceover | `assets/demo/narration/pms-jessica-final.mp3` | 54.24 seconds, 44.1 kHz mono, peak −2.2 dBFS, full decode |
+| Six chapters per pitch | `assets/demo/narration/dementia/` and `pms/` | Separate MP3s with small silence handles |
 | Voice auditions | `assets/demo/narration/audition-*-expressive.mp3` | Directed Jessica and Lily alternatives, about 15 seconds each |
-| Captions | Matching `.srt` and `.vtt` files | 125 source words aligned by ElevenLabs, 16 cues for the current take |
-| Routine interface | `assets/demo/motion/ui-routine.mp4` | 16 seconds, 1080p, actual query/result/source link |
-| Reflection interface | `assets/demo/motion/ui-reflection.mp4` | 22 seconds, 1080p, exact fictional notes, query, source and intention |
+| Captions | Matching `.srt` and `.vtt` files | 140 dementia / 145 PMS source words aligned by ElevenLabs; 19 cues per take |
+| Dementia interface | `assets/demo/motion/current-dementia.mp4` | 15 seconds, 1080p, actual packing query/result/source link |
+| PMS interface | `assets/demo/motion/current-pms.mp4` | 25 seconds, 1080p, scripted speaker review, preference, actual calendar conflict/retry/create/undo |
 | Local image stills | `assets/demo/visuals/*.png` | Three native H3-Image images, 1536×864; inspected for composition and visible artifacts |
 | Image motion | `assets/demo/visuals/*-motion.mp4` | Separate 5-second 1080p digital push-ins; no AI video generation |
 | Transparent graphics | `assets/demo/motion/*-alpha.webm` | Title, memory, modes, optional decorative waveform; 1080p VP9 alpha |
@@ -49,4 +51,4 @@ Set `ELEVENLABS_MODEL` appropriately for the chosen voice endpoint: the Text to 
 
 The [event deck transcription](../VEXOHACKS_2026-11-14_EVENT_PRESENTATION.md) arrived in a parallel update and has now been read. It lists wearables, voice and real-world experiences; a public-repository submission requirement; and separate sponsor tracks. MiniMax image assets and ElevenLabs narration are actual uses. These clips do not establish Pipecat use or a live economic-agent integration, so do not claim those tracks from the assets alone. Repository visibility and submission remain separate actions.
 
-The UI clips were captured from the earlier deployed scaffold at `1edae7e`. The merged app at `d8c3f0d` adds microphone controls, speaker review, saved preferences and a local demo-calendar action. Those features are described in [the current live-demo script](../DEMO.md), but are not shown in these earlier clips. Do not present these captures as a comprehensive demonstration of the newer app. Voice playback, BLE and real external calendars remain unconnected.
+The `current-` UI clips were captured from the merged local app with speaker review, saved preferences and actual local demo-calendar endpoints. The PMS capture received find-slot 200, booking conflict 409, replacement lookup 200, approved booking 200, then performed undo. The `ui-` clips were captured from the earlier deployed scaffold at `1edae7e` and are retained as alternatives. Voice playback, BLE and real external calendars remain unconnected.

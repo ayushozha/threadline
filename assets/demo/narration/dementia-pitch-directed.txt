@@ -1,0 +1,11 @@
+[storytelling] She’s packing for a family visit. Clothes go in the suitcase. The doorbell rings. Then she comes back… and loses her place.
+
+[thoughtful] For someone living with dementia, a small interruption can make a familiar task difficult to pick up again.
+
+Retracing those steps takes effort, and may mean asking someone else for help. What’s at stake is more than a forgotten charger. [gently] It’s everyday independence.
+
+[warmly] Threadline brings her recorded plan and recent notes back into view. [curious] “What was my next planned step?” Her plan and earlier notes give her a place to restart.
+
+In our prototype, she can review what was captured, correct it, and see the source. Unrecorded progress stays unknown.
+
+[confidently] That’s the difference: support tied to her intention and context. This fictional demo explores a simple goal: [warmly] help people keep their place, and their say, in everyday life.

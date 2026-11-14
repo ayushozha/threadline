@@ -1,0 +1,38 @@
+[
+  {
+    "section": "Introduction",
+    "speech_start": 0.1,
+    "speech_end": 8.34,
+    "text": "You’ve got plans every evening. You’re exhausted. And you remember thinking, “I felt like this before… what actually helped?”"
+  },
+  {
+    "section": "Problem statement",
+    "speech_start": 8.82,
+    "speech_end": 16.82,
+    "text": "For some people, the days before a period can bring changes in energy, mood, and concentration. But remembering the details takes effort."
+  },
+  {
+    "section": "Why it matters",
+    "speech_start": 17.14,
+    "speech_end": 21.58,
+    "text": "When you’re already overwhelmed, another form to fill out can feel like one more task."
+  },
+  {
+    "section": "Our solution",
+    "speech_start": 22.1,
+    "speech_end": 32.259,
+    "text": "Threadline keeps the words you choose to save, with your permission and their source. Ask, “What helped me feel less rushed last time?” Your note says: leaving an evening free."
+  },
+  {
+    "section": "What it solves",
+    "speech_start": 32.8,
+    "speech_end": 41.04,
+    "text": "Then it helps you act. Our prototype checks a demo calendar, proposes a break, catches a new conflict, and only books after you approve."
+  },
+  {
+    "section": "Why this approach",
+    "speech_start": 41.48,
+    "speech_end": 53.96,
+    "text": "That’s what makes this approach personal: your own recorded words, your saved preferences, and practical support you control. This is a fictional example, not a judgment about how you feel. A little more breathing room."
+  }
+]

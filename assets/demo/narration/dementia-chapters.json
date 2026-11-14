@@ -1,0 +1,38 @@
+[
+  {
+    "section": "Introduction",
+    "speech_start": 0.14,
+    "speech_end": 8.26,
+    "text": "She’s packing for a family visit. Clothes go in the suitcase. The doorbell rings. Then she comes back… and loses her place."
+  },
+  {
+    "section": "Problem statement",
+    "speech_start": 8.72,
+    "speech_end": 14.26,
+    "text": "For someone living with dementia, a small interruption can make a familiar task difficult to pick up again."
+  },
+  {
+    "section": "Why it matters",
+    "speech_start": 14.72,
+    "speech_end": 23.98,
+    "text": "Retracing those steps takes effort, and may mean asking someone else for help. What’s at stake is more than a forgotten charger. It’s everyday independence."
+  },
+  {
+    "section": "Our solution",
+    "speech_start": 24.46,
+    "speech_end": 33.0,
+    "text": "Threadline brings her recorded plan and recent notes back into view. “What was my next planned step?” Her plan and earlier notes give her a place to restart."
+  },
+  {
+    "section": "What it solves",
+    "speech_start": 33.38,
+    "speech_end": 40.0,
+    "text": "In our prototype, she can review what was captured, correct it, and see the source. Unrecorded progress stays unknown."
+  },
+  {
+    "section": "Why this approach",
+    "speech_start": 40.44,
+    "speech_end": 50.94,
+    "text": "That’s the difference: support tied to her intention and context. This fictional demo explores a simple goal: help people keep their place, and their say, in everyday life."
+  }
+]

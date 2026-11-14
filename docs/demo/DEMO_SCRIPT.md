@@ -1,5 +1,7 @@
 # Threadline demo script
 
+Current delivery: [two standalone pitches](TWO_PITCHES.md), each with its own introduction, problem, importance, solution, benefit and differentiation. This older document describes the combined two-vignette edit.
+
 ## Current narration revision
 
 The initial Bella delivery was rejected as too robotic. Use the conversational [125-word revision](../../assets/demo/narration/narration-expressive.txt) and [Jessica expressive take](../../assets/demo/narration/narration-jessica-expressive.mp3). The [directed input](../../assets/demo/narration/narration-expressive-directed.txt) adds sparse performance cues; captions use the clean text. This keeps the exact two demo questions and existing UI scenes.
