@@ -37,7 +37,7 @@ def main():
                                'Narration is editorial voiceover, not connected app speech.',
                                'Wearable capture and external agent actions are not implemented.'],
                 'assets':assets}
-    (FOLDER/'manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False),encoding='utf-8')
+    (FOLDER/'manifest.json').write_text(json.dumps(manifest,separators=(',', ':'),ensure_ascii=False),encoding='utf-8')
     print(f'Inspected {len(assets)} media assets; {manifest["images_generated"]} generated images.')
 
 

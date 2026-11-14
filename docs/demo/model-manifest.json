@@ -34,5 +34,10 @@
     }
   ],
   "status": "verified",
-  "completed_at": "2026-11-14T21:58:25.127222+00:00"
+  "completed_at": "2026-11-14T21:58:25.127222+00:00",
+  "reused_encoder": {
+    "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "bytes": 15687142551,
+    "source": "Existing previous hackathon ComfyUI text_encoders; supported by pinned model README."
+  }
 }

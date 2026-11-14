@@ -45,7 +45,7 @@ assets/demo/
     [optional quiet transition cue]
 ```
 
-Do not invent filenames as evidence that assets were generated. Include an asset manifest with actual paths and generation/capture provenance in the eventual delivery. Any lifestyle image should be marked `AI-generated editorial image` in that manifest. App captures must remain genuine.
+Do not invent filenames as evidence that assets were generated. Include an asset manifest with actual paths and generation/capture provenance in the eventual delivery. Any lifestyle image should be marked as a synthetic editorial image made with its named model in that manifest. App captures must remain genuine.
 
 ## Capture sequence
 

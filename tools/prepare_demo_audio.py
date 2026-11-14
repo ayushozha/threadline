@@ -46,7 +46,7 @@ def align(audio, text_path):
         result = response.json()
         if not result.get('words'):
             raise SystemExit('No word timings returned; no captions generated.')
-        destination.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+        destination.write_text(json.dumps(result, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     words = [dict(word, text=word['text'].strip()) for word in result['words'] if word['text'].strip()]
     normalize = lambda value: re.sub(r'\W+', '', value.casefold())
     if normalize(' '.join(word['text'] for word in words)) != normalize(text):
