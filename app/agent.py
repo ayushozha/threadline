@@ -3,7 +3,7 @@ every rule (allowed actions, preference match, evidence ids, auto, wording) is e
 
 import json
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 import httpx
@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 ACTIONS = ("none", "offer_schedule", "offer_update", "show_evidence", "watch_tap", "ask_checkin",
-           "hold_decision", "move_to_today", "calendar_note", "music")
+           "hold_decision", "move_to_today", "calendar_note", "music", "create_task")
 NEEDS_TASK = {"hold_decision", "move_to_today"}  # calendar_note may name a task; if it does, it must exist
 MOODS = ("calm", "steady", "uplifting")
 HOLD_WINDOW_DAYS = 3
@@ -32,9 +32,10 @@ ACTION_CRITERIA = {
     "move_to_today": "The person says their energy is good; offer to move one open task to today.",
     "calendar_note": "Offer to add a short calendar note, in the person's own words, about a task or decision.",
     "music": "Offer music that matches the energy the person states (calm, steady or uplifting).",
+    "create_task": "The person explicitly asks for a new reminder or task. Offer a draft from their words, never save it automatically.",
 }
 MESSAGES = {
-    "none": "Saved. Nothing else to do right now.",
+    "none": "Listening. No action proposed.",
     "offer_schedule": "Want me to look for a quiet slot, as you asked me to?",
     "offer_update": "Want me to make the update you set up for this?",
     "show_evidence": "You've said something similar before. Here are those notes.",
@@ -44,6 +45,7 @@ MESSAGES = {
     "move_to_today": "Want to move this task to today?",
     "calendar_note": "Want me to add this as a note on your calendar?",
     "music": "Want some music to go with that?",
+    "create_task": "Save this as a task?",
 }
 LOW_ENERGY = re.compile(r"\b(tired|exhausted|drained|wiped( out)?|low energy|overloaded)\b", re.IGNORECASE)
 POSITIVE_ENERGY = re.compile(r"\b(energi[sz]ed|great|motivated|good energy|productive|excited)\b", re.IGNORECASE)
@@ -54,6 +56,10 @@ ENERGY_WORDING = re.compile(
 )
 MUSIC_WORDS = re.compile(r"\b(music|song|songs|playlist|tunes)\b", re.IGNORECASE)
 NOTE_WORDS = re.compile(r"\b(note|write (it|that|this) down|jot|calendar)\b", re.IGNORECASE)
+TASK_REQUEST = re.compile(
+    r"^(?:please\s+)?(?:remind me to|(?:i (?:need|want|have) to )?remember to|"
+    r"(?:add|create) (?:a |the )?task(?: to)?)[\s:,-]+(?P<title>.+)", re.IGNORECASE,
+)
 # Claims of diagnosis, hormones or cycle causation are never shown, whatever the model writes.
 BLOCKED = re.compile(
     r"diagnos|disorder|hormon|estrogen|oestrogen|progesterone|\bpms\b|\bpmdd\b|luteal|follicular|ovulat|menstrua"
@@ -205,6 +211,29 @@ def task_message(action: str, task: Task) -> str:
     }[action]
 
 
+def task_draft(body: DecideRequest, *, semantic_request: bool = False) -> dict | None:
+    """Only literal transcript text becomes a draft; the model cannot supply a title or date."""
+    text = " ".join(body.statement.text.split()).strip()
+    match = TASK_REQUEST.match(text)
+    if not match and not semantic_request:
+        return None
+    title = (match.group("title") if match else text).strip(" .,:;!?\"“”")
+    if not title or (len(title.split()) < 2 and sum(char.isalpha() for char in title) < 4):
+        return None
+    due = None
+    days = set(re.findall(r"\b(today|tomorrow)\b", title.casefold()))
+    if match and len(days) == 1 and not re.search(r"\b(?:not|except|maybe|perhaps)\b", title, re.IGNORECASE):
+        suffix = re.search(r"\s+(today|tomorrow)$", title, re.IGNORECASE)
+        if suffix:
+            due = (date.today() + timedelta(days=suffix.group(1).lower() == "tomorrow")).isoformat()
+            title = title[:suffix.start()].rstrip(" ,")
+    title = quote(title, 200)
+    canonical = lambda value: " ".join(re.findall(r"\w+", value.casefold()))
+    if not title or any(canonical(task.title) == canonical(title) for task in body.tasks):
+        return None
+    return {"title": title, "due": due, "source_id": body.statement.id}
+
+
 def finalize(body: DecideRequest, engine: str, proposal: dict) -> dict:
     """Enforce every rule on a proposal, whoever made it. Never trusts `auto` or ids from the proposal."""
     known = {body.statement.id, *(note.id for note in body.recent)}
@@ -225,6 +254,14 @@ def finalize(body: DecideRequest, engine: str, proposal: dict) -> dict:
         action = downgrade()
     if action == "show_evidence" and not evidence:
         action = "none"
+
+    draft = task_draft(body, semantic_request=engine == "gemini") if action == "create_task" else None
+    if action == "create_task":
+        if draft is None:
+            action = "none"
+        else:
+            pref = None
+            evidence = [body.statement.id]
 
     today = date.today()
     tasks = {t.id: t for t in body.tasks}
@@ -253,11 +290,18 @@ def finalize(body: DecideRequest, engine: str, proposal: dict) -> dict:
         reason, message = neutral_reason(body), ""
     if not message or proposal.get("action") != action:
         message = task_message(action, task) if task else MESSAGES[action]  # the model's wording described a different action
+    if action == "create_task":
+        reason = f'Transcript: "{quote(body.statement.text, 140)}".'[:160]
+        message = MESSAGES[action]
+    elif action == "none":
+        message = MESSAGES[action]
     result = {
         "engine": engine, "action": action, "auto": action in AUTO_ACTIONS,
         "preference_id": pref.id if pref else None, "evidence": evidence, "reason": reason, "message": message,
         "task_id": task.id if task else None, "note": note, "music": music,
     }
+    if draft is not None and action == "create_task":
+        result["draft_task"] = draft
     if proposal.get("fallback_reason"):
         result["fallback_reason"] = str(proposal["fallback_reason"])[:200]
     return result
@@ -267,6 +311,8 @@ def local_task_proposal(body: DecideRequest) -> dict | None:
     """Energy words and explicit asks in the person's own statement; None falls through to preferences."""
     text, today = body.statement.text, date.today()
     said = f'You said "{quote(text, 120)}".'
+    if task_draft(body):
+        return {"action": "create_task", "evidence": [body.statement.id], "reason": said}
     hold = eligible_tasks(body, "hold_decision", today)
     move = eligible_tasks(body, "move_to_today", today)
     if LOW_ENERGY.search(text) and hold:
@@ -317,7 +363,9 @@ async def decisions_propose(body: DecideRequest, key: str, model: str, slots) ->
                 "the listed `preferences`. Which single next step best fits the newest `statement`? Offer schedule or "
                 "update only when a preference of that kind applies. hold_decision only when the person states low "
                 "energy and a big-decision task is due within 3 days; move_to_today only when they state good energy "
-                "and an open task exists. Prefer none when unsure. `today` and `voice` are context only."
+                "and an open task exists. create_task only for an explicit request to remember a new future task, "
+                "not ordinary fragments or a question about what was said. It needs no existing task. "
+                "Prefer none when unsure. `today` and `voice` are context only."
             ),
             "criteria": ACTION_CRITERIA,
         }
@@ -381,7 +429,9 @@ async def interactions_propose(body: DecideRequest, key: str, model: str, slots)
         "hold_decision: only if the person states low energy; task_id of a not-done task with big_decision true due "
         "within 3 days. move_to_today: only if the person states good energy; task_id of a not-done task, preferring "
         "big_decision false. calendar_note: optional task_id. music: music.mood one of calm, steady, uplifting matching "
-        "the stated energy, never track names. task_id must be an id from tasks. today and voice are context only. "
+        "the stated energy, never track names. create_task only for an explicit new reminder or task request, "
+        "never an ordinary conversational fragment; it requires no existing task and remains an unsaved draft. "
+        "task_id must be an id from tasks. today and voice are context only. "
         "Describe energy only in the person's own words. "
         "reason: at most 160 characters, plain, quoting the person's own words. message: at most 200 characters, "
         "addressed to the person. Never diagnose; never mention hormones, PMS/PMDD, or that a cycle causes anything; "

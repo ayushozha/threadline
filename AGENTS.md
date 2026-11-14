@@ -2,7 +2,7 @@
 
 Hackathon prototype. Keep changes small and demonstrate actual behavior.
 
-- Work directly on `main`; the owner explicitly requested no pull requests for this repository.
+- Only authenticated GitHub account `ayushozha` may push directly to `main`. Other contributors must use branches and reviewed pull requests; active GitHub rules enforce this.
 - Preserve Git hooks, checks, and remote protections. Never force-push.
 - Local `git config push.allowDirect true` is scoped to this repository and implements that request.
 - Never commit `.env`, recordings, personal health data, keys, or access tokens.
@@ -13,3 +13,4 @@ Hackathon prototype. Keep changes small and demonstrate actual behavior.
 - Vexo band access uses the official Vexo Open kit (vendored unchanged in app/static/vendor/vexo-open). Pair only the user's own band number.
 - For live video, Vexo synchronization, remote viewing, and bring-your-own GoPro/Meta/phone/Pi setup, follow `docs/LIVE_CAPTURE_HANDOFF.md`. It distinguishes current code from required integrations; do not claim a local preview proves remote streaming or AI video analysis.
 - Validate with `uv run pytest` and `uv run python -m compileall -q app`; deploy with `./deploy/deploy.ps1`.
+- Before edits and before deployment, fetch `origin/main`. Integrate newer commits without losing local or teammate work, inspect the new scope, and rerun relevant checks. Never reset or overwrite uncommitted changes to catch up.

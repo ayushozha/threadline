@@ -18,6 +18,21 @@ private account access. They expire, enforce request and streaming limits, and
 cannot create Apple Watch pairings. Operator scripts can still send
 `X-App-Token`; the browser does not receive that token. Run one backend worker
 while these sessions live in process memory; a restart requires a new session.
+Each browser session permits up to two hours of capture, 20 MiB of audio and
+30 connection attempts; global concurrency remains limited. Short reconnects
+retain at most two seconds of band packets. Longer gaps are shown as missed
+packets instead of claiming uninterrupted capture. Keep the page open while using
+Web Bluetooth; suspending the browser can interrupt device access.
+
+`DEEPGRAM_LANGUAGE=multi` removes the former English-only restriction;
+`DEEPGRAM_ENDPOINTING_MS=100` matches the Vexo reference's pause setting. Supported
+languages depend on the configured model. The browser keeps at most 12 seconds
+of decoded audio in memory and can submit a short, consented WAV to Gemini at
+`POST /api/transcribe/fallback` when speech has no transcription or when the user
+chooses **Check recent speech**. This fallback preserves the original language
+and script, does not identify speakers, and is not a guarantee for every language.
+Finalized transcript lines now update the current browser-local archive as they
+arrive, without waiting for Stop. Provider controls and keys stay off the page.
 
 The older endpoint details below remain reference material; the old instructions
 to type an access token or turn on provider controls no longer describe the UI.

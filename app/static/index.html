@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f4f4f1">
   <title>Threadline — a little context, kept close</title>
   <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js" type="module"></script>
 </head>
 <body>
   <div class="app">
@@ -128,6 +128,8 @@
               <div class="tc-head"><h2>Live transcript</h2><span class="caption">Speaker labels separate voices, not identities</span></div>
               <ol id="live-lines" class="script"></ol>
               <p id="live-interim" class="interim">Connect your band above, allow recording, and press the red button. Words appear here as they are spoken.</p>
+              <p id="speech-status" class="caption">Speech recognition detects supported languages automatically.</p>
+              <button type="button" id="recover-speech" class="text-button">Check recent speech</button>
             </div>
             <section id="review" class="block review" aria-labelledby="review-heading" hidden>
           <h3 id="review-heading">Review before saving</h3>
@@ -280,7 +282,7 @@
         </section>
         <div class="two-col">
           <section class="card" aria-labelledby="words-h">
-            <div class="section-top"><h2 id="words-h">In your words</h2><button type="button" id="today-summary" class="secondary">Summarize with Gemini</button></div>
+            <div class="section-top"><h2 id="words-h">In your words</h2><button type="button" id="today-summary" class="secondary">Summarize my day</button></div>
             <div id="today-summary-out" class="answer"><p class="caption">A three-line summary from today's saved statements, with the day's readings as context.</p></div>
           </section>
           <section class="card dark" aria-labelledby="measured-h">
@@ -321,7 +323,7 @@
         </section></section>
       <section class="view" data-view="graph" hidden><section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
           <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>
-          <div class="row tight" role="radiogroup" aria-label="Graph engine">
+          <div class="row tight" role="radiogroup" aria-label="Graph engine" hidden>
             <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
             <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
           </div>
