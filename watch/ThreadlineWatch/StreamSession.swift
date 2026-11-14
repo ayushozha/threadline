@@ -68,10 +68,10 @@ final class StreamSession: ObservableObject {
             }
             guard isStreaming else { return }
             connect()
-            ticker = Task { [weak self] in
+            ticker = Task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
-                    self?.sendSensors()
+                    self.sendSensors()
                 }
             }
         }

@@ -19,14 +19,22 @@ targets:
         PRODUCT_NAME: Threadline Watch
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: ThreadlineWatch/ThreadlineWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     info:
       path: ThreadlineWatch/Info.plist
       properties:
         CFBundleDisplayName: Threadline
         WKApplication: true
         WKWatchOnly: true
-        NSMicrophoneUsageDescription: Threadline streams what your microphone hears to your Threadline server for live transcription while you are recording. Nothing is stored on the watch.
-        WKBackgroundModes: [audio]
+        NSMicrophoneUsageDescription: Only when you turn on Record audio, Threadline streams what your microphone hears to your Threadline server for live transcription. Nothing is stored on the watch.
+        NSHealthShareUsageDescription: While you stream, Threadline reads your live heart rate and active energy and sends them to your paired Threadline page. Nothing is saved.
+        NSHealthUpdateUsageDescription: Threadline runs a workout session only to read live heart rate while streaming. The workout is discarded and not saved to Health.
+        NSMotionUsageDescription: While you stream, Threadline sends your step count and activity (still, walking, running) to your paired Threadline page.
+        WKBackgroundModes: [workout-processing, audio]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSAllowsArbitraryLoads: true

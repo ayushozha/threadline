@@ -30,10 +30,7 @@ struct PairView: View {
 /// Screen 2: live sensor readings, what is being shared, and an optional audio recording.
 struct StreamView: View {
     @EnvironmentObject var session: StreamSession
-    @ObservedObject private var sensors: Sensors
     @Environment(\.isLuminanceReduced) private var screenDimmed
-
-    init() { _sensors = ObservedObject(wrappedValue: Sensors()) }
 
     var body: some View {
         StreamContent(session: session, sensors: session.sensors)

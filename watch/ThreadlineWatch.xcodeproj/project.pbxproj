@@ -8,16 +8,19 @@
 
 /* Begin PBXBuildFile section */
 		3D304F3B7DF4F40CAEE49903 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3642F369F78CD5ED29D3C16B /* Views.swift */; };
-		53AA02F7E088E780F9F30DB6 /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 428221B252875C96DB4A87A6 /* Recorder.swift */; };
+		710E92B34A041F1EE85EC25D /* StreamSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDE073EC97CAB40AC8AD4989 /* StreamSession.swift */; };
 		862967F470B54BC12C6E51E3 /* ThreadlineWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E271399EF8176FC07138862 /* ThreadlineWatchApp.swift */; };
+		898EEAD61CA4713DA5F160E5 /* Sensors.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD608EA22DE16A51FD72DB0D /* Sensors.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0E271399EF8176FC07138862 /* ThreadlineWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadlineWatchApp.swift; sourceTree = "<group>"; };
 		3642F369F78CD5ED29D3C16B /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
-		428221B252875C96DB4A87A6 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		581E97FED0504000B82D9F20 /* ThreadlineWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ThreadlineWatch.entitlements; sourceTree = "<group>"; };
 		7DD7A50349ACAB9162720F18 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C14785E4671237DC065C3F70 /* ThreadlineWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ThreadlineWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CD608EA22DE16A51FD72DB0D /* Sensors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sensors.swift; sourceTree = "<group>"; };
+		EDE073EC97CAB40AC8AD4989 /* StreamSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -25,7 +28,9 @@
 			isa = PBXGroup;
 			children = (
 				7DD7A50349ACAB9162720F18 /* Info.plist */,
-				428221B252875C96DB4A87A6 /* Recorder.swift */,
+				CD608EA22DE16A51FD72DB0D /* Sensors.swift */,
+				EDE073EC97CAB40AC8AD4989 /* StreamSession.swift */,
+				581E97FED0504000B82D9F20 /* ThreadlineWatch.entitlements */,
 				0E271399EF8176FC07138862 /* ThreadlineWatchApp.swift */,
 				3642F369F78CD5ED29D3C16B /* Views.swift */,
 			);
@@ -107,7 +112,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				53AA02F7E088E780F9F30DB6 /* Recorder.swift in Sources */,
+				898EEAD61CA4713DA5F160E5 /* Sensors.swift in Sources */,
+				710E92B34A041F1EE85EC25D /* StreamSession.swift in Sources */,
 				862967F470B54BC12C6E51E3 /* ThreadlineWatchApp.swift in Sources */,
 				3D304F3B7DF4F40CAEE49903 /* Views.swift in Sources */,
 			);
@@ -178,6 +184,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ThreadlineWatch/ThreadlineWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = ThreadlineWatch/Info.plist;
@@ -193,6 +200,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ThreadlineWatch/ThreadlineWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = ThreadlineWatch/Info.plist;
