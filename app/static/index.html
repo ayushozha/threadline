@@ -102,21 +102,27 @@
             </svg>
             <div class="pair-id">
               <span class="pair-eyebrow">Apple Watch</span>
-              <span class="pair-name">Pair with a code</span>
+              <span class="pair-name">Sensors &amp; backup mic</span>
               <span id="watch-status" class="pair-status" role="status" aria-live="polite">Not paired</span>
             </div>
           </div>
           <div id="watch-code-box" class="watch-code-box" hidden>
             <span class="caption">Enter this code in Threadline on your watch</span>
             <output id="watch-code" class="watch-code">——————</output>
-            <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Record</b>. The transcript appears here.</li></ol>
+            <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Stream</b>. Heart rate, steps and activity appear here; turn on audio only if the band isn't recording.</li></ol>
           </div>
           <div class="pair-buttons">
             <button type="button" id="watch-pair-btn" class="primary-sm">Pair Apple Watch</button>
             <button type="button" id="watch-unpair" class="secondary" hidden>Unpair</button>
           </div>
+          <dl id="watch-sensors" class="band-info watch-sensors" hidden>
+            <div><dt>Heart rate</dt><dd id="ws-hr">—</dd></div>
+            <div><dt>Steps</dt><dd id="ws-steps">—</dd></div>
+            <div><dt>Activity</dt><dd id="ws-activity">—</dd></div>
+          </dl>
+          <p id="ws-age" class="pair-hint" hidden></p>
           <p id="watch-msg" class="pair-msg" role="status" aria-live="polite"></p>
-          <p class="pair-hint">A web page cannot reach a watch directly: the Threadline watch app streams its microphone to this server, and the code links it to this page.</p>
+          <p class="pair-hint">A web page cannot reach a watch over Bluetooth: the Threadline watch app sends its readings (and, if you choose, its microphone) to this server, and the code links it to this page. Readings are numbers, not feelings.</p>
         </div>
 
       </aside>

@@ -440,7 +440,9 @@ function openSocket() {
         if (msg.transcript.trim()) {
           const shift = ws.offset || 0;
           const final = { ...msg, start: msg.start + shift, words: msg.words.map((w) => ({ ...w, start: (w.start || 0) + shift, end: (w.end || 0) + shift })) };
-          final.activity = signals.activity; capture.finals.push(final); addLiveLine(final);
+          final.activity = signals.activity;
+          if (watch.sensors?.heart_rate != null && Date.now() - watch.sensorsAt < 10000) final.hr = Math.round(watch.sensors.heart_rate);
+          capture.finals.push(final); addLiveLine(final);
         }
         $("live-interim").textContent = "";
       } else $("live-interim").textContent = msg.transcript;
@@ -464,7 +466,7 @@ function addLiveLine(msg) {
   const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
   $("live-lines").append(el("li", {},
-    el("span", { className: "caption", textContent: `${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}` }),
+    el("span", { className: "caption", textContent: `${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` }),
     el("p", { textContent: msg.transcript })));
   $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
 }
@@ -714,7 +716,7 @@ function saveArchive(list) { try { localStorage.setItem(archiveKey(), JSON.strin
 function archiveSession(finals, meta) {
   const lines = finals.map((f) => {
     const speakers = [...new Set(f.words.map((w) => w.speaker).filter((s) => s != null))];
-    return { at: new Date(meta.startedAt.getTime() + f.start * 1000).toISOString(), offset: f.start, speakers, text: f.transcript, activity: f.activity || "", marked: meta.marks.some((m) => m >= f.start - 1 && m <= f.start + (f.duration || 0) + 1) };
+    return { at: new Date(meta.startedAt.getTime() + f.start * 1000).toISOString(), offset: f.start, speakers, text: f.transcript, activity: f.activity || "", hr: f.hr ?? null, marked: meta.marks.some((m) => m >= f.start - 1 && m <= f.start + (f.duration || 0) + 1) };
   });
   const entry = { id: newId("t"), startedAt: meta.startedAt.toISOString(), endedAt: new Date().toISOString(), source: meta.source, device: meta.device || capture.band?.name || (meta.source === "browser" ? "Browser microphone" : bandNumber ? bandLabel() : ""), marks: meta.marks.length, lines };
   const ok = saveArchive([entry, ...loadArchive()]);
@@ -728,7 +730,7 @@ function renderArchive() {
   for (const entry of list) {
     const mins = Math.max(1, Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000));
     const lines = el("ol", { className: "archive-lines" }, ...entry.lines.map((l) => el("li", { className: l.marked ? "marked" : "" },
-      el("span", { className: "caption", textContent: `${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${l.speakers.length ? l.speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${l.activity ? ` · ${l.activity}` : ""}${l.marked ? " · ★ marked" : ""}` }),
+      el("span", { className: "caption", textContent: `${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${l.speakers.length ? l.speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${l.activity ? ` · ${l.activity}` : ""}${l.hr ? ` · ♥ ${l.hr}` : ""}${l.marked ? " · ★ marked" : ""}` }),
       el("p", { textContent: l.text }))));
     const exp = el("button", { type: "button", className: "text-button", textContent: "Export .txt" });
     const review = el("button", { type: "button", className: "text-button", textContent: "Save statements from this" });
@@ -811,7 +813,8 @@ function showGraphNode(n, edges, byId) {
 
 
 /* ---------- Apple Watch (companion app streams to this server; this page follows it by code) ---------- */
-const watch = { ws: null, code: "", finals: [], startedAt: null, device: "Apple Watch" };
+const watch = { ws: null, code: "", finals: [], startedAt: null, device: "Apple Watch", sensors: null, sensorsAt: 0, owningLive: false };
+setInterval(() => { if (watch.sensorsAt) { const s = Math.round((Date.now() - watch.sensorsAt) / 1000); $("ws-age").hidden = false; $("ws-age").textContent = s < 5 ? "Live from the watch" : `Last reading ${s} s ago`; } }, 1000);
 function watchState(state, text) { $("watch-pair").dataset.state = state; $("watch-status").textContent = text; }
 function watchMsg(text, error = false) { $("watch-msg").textContent = text; $("watch-msg").classList.toggle("error", error); }
 $("watch-pair-btn").addEventListener("click", async () => {
@@ -836,10 +839,16 @@ function openWatchFeed(token) {
     const msg = JSON.parse(event.data);
     if (msg.type === "watch_connected") {
       watch.device = msg.device || "Apple Watch"; watch.finals = []; watch.startedAt = new Date();
-      watchState("connected", `${watch.device} · streaming`); watchMsg("Connected. Recording happens on the watch.");
-      $("watch-code-box").hidden = true;
-      $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = watch.device; $("signals").hidden = true;
+      watchState("connected", `${watch.device} · connected`); watchMsg("Connected. Readings stream from the watch.");
+      $("watch-code-box").hidden = true; watch.owningLive = false;
+    } else if (msg.type === "sensors") {
+      watch.sensors = msg; watch.sensorsAt = Date.now(); $("watch-sensors").hidden = false;
+      if (msg.heart_rate != null) $("ws-hr").textContent = `${Math.round(msg.heart_rate)} bpm`;
+      if (msg.steps != null) $("ws-steps").textContent = String(msg.steps);
+      if (msg.activity) $("ws-activity").textContent = msg.activity;
     } else if (msg.type === "result") {
+      if (capture.active) return;  // the band is recording; the watch only adds readings
+      if (!watch.owningLive) { watch.owningLive = true; watch.startedAt = watch.startedAt || new Date(); $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = `${watch.device} · microphone`; $("signals").hidden = true; }
       if (msg.is_final && msg.transcript.trim()) {
         watch.finals.push(msg);
         const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
