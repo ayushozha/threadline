@@ -45,7 +45,7 @@ No patient impersonation, dramatic distress, or exaggerated reassurance. The con
 
 ## What is real in this demonstration
 
-Checked against `README.md`, `app/static/index.html`, and `app/static/app.js` at the current scaffold:
+Capture revision: deployed scaffold `1edae7e`. A parallel update at `d8c3f0d` subsequently added microphone capture, speaker review, preferences and a local demo calendar; see [the current live-demo script](../DEMO.md). The statements below describe the captured revision only, not the newer app's complete capabilities:
 
 - The app has Personal reflection and Resume a routine modes, editable session notes, local keyword retrieval, and clickable source-note links.
 - The initial data is explicitly fictional. The local response is keyword retrieval, not an AI inference. Preserve the visible `Local demo` status in a genuine app recording.

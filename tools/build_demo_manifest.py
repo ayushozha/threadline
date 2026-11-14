@@ -35,7 +35,8 @@ def main():
                 'limitations':['Fictional examples; no medical assessment or validated clinical effect.',
                                'UI captures show local keyword retrieval, not live AI.',
                                'Narration is editorial voiceover, not connected app speech.',
-                               'Wearable capture and external agent actions are not implemented.'],
+                               'UI footage captures earlier scaffold1edae7e; newer local demo calendar is not shown.',
+                               'Wearable capture and real external agent actions are not implemented.'],
                 'assets':assets}
     (FOLDER/'manifest.json').write_text(json.dumps(manifest,separators=(',', ':'),ensure_ascii=False),encoding='utf-8')
     print(f'Inspected {len(assets)} media assets; {manifest["images_generated"]} generated images.')

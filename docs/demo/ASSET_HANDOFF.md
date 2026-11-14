@@ -45,6 +45,8 @@ uv run python tools/build_demo_manifest.py
 
 Set `ELEVENLABS_MODEL` appropriately for the chosen voice endpoint: the Text to Dialogue helper uses the v4-compatible API, while `generate_narration.py` uses Text to Speech. Model and voice IDs are read from local `.env`. See [local image setup](LOCAL_IMAGE_RUNTIME.md) for runtime paths and model files.
 
-## Remaining input
+## Presentation and app revision
 
-The additional Markdown presentation document mentioned in the request was not found in this project or the checked recent project locations. These materials use the conversation context and the current repository. Merge that document's verified information when its path is available.
+The [event deck transcription](../VEXOHACKS_2026-11-14_EVENT_PRESENTATION.md) arrived in a parallel update and has now been read. It lists wearables, voice and real-world experiences; a public-repository submission requirement; and separate sponsor tracks. MiniMax image assets and ElevenLabs narration are actual uses. These clips do not establish Pipecat use or a live economic-agent integration, so do not claim those tracks from the assets alone. Repository visibility and submission remain separate actions.
+
+The UI clips were captured from the earlier deployed scaffold at `1edae7e`. The merged app at `d8c3f0d` adds microphone controls, speaker review, saved preferences and a local demo-calendar action. Those features are described in [the current live-demo script](../DEMO.md), but are not shown in these earlier clips. Do not present these captures as a comprehensive demonstration of the newer app. Voice playback, BLE and real external calendars remain unconnected.

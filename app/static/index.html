@@ -10,52 +10,103 @@
 </head>
 <body>
   <main class="shell">
-    <header class="masthead"><a href="/" class="brand">threadline<span aria-hidden="true">↗</span></a><span class="tag">Early prototype · VexoHacks</span></header>
+    <header class="masthead"><a href="/" class="brand">threadline<span aria-hidden="true">↗</span></a><span class="tag">Prototype · VexoHacks</span></header>
     <section class="intro">
       <p class="eyebrow">A little context, kept close.</p>
       <h1>Pick up your<br><em>thread.</em></h1>
-      <p class="lead">Keep a few notes. Revisit what you said. Find your place in the day.</p>
+      <p class="lead">Your own words, kept with their source. Support you chose, offered only when it fits.</p>
     </section>
     <div class="modes" role="group" aria-label="Choose a demo">
       <button type="button" data-mode="reflection" aria-pressed="true">01 <span>Personal reflection</span></button>
       <button type="button" data-mode="routine" aria-pressed="false">02 <span>Resume a routine</span></button>
     </div>
     <p id="mode-description" class="description"></p>
+
+    <details class="live-settings strip">
+      <summary>Live providers <span id="provider-summary" class="caption">· off — local demo only</span></summary>
+      <div class="strip-body">
+        <label class="check"><input id="live" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
+        <label for="token">App access token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Provided by your app operator">
+        <label class="check"><input id="consent" type="checkbox"><span>I have permission to send these notes and any recorded or uploaded audio to the configured providers.</span></label>
+        <div class="row"><button type="button" id="check-config" class="secondary">Check provider status</button><span id="config-result" class="caption"></span></div>
+        <p class="caption">Nothing is sent until you run a live request. This browser does not save your notes or token.</p>
+      </div>
+    </details>
+
     <div class="workspace">
       <section class="notes-panel" aria-labelledby="notes-heading">
         <div class="section-top"><h2 id="notes-heading">Your thread</h2><button type="button" id="clear" class="text-button">Clear session</button></div>
-        <p class="caption" id="sample-label">Fictional sample notes · replace with your own</p>
+        <p class="caption" id="sample-label"></p>
         <ol id="timeline" class="timeline"></ol>
-        <form id="note-form">
-          <label for="note">Add a note</label>
-          <textarea id="note" rows="3" maxlength="4000" placeholder="Something you want to remember…" required></textarea>
+
+        <section id="prefs-section" class="block" aria-labelledby="prefs-heading">
+          <h3 id="prefs-heading">Support preferences you saved</h3>
+          <p class="caption">Threadline only offers help you asked for, and only when your own words match.</p>
+          <ul id="prefs" class="prefs"></ul>
+          <details class="add-pref">
+            <summary>Save a new preference</summary>
+            <label for="pref-text">When I say something like…</label>
+            <textarea id="pref-text" rows="2" maxlength="300" placeholder="When I describe feeling overloaded, offer to help make space in my schedule."></textarea>
+            <label for="pref-triggers">Words that should match (comma-separated)</label>
+            <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
+            <label for="pref-action">Then</label>
+            <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="remind">Only show what I said before</option></select>
+            <button type="button" id="pref-save" class="secondary">Save preference</button>
+          </details>
+        </section>
+
+        <section class="block capture" aria-labelledby="capture-heading">
+          <h3 id="capture-heading">Capture</h3>
+          <p class="caption" id="source-line">Audio source: this browser's microphone. Vexo band: not connected — awaiting the event Bluetooth contract.</p>
+          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed.</span></label>
+          <div class="row">
+            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start recording</button>
+            <button type="button" id="rec-stop" class="secondary" disabled>Stop</button>
+            <button type="button" id="rec-delete" class="text-button" disabled>Delete recording</button>
+          </div>
+          <p id="rec-state" class="rec-state" role="status">Not recording.</p>
+          <audio id="rec-audio" controls hidden></audio>
+          <div class="row"><button type="button" id="rec-transcribe" class="secondary" disabled>Transcribe recording (live)</button></div>
+          <details class="audio-option">
+            <summary>Other ways to add a conversation</summary>
+            <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
+            <button type="button" id="transcribe" class="secondary">Transcribe file</button>
+            <p class="caption">No microphone or keys? Load a short scripted conversation. It is labeled as scripted, not captured audio.</p>
+            <button type="button" id="scripted" class="secondary">Load scripted demo conversation</button>
+          </details>
+        </section>
+
+        <section id="review" class="block review" aria-labelledby="review-heading" hidden>
+          <h3 id="review-heading">Review before saving</h3>
+          <p class="caption" id="review-source"></p>
+          <label for="who">Which speaker is you?</label>
+          <select id="who"></select>
+          <ol id="segments" class="segments"></ol>
+          <div class="row"><button type="button" id="review-save" class="secondary">Save my statements</button><button type="button" id="review-discard" class="text-button">Discard all</button></div>
+          <p class="caption">Only segments marked “Me” are saved. Other people's speech is dropped, not stored.</p>
+        </section>
+
+        <form id="note-form" class="block">
+          <label for="note">Or type a note</label>
+          <textarea id="note" rows="2" maxlength="4000" placeholder="Something you want to remember…" required></textarea>
           <div class="capture-row"><span class="caption">Timestamp added automatically</span><button type="submit" class="secondary">Add note <span aria-hidden="true">+</span></button></div>
         </form>
-        <details class="audio-option">
-          <summary>Or transcribe an audio file</summary>
-          <p class="caption">Live processing and consent are required. The transcript becomes a draft for you to review.</p>
-          <label for="audio">Choose audio</label><input id="audio" type="file" accept="audio/*">
-          <button type="button" id="transcribe" class="secondary">Transcribe to draft</button>
-        </details>
       </section>
+
       <section class="reflection-panel" aria-labelledby="ask-heading">
+        <div id="support" class="support" hidden></div>
+        <div id="calendar" class="calendar" hidden></div>
+
         <p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like<br>to revisit?</h2>
         <form id="question-form">
           <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required></textarea>
-          <details class="live-settings">
-            <summary>Live processing settings</summary>
-            <label class="check"><input id="live" type="checkbox"><span>Use the configured AI providers</span></label>
-            <label for="token">App access token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Provided by your app operator">
-            <label class="check"><input id="consent" type="checkbox"><span>I have permission to send these notes and any uploaded audio to the configured providers.</span></label>
-            <p class="caption">Nothing is sent until you run a live request. This browser does not save your notes or token.</p>
-          </details>
           <button id="run" type="submit" class="primary">Revisit my notes <span aria-hidden="true">↗</span></button>
         </form>
         <p id="status" class="status" role="status">Local demo · no AI request</p>
         <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div>
       </section>
     </div>
-    <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring.</p></footer>
+    <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
   </main>
 </body>
 </html>
