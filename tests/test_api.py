@@ -255,3 +255,120 @@ def test_live_relay_releases_provider_when_browser_leaves(client, monkeypatch):
     time.sleep(0.2)
     assert len(closed) == 3
     assert not main.stream_slots.locked()
+
+
+def fake_deepgram_factory(sent, closed):
+    """Fake Deepgram: answers the first audio frame with one Results message; CloseStream/close end the stream."""
+    import json
+
+    class FakeDeepgram:
+        def __init__(self):
+            self.queue = asyncio.Queue()
+            self.answered = False
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *exc):
+            return False
+        async def send(self, data):
+            sent.append(data)
+            if isinstance(data, bytes) and not self.answered:
+                self.answered = True
+                await self.queue.put(json.dumps({"type": "Results", "is_final": True, "start": 0, "duration": 1,
+                    "channel": {"alternatives": [{"transcript": "hello watch", "words": []}]}}))
+            elif isinstance(data, str) and "CloseStream" in data:
+                await self.queue.put(None)
+        async def close(self):
+            closed.append(True)
+            await self.queue.put(None)
+        def __aiter__(self):
+            return self
+        async def __anext__(self):
+            item = await self.queue.get()
+            if item is None:
+                raise StopAsyncIteration
+            return item
+
+    return FakeDeepgram
+
+
+def wait_for_slots():
+    import time
+    for _ in range(50):
+        if main.stream_slots._value == 4:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_watch_pair_requires_auth(client):
+    assert client.post("/api/watch/pair").status_code == 401
+    response = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["code"]) == 6 and body["code"].isdigit() and body["expires_in"] == 600
+
+
+def test_watch_feed_and_stream_reject_bad_code(client):
+    with client.websocket_connect("/api/watch/feed") as ws:
+        ws.send_json({"token": "test-only-access", "code": "nope"})
+        assert ws.receive_json()["type"] == "error"
+    with client.websocket_connect("/api/watch/feed") as ws:  # token is checked before the code
+        ws.send_json({"token": "wrong", "code": "123456"})
+        assert "token" in ws.receive_json()["message"]
+    with client.websocket_connect("/api/watch/stream") as ws:
+        ws.send_json({"code": "000000x", "device": "Apple Watch", "format": "pcm16"})
+        assert ws.receive_json()["type"] == "error"
+
+
+def test_watch_stream_fans_results_to_watch_and_feeds(client, monkeypatch):
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-only-key")
+    monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")
+    sent, closed, urls = [], [], []
+    fake = fake_deepgram_factory(sent, closed)
+    monkeypatch.setattr(main, "ws_connect", lambda url, **k: urls.append(url) or fake())
+    with client:  # one event loop for every socket in this test
+        code = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"}).json()["code"]
+        with client.websocket_connect("/api/watch/feed") as feed:
+            feed.send_json({"token": "test-only-access", "code": code})
+            assert feed.receive_json() == {"type": "waiting"}
+            with client.websocket_connect("/api/watch/stream") as watch:
+                watch.send_json({"code": code, "device": "Ayush's Watch", "format": "pcm16"})
+                assert watch.receive_json()["type"] == "ready"
+                assert feed.receive_json() == {"type": "watch_connected", "device": "Ayush's Watch"}
+                watch.send_bytes(b"\x00\x01" * 1600)
+                result = watch.receive_json()
+                assert result["type"] == "result" and result["transcript"] == "hello watch"
+                assert feed.receive_json() == result
+            assert feed.receive_json() == {"type": "watch_disconnected"}
+        assert "encoding=linear16" in urls[0] and "sample_rate=16000" in urls[0] and "model=test-model" in urls[0]
+        assert closed and wait_for_slots()
+        assert main.pairings[code].expires > main.time.monotonic() + 3600  # reconnects allowed for 2 h
+
+
+def test_watch_http_fallback_streams_and_stops(client, monkeypatch):
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-only-key")
+    monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")
+    sent, closed = [], []
+    monkeypatch.setattr(main, "ws_connect", lambda url, **k: fake_deepgram_factory(sent, closed)())
+    import time
+    with client:
+        assert client.post("/api/watch/audio", headers={"X-Watch-Code": "bad"}, content=b"\x00\x00").status_code == 401
+        code = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"}).json()["code"]
+        with client.websocket_connect("/api/watch/feed") as feed:
+            feed.send_json({"token": "test-only-access", "code": code})
+            assert feed.receive_json()["type"] == "waiting"
+            headers = {"X-Watch-Code": code, "X-Watch-Device": "Apple Watch"}
+            messages = client.post("/api/watch/audio", headers=headers, content=b"\x00\x01" * 1600).json()["messages"]
+            for _ in range(40):
+                if any(m["type"] == "result" for m in messages):
+                    break
+                time.sleep(0.05)
+                messages += client.post("/api/watch/audio", headers=headers, content=b"").json()["messages"]
+            assert [m["transcript"] for m in messages if m["type"] == "result"] == ["hello watch"]
+            assert feed.receive_json()["type"] == "watch_connected"
+            assert feed.receive_json()["transcript"] == "hello watch"
+            stopped = client.post("/api/watch/audio/stop", headers=headers).json()["messages"]
+            assert stopped[-1] == {"type": "closed"}
+            assert feed.receive_json() == {"type": "watch_disconnected"}
+        assert any(isinstance(d, str) and "Finalize" in d for d in sent)
+        assert wait_for_slots()

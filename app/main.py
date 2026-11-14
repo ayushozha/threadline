@@ -4,6 +4,9 @@ import asyncio
 import json
 import os
 import secrets
+import time
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -24,7 +27,7 @@ load_dotenv(ROOT.parent / ".env")
 
 app = FastAPI(title="Threadline", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 provider_slots = asyncio.Semaphore(3)
-stream_slots = asyncio.Semaphore(2)
+stream_slots = asyncio.Semaphore(4)
 
 
 LOOPBACK = {"127.0.0.1", "::1"}
@@ -221,6 +224,8 @@ def live_url(source: str) -> str:
     }
     if source == "vexo":  # The band sends raw Opus packets: 16 kHz mono, 20 ms each, one per message.
         params.update(encoding="opus", sample_rate="16000", channels="1")
+    elif source == "pcm16":  # Apple Watch: raw little-endian 16-bit PCM, 16 kHz mono.
+        params.update(encoding="linear16", sample_rate="16000", channels="1")
     return "wss://api.deepgram.com/v1/listen?" + str(httpx.QueryParams(params))
 
 
@@ -238,59 +243,45 @@ def simplify(result: dict) -> dict | None:
     }
 
 
-@app.websocket("/api/live-transcribe")
-async def live_transcribe(client: WebSocket):
-    """Relay one consented audio stream to Deepgram. The key stays on the server; nothing is stored."""
-    await client.accept()
+Receive = Callable[[], Awaitable[bytes | str | None]]  # audio bytes, "stop", or None when the sender left
+Send = Callable[[dict], Awaitable[None]]  # raises WebSocketDisconnect/RuntimeError when the receiver left
+Fail = Callable[..., Awaitable[None]]
 
-    async def fail(message: str, code: int = 1008):
-        try:
-            await client.send_json({"type": "error", "message": message})
-            await client.close(code)
-        except (WebSocketDisconnect, RuntimeError):
-            pass  # the browser already left
 
-    try:
-        hello = await asyncio.wait_for(client.receive_json(), timeout=10)
-    except (asyncio.TimeoutError, WebSocketDisconnect, ValueError, KeyError):
-        return await fail("Start message missing.")
-    expected = os.getenv("APP_ACCESS_TOKEN", "")
-    token = str(hello.get("token", ""))
-    local = trusted_local(client.client.host if client.client else None, client.headers.get("host", ""))
-    if not local and (not expected or not secrets.compare_digest(token.encode(), expected.encode())):
-        return await fail("Enter the project access token to use live providers.")
-    source = hello.get("source")
-    if source not in {"vexo", "browser"}:
-        return await fail("Unknown audio source.")
+async def relay_audio(source: str, receive: Receive, send: Send, fail: Fail,
+                      on_ready: Callable[[], Awaitable[None]] | None = None) -> int | None:
+    """Relay one audio stream to Deepgram and simplified results back. The key stays on the server and
+    nothing is stored. Returns the byte count on a clean end, None if it failed or the sender left."""
     key, model = os.getenv("DEEPGRAM_API_KEY"), os.getenv("DEEPGRAM_MODEL")
     if not key or not model:
         return await fail("Set DEEPGRAM_API_KEY and DEEPGRAM_MODEL to transcribe audio.", 1011)
     if stream_slots.locked():
-        return await fail("Another live transcript is running. Stop it first.", 1013)
+        return await fail("Too many live transcripts are running. Stop one first.", 1013)
 
     async with stream_slots:
         try:
             async with ws_connect(live_url(source), additional_headers={"Authorization": f"Token {key}"}, open_timeout=10) as deepgram:
-                await client.send_json({"type": "ready", "source": source})
+                await send({"type": "ready", "source": source})
+                if on_ready:
+                    await on_ready()
                 loop = asyncio.get_running_loop()
                 state = {"bytes": 0, "last": loop.time(), "started": loop.time(), "closing": False}
 
                 async def upstream():
                     while True:
-                        message = await client.receive()
-                        if message["type"] == "websocket.disconnect":
-                            # Browser left (reload, network drop, reconnect): release Deepgram and the slot now.
+                        data = await receive()
+                        if data is None:
+                            # Sender left (reload, network drop, reconnect): release Deepgram and the slot now.
                             state["closing"] = True
                             await deepgram.close()
                             return
-                        data = message.get("bytes")
-                        if data is not None:
+                        if isinstance(data, bytes):
                             state["bytes"] += len(data)
                             state["last"] = loop.time()
                             if state["bytes"] <= LIVE_MAX_BYTES and loop.time() - state["started"] <= LIVE_MAX_SECONDS:
                                 await deepgram.send(data)
                                 continue
-                            await client.send_json({"type": "error", "message": "Live session limit reached; stopping."})
+                            await send({"type": "error", "message": "Live session limit reached; stopping."})
                         state["closing"] = True
                         await deepgram.send(json.dumps({"type": "Finalize"}))  # flush the words still in progress
                         await asyncio.sleep(1.5)
@@ -298,7 +289,7 @@ async def live_transcribe(client: WebSocket):
                         return
 
                 async def keepalive():
-                    # Deepgram hangs up after ~10 s without audio; keep the line open while the band is quiet.
+                    # Deepgram hangs up after ~10 s without audio; keep the line open while the source is quiet.
                     while not state["closing"]:
                         await asyncio.sleep(3)
                         if not state["closing"] and loop.time() - state["last"] >= 3:
@@ -312,7 +303,7 @@ async def live_transcribe(client: WebSocket):
                             continue
                         if simple:
                             try:
-                                await client.send_json(simple)
+                                await send(simple)
                             except (WebSocketDisconnect, RuntimeError):
                                 await deepgram.close()
                                 return
@@ -322,21 +313,295 @@ async def live_transcribe(client: WebSocket):
                     await downstream()
                 except ConnectionClosed as exc:
                     reason = exc.rcvd.reason if exc.rcvd else ""
-                    await fail(f"Deepgram closed the stream: {reason or 'connection lost'}", 1011)
-                    return
+                    return await fail(f"Deepgram closed the stream: {reason or 'connection lost'}", 1011)
                 finally:
                     for task in tasks:
                         task.cancel()
-                try:
-                    await client.send_json({"type": "closed", "bytes": state["bytes"]})
-                    await client.close()
-                except (WebSocketDisconnect, RuntimeError):
-                    pass
+                return state["bytes"]
         except WebSocketDisconnect:
-            return
+            return None
         except (WebSocketException, OSError, asyncio.TimeoutError) as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            await fail(f"Deepgram live connection failed{f' ({status})' if status else ''}. Check server configuration.", 1011)
+            return await fail(f"Deepgram live connection failed{f' ({status})' if status else ''}. Check server configuration.", 1011)
+
+
+def socket_fail(client: WebSocket) -> Fail:
+    async def fail(message: str, code: int = 1008) -> None:
+        try:
+            await client.send_json({"type": "error", "message": message})
+            await client.close(code)
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # the client already left
+    return fail
+
+
+def socket_receiver(client: WebSocket) -> Receive:
+    async def receive() -> bytes | str | None:
+        message = await client.receive()
+        if message["type"] == "websocket.disconnect":
+            return None
+        data = message.get("bytes")
+        return data if data is not None else "stop"  # any text frame ends the stream
+    return receive
+
+
+async def socket_hello(client: WebSocket, fail: Fail) -> dict | None:
+    try:
+        hello = await asyncio.wait_for(client.receive_json(), timeout=10)
+        if isinstance(hello, dict):
+            return hello
+    except (asyncio.TimeoutError, WebSocketDisconnect, ValueError, KeyError):
+        pass
+    await fail("Start message missing.")
+    return None
+
+
+def socket_token_ok(client: WebSocket, hello: dict) -> bool:
+    expected = os.getenv("APP_ACCESS_TOKEN", "")
+    token = str(hello.get("token", ""))
+    local = trusted_local(client.client.host if client.client else None, client.headers.get("host", ""))
+    return local or bool(expected and secrets.compare_digest(token.encode(), expected.encode()))
+
+
+async def close_cleanly(client: WebSocket, sent: int | None) -> None:
+    if sent is None:
+        return
+    try:
+        await client.send_json({"type": "closed", "bytes": sent})
+        await client.close()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+
+
+@app.websocket("/api/live-transcribe")
+async def live_transcribe(client: WebSocket):
+    """Relay one consented audio stream to Deepgram. The key stays on the server; nothing is stored."""
+    await client.accept()
+    fail = socket_fail(client)
+    if (hello := await socket_hello(client, fail)) is None:
+        return
+    if not socket_token_ok(client, hello):
+        return await fail("Enter the project access token to use live providers.")
+    source = hello.get("source")
+    if source not in {"vexo", "browser"}:
+        return await fail("Unknown audio source.")
+    await close_cleanly(client, await relay_audio(source, socket_receiver(client), client.send_json, fail))
+
+
+# --- Apple Watch ---------------------------------------------------------------------------------
+# The watch runs its own app and streams PCM to this server; a browser cannot reach the watch directly.
+# Pairing is in memory only: the 6-digit code is the watch's credential, and browsers watch via a feed.
+
+PAIR_TTL = 600  # an unused code expires after 10 min
+ATTACHED_TTL = 2 * 3600  # once a watch has attached, it may reconnect for 2 h
+MAX_PAIRINGS = 20
+WATCH_IDLE_SECONDS = 15  # HTTP fallback: finalize when the watch stops posting audio
+WATCH_CHUNK_MAX = 1024 * 1024
+RESULT_TYPES = {"result", "utterance_end"}
+
+
+@dataclass
+class Pairing:
+    expires: float
+    feeds: set = field(default_factory=set)
+    watches: int = 0
+    device: str = ""
+    http: dict | None = None  # HTTP-fallback session: queue, outbox, task
+
+
+pairings: dict[str, Pairing] = {}
+background: set[asyncio.Task] = set()
+
+
+def prune_pairings() -> None:
+    now = time.monotonic()
+    for code, pairing in list(pairings.items()):
+        busy = pairing.watches or (pairing.http and not pairing.http["task"].done())
+        if pairing.expires < now and not busy:
+            del pairings[code]
+
+
+def find_pairing(code: object) -> Pairing | None:
+    prune_pairings()
+    return pairings.get(code) if isinstance(code, str) else None
+
+
+async def fanout(pairing: Pairing, message: dict) -> None:
+    for feed in list(pairing.feeds):
+        try:
+            await feed.send_json(message)
+        except (WebSocketDisconnect, RuntimeError):
+            pairing.feeds.discard(feed)
+
+
+def watch_hooks(pairing: Pairing, device: str):
+    """Shared by the WebSocket and HTTP watch paths: announce the watch to feeds and keep the code alive."""
+    attached = {"on": False}
+
+    async def on_ready():
+        attached["on"] = True
+        pairing.watches += 1
+        pairing.device = device
+        pairing.expires = time.monotonic() + ATTACHED_TTL
+        await fanout(pairing, {"type": "watch_connected", "device": device})
+
+    def on_end():
+        # Synchronous on purpose: it runs in `finally` even when the handler is being cancelled,
+        # so the notice goes out from its own task.
+        if attached["on"]:
+            attached["on"] = False
+            pairing.watches -= 1
+            pairing.expires = max(pairing.expires, time.monotonic() + ATTACHED_TTL)
+            task = asyncio.get_running_loop().create_task(fanout(pairing, {"type": "watch_disconnected"}))
+            background.add(task)
+            task.add_done_callback(background.discard)
+
+    return on_ready, on_end
+
+
+def watch_device(value: object) -> str:
+    return (str(value or "").strip() or "Apple Watch")[:40]
+
+
+@app.post("/api/watch/pair", dependencies=[Depends(authorize)])
+async def watch_pair():
+    prune_pairings()
+    if len(pairings) >= MAX_PAIRINGS:
+        raise HTTPException(429, "Too many pairing codes are active. Try again in a few minutes.")
+    code = f"{secrets.randbelow(10**6):06d}"
+    while code in pairings:
+        code = f"{secrets.randbelow(10**6):06d}"
+    pairings[code] = Pairing(expires=time.monotonic() + PAIR_TTL)
+    return {"code": code, "expires_in": PAIR_TTL}
+
+
+@app.websocket("/api/watch/feed")
+async def watch_feed(client: WebSocket):
+    """Browser side: receive what a paired watch is transcribing. Token-checked like live-transcribe."""
+    await client.accept()
+    fail = socket_fail(client)
+    if (hello := await socket_hello(client, fail)) is None:
+        return
+    if not socket_token_ok(client, hello):
+        return await fail("Enter the project access token to use live providers.")
+    pairing = find_pairing(hello.get("code"))
+    if not pairing:
+        return await fail("Unknown or expired pairing code. Create a new one.")
+    try:
+        await client.send_json({"type": "waiting"})
+        pairing.feeds.add(client)
+        if pairing.watches:
+            await client.send_json({"type": "watch_connected", "device": pairing.device})
+        while (await client.receive())["type"] != "websocket.disconnect":
+            pass
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        pairing.feeds.discard(client)
+
+
+@app.websocket("/api/watch/stream")
+async def watch_stream(client: WebSocket):
+    """Watch side: the pairing code is the credential. Binary frames are 16 kHz mono linear16 PCM."""
+    await client.accept()
+    fail = socket_fail(client)
+    if (hello := await socket_hello(client, fail)) is None:
+        return
+    pairing = find_pairing(hello.get("code"))
+    if not pairing:
+        return await fail("Unknown or expired pairing code. Create a new one on the website.")
+    if hello.get("format", "pcm16") != "pcm16":
+        return await fail("Send 16 kHz mono linear16 PCM (format pcm16).")
+    on_ready, on_end = watch_hooks(pairing, watch_device(hello.get("device")))
+
+    async def send(message: dict) -> None:
+        if message["type"] in RESULT_TYPES:
+            await fanout(pairing, message)
+        await client.send_json(message)
+
+    try:
+        sent = await relay_audio("pcm16", socket_receiver(client), send, fail, on_ready)
+    finally:
+        on_end()
+    await close_cleanly(client, sent)
+
+
+# HTTP fallback for real watches: watchOS blocks URLSessionWebSocketTask for ordinary apps (Apple TN3135),
+# but plain URLSession HTTPS works. The watch POSTs PCM chunks and gets back the results since its last post.
+
+def watch_http_session(pairing: Pairing, device: str) -> dict:
+    if pairing.http and not pairing.http["task"].done():
+        return pairing.http
+    queue: asyncio.Queue = asyncio.Queue()
+    outbox: list[dict] = list(pairing.http["outbox"]) if pairing.http else []
+    on_ready, on_end = watch_hooks(pairing, device)
+
+    async def receive() -> bytes | str | None:
+        try:
+            return await asyncio.wait_for(queue.get(), timeout=WATCH_IDLE_SECONDS)
+        except asyncio.TimeoutError:
+            return "stop"
+
+    async def send(message: dict) -> None:
+        if message["type"] in RESULT_TYPES:
+            await fanout(pairing, message)
+        outbox.append(message)
+
+    async def fail(message: str, code: int = 1008) -> None:
+        outbox.append({"type": "error", "message": message})
+
+    async def run():
+        try:
+            await relay_audio("pcm16", receive, send, fail, on_ready)
+        finally:
+            on_end()
+            outbox.append({"type": "closed"})
+
+    session = {"queue": queue, "outbox": outbox}
+    session["task"] = asyncio.create_task(run())
+    pairing.http = session
+    return session
+
+
+def drain(session: dict) -> list[dict]:
+    messages = list(session["outbox"])
+    session["outbox"].clear()
+    return messages
+
+
+@app.post("/api/watch/audio")
+async def watch_audio(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+    pairing = find_pairing(x_watch_code)
+    if not pairing:
+        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    audio = bytearray()
+    async for chunk in request.stream():
+        audio.extend(chunk)
+        if len(audio) > WATCH_CHUNK_MAX:
+            raise HTTPException(413, "Send audio in chunks of at most 1 MB.")
+    session = watch_http_session(pairing, watch_device(x_watch_device))
+    if audio:
+        session["queue"].put_nowait(bytes(audio))
+    return {"messages": drain(session)}
+
+
+@app.post("/api/watch/audio/stop")
+async def watch_audio_stop(x_watch_code: str = Header(default="")):
+    pairing = find_pairing(x_watch_code)
+    if not pairing:
+        raise HTTPException(401, "Unknown or expired pairing code.")
+    session = pairing.http
+    if not session:
+        return {"messages": []}
+    session["queue"].put_nowait("stop")
+    try:
+        await asyncio.wait_for(asyncio.shield(session["task"]), timeout=5)
+    except asyncio.TimeoutError:
+        pass
+    messages = drain(session)
+    if session["task"].done() and pairing.http is session:
+        pairing.http = None
+    return {"messages": messages}
 
 
 @app.get("/")

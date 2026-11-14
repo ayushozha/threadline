@@ -1,0 +1,32 @@
+name: ThreadlineWatch
+options:
+  bundleIdPrefix: com.threadline
+  deploymentTarget:
+    watchOS: "10.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ThreadlineWatch:
+    type: application
+    platform: watchOS
+    sources: [ThreadlineWatch]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.threadline.watch
+        PRODUCT_NAME: Threadline Watch
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+    info:
+      path: ThreadlineWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Threadline
+        WKApplication: true
+        WKWatchOnly: true
+        NSMicrophoneUsageDescription: Threadline streams what your microphone hears to your Threadline server for live transcription while you are recording. Nothing is stored on the watch.
+        WKBackgroundModes: [audio]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
