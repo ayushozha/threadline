@@ -26,7 +26,19 @@ provider_slots = asyncio.Semaphore(3)
 stream_slots = asyncio.Semaphore(2)
 
 
-def authorize(x_app_token: str = Header(default="")) -> None:
+LOOPBACK = {"127.0.0.1", "::1"}
+
+
+def trusted_local(client_host: str | None, host_header: str) -> bool:
+    """Opt-in (APP_TRUST_LOOPBACK=1) for a server you run on your own laptop: requests from this
+    machine to localhost skip the token. Never set it on a public deployment."""
+    host = host_header.rsplit(":", 1)[0].strip("[]").lower()
+    return os.getenv("APP_TRUST_LOOPBACK") == "1" and client_host in LOOPBACK and host in {"localhost", "127.0.0.1", "::1"}
+
+
+def authorize(request: Request, x_app_token: str = Header(default="")) -> None:
+    if trusted_local(request.client.host if request.client else None, request.headers.get("host", "")):
+        return
     expected = os.getenv("APP_ACCESS_TOKEN", "")
     if not expected:
         raise HTTPException(503, "Set APP_ACCESS_TOKEN in the server environment.")
@@ -64,11 +76,12 @@ async def config():
 
 
 @app.get("/api/device")
-async def device():
-    """Public: the team's assigned Vexo band number (not a secret), or null if unset."""
+async def device(request: Request):
+    """Public: the team's assigned Vexo band number (not a secret), and whether this request needs a token."""
     raw = os.getenv("VEXO_BAND_NUMBER", "").strip()
     number = int(raw) if raw.isdigit() and 1 <= int(raw) <= 999 else None
-    return {"vexo_band_number": number}
+    local = trusted_local(request.client.host if request.client else None, request.headers.get("host", ""))
+    return {"vexo_band_number": number, "token_required": not local}
 
 
 class Note(BaseModel):
@@ -227,7 +240,8 @@ async def live_transcribe(client: WebSocket):
         return await fail("Start message missing.")
     expected = os.getenv("APP_ACCESS_TOKEN", "")
     token = str(hello.get("token", ""))
-    if not expected or not secrets.compare_digest(token.encode(), expected.encode()):
+    local = trusted_local(client.client.host if client.client else None, client.headers.get("host", ""))
+    if not local and (not expected or not secrets.compare_digest(token.encode(), expected.encode())):
         return await fail("Enter the project access token to use live providers.")
     source = hello.get("source")
     if source not in {"vexo", "browser"}:

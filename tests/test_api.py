@@ -101,9 +101,9 @@ def test_schedule_rejects_malformed_times(client):
 
 def test_device_reports_configured_band_only(client, monkeypatch):
     monkeypatch.setenv("VEXO_BAND_NUMBER", "73")
-    assert client.get("/api/device").json() == {"vexo_band_number": 73}
+    assert client.get("/api/device").json()["vexo_band_number"] == 73
     monkeypatch.setenv("VEXO_BAND_NUMBER", "not-a-band")
-    assert client.get("/api/device").json() == {"vexo_band_number": None}
+    assert client.get("/api/device").json()["vexo_band_number"] is None
 
 
 def test_live_transcribe_rejects_bad_token_before_contacting_provider(client, monkeypatch):
@@ -120,3 +120,12 @@ def test_live_url_uses_band_opus_format_and_env_model(monkeypatch):
     assert "encoding=opus" in url and "sample_rate=16000" in url and "model=test-model" in url
     assert "mip_opt_out=true" in url
     assert "encoding" not in main.live_url("browser")
+
+
+def test_loopback_trust_is_opt_in_and_local_only(monkeypatch):
+    monkeypatch.delenv("APP_TRUST_LOOPBACK", raising=False)
+    assert not main.trusted_local("127.0.0.1", "localhost:8000")
+    monkeypatch.setenv("APP_TRUST_LOOPBACK", "1")
+    assert main.trusted_local("127.0.0.1", "localhost:8000")
+    assert not main.trusted_local("10.0.1.5", "localhost:8000")          # e.g. a reverse proxy
+    assert not main.trusted_local("127.0.0.1", "threadline.ayushojha.com")

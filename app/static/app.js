@@ -243,7 +243,12 @@ async function run(task) { if (busy) return; setBusy(true); try { await task(); 
 // Audio streams through Threadline's server to Deepgram; the provider key never reaches the page.
 const SOURCE_LABELS_LIVE = { "vexo-usb": "Vexo band · USB", "vexo-ble": "Vexo band · Bluetooth", browser: "Browser microphone" };
 let kit = null, bandNumber = null;
-fetch("/api/device").then((r) => r.json()).then((d) => { bandNumber = d.vexo_band_number; bandStatus(); }).catch(() => bandStatus());
+let tokenRequired = true;
+fetch("/api/device").then((r) => r.json()).then((d) => {
+  bandNumber = d.vexo_band_number; tokenRequired = d.token_required !== false;
+  if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
+  bandStatus(); setRecUI();
+}).catch(() => bandStatus());
 const isVexo = () => $("source").value.startsWith("vexo");
 function bandStatus(text, error = false) {
   const name = bandNumber ? `Vexo-HACK-${String(bandNumber).padStart(2, "0")}` : "";
@@ -287,8 +292,8 @@ $("band-disconnect").addEventListener("click", async () => { try { await capture
 $("rec-start").addEventListener("click", async () => {
   if (capture.ws) return;
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
-  let headers;
-  try { headers = liveHeaders(); } catch (e) { return recState(e.message, true); }
+  const token = $("token").value.trim();
+  if (tokenRequired && !token) { $("token").closest("details").open = true; $("token").focus(); return recState("Enter the app access token (Live providers, above) to stream audio.", true); }
   const source = $("source").value, vexo = source.startsWith("vexo");
   if (vexo && !capture.band) return recState("Connect the band first.", true);
   let stream = null;
@@ -301,7 +306,7 @@ $("rec-start").addEventListener("click", async () => {
   Object.assign(capture, { ws, source, stream, startedAt: new Date(), finals: [], interim: "", stopping: false, packets: 0 });
   $("live-on").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source];
   recState("Connecting to Deepgram…"); setRecUI();
-  ws.onopen = () => ws.send(JSON.stringify({ token: headers["X-App-Token"], source: vexo ? "vexo" : "browser" }));
+  ws.onopen = () => ws.send(JSON.stringify({ token, source: vexo ? "vexo" : "browser" }));
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === "ready") {
@@ -324,7 +329,7 @@ $("rec-start").addEventListener("click", async () => {
         $("live-interim").textContent = "";
       } else $("live-interim").textContent = msg.transcript;
     } else if (msg.type === "error") {
-      recState(msg.message, true);
+      capture.lastError = msg.message; recState(msg.message, true);
     } else if (msg.type === "closed") finishLive();
   };
   ws.onclose = () => finishLive();
@@ -360,7 +365,7 @@ function finishLive() {
   Object.assign(capture, { ws: null, recorder: null, stream: null, stopping: false });
   setRecUI();
   const words = finals.flatMap((f) => f.words);
-  if (!finals.length) return recState("Capture ended. No speech was transcribed; nothing was saved.", Boolean(false));
+  if (!finals.length) { const err = capture.lastError; capture.lastError = ""; return recState(err ? `Capture ended: ${err}` : "Capture ended. No speech was transcribed; nothing was saved.", Boolean(err)); }
   openReview(segmentsFromWords(words, finals.map((f) => f.transcript).join(" ")), source.startsWith("vexo") ? "vexo" : "mic", startedAt,
     `${SOURCE_LABELS_LIVE[source]} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
   recState("Capture stopped. Review below: choose which speaker is you before anything is saved.");
@@ -452,8 +457,8 @@ function setBusy(value) {
 function liveHeaders() {
   if (!$("live-on").checked) throw new Error("Open “Live providers” and enable them to use Deepgram or Gemini.");
   if (!$("consent").checked) throw new Error("Confirm permission before sending notes or audio.");
-  if (!$("token").value.trim()) throw new Error("Enter the app access token for live processing.");
-  return { "X-App-Token": $("token").value.trim() };
+  if (tokenRequired && !$("token").value.trim()) throw new Error("Enter the app access token for live processing.");
+  return tokenRequired ? { "X-App-Token": $("token").value.trim() } : {};
 }
 async function request(url, options) {
   const response = await fetch(url, options), data = await response.json().catch(() => ({}));
@@ -464,8 +469,8 @@ function updateProviderSummary() { $("provider-summary").textContent = $("live-o
 $("live-on").addEventListener("change", updateProviderSummary);
 $("check-config").addEventListener("click", async () => {
   try {
-    const token = $("token").value.trim(); if (!token) throw new Error("Enter the access token first.");
-    const c = await request("/api/config", { headers: { "X-App-Token": token } });
+    const token = $("token").value.trim(); if (tokenRequired && !token) throw new Error("Enter the access token first.");
+    const c = await request("/api/config", { headers: tokenRequired ? { "X-App-Token": token } : {} });
     $("config-result").textContent = `Gemini: ${c.reflection_ready ? "configured" : "not configured"} · Deepgram: ${c.transcription_ready ? "configured" : "not configured"} · Vexo band: ${c.wearable_connected ? "connected" : "not connected"}`;
   } catch (e) { $("config-result").textContent = e.message; }
 });
