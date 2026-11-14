@@ -41,7 +41,7 @@ function loadThread(key) {
   Object.assign(agent, { offer: null, events: saved?.events || [], proposal: null, skip: [], log: [], created: null });
   life.days = saved?.days || {}; life.cycle = { starts: [], notify: false, haptic: false, notifiedFor: "", ...(saved?.cycle || {}) };
   life.energyWords = saved?.energyWords || DEFAULT_ENERGY_WORDS;
-  Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
+  Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], energyLog: saved?.energyLog || [], actions: saved?.actions || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
   threadLoaded = true;
 }
 function saveThread() {
@@ -51,7 +51,7 @@ function saveThread() {
       reflection: { notes: sessions.reflection.notes, prefs: sessions.reflection.prefs },
       routine: { notes: sessions.routine.notes }, events: agent.events,
       days: life.days, cycle: life.cycle, energyWords: life.energyWords,
-      positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, checkins: life.checkins, voice: life.voice,
+      positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, energyLog: life.energyLog, actions: life.actions, checkins: life.checkins, voice: life.voice,
     }));
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
@@ -176,7 +176,7 @@ function renderSupport() {
     const sms = el("a", { className: "secondary ics", href: `sms:?&body=${encodeURIComponent(offer.pref.update)}`, textContent: "Open Messages" });
     const copy = el("button", { type: "button", className: "secondary", textContent: "Copy" });
     const no = el("button", { type: "button", className: "text-button", textContent: "Not now" });
-    share.addEventListener("click", async () => { try { await navigator.share({ text: offer.pref.update }); offer.status = "shared"; renderSupport(); } catch { message("Sharing was cancelled or isn't available here — use Copy or Open Messages."); } });
+    share.addEventListener("click", async () => { try { await navigator.share({ text: offer.pref.update }); offer.status = "shared"; renderSupport(); logAction(`Shared your pre-approved update${offer.pref.updateTo ? ` with ${offer.pref.updateTo}` : ""}`); } catch { message("Sharing was cancelled or isn't available here — use Copy or Open Messages."); } });
     copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(offer.pref.update); message("Copied. Paste it to your close friends."); } catch { message("Copy failed; select the text instead.", true); } });
     no.addEventListener("click", () => { offer.status = "declined"; renderSupport(); });
     children.push(msg, el("div", { className: "row" }, share, sms, copy), no);
@@ -210,7 +210,7 @@ async function bookProposal() {
   logStep(`You approved ${fmtClock(p.start)}–${fmtClock(p.end)}. Re-checking before creating…`);
   const { ok, status, data } = await postJSON("/api/schedule/book", { events: agent.events, event: { title: "Quiet time (protected)", date: p.date, start: p.start, end: p.end } });
   if (ok) {
-    agent.events.push(data.event); agent.created = data.event; agent.proposal = null;
+    agent.events.push(data.event); agent.created = data.event; agent.proposal = null; logAction(`Protected quiet time ${fmtClock(data.event.start)}–${fmtClock(data.event.end)} tomorrow`);
     logStep(`Created “${data.event.title}” ${fmtClock(data.event.start)}–${fmtClock(data.event.end)} in your Threadline schedule.`, "good");
     message("Created in your Threadline schedule. Download the .ics to add it to your own calendar.");
     saveThread();
@@ -622,10 +622,25 @@ function openReview(segments, source, startedAt, label) {
   const speakers = [...new Set(segments.map((s) => s.speaker))];
   $("who").replaceChildren(el("option", { value: "", textContent: "Choose…" }), ...speakers.map((s) => el("option", { value: String(s), textContent: s === null ? "Unlabeled speaker" : `Speaker ${s}` })), el("option", { value: "none", textContent: "None of these is me" }));
   $("review-source").textContent = label;
+  renderWhoButtons();
   $("review").hidden = false; renderSegments(); $("review").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+function renderWhoButtons() {
+  const r = capture.review; if (!r) return;
+  const counts = {}; for (const seg of r.segments) counts[String(seg.speaker)] = (counts[String(seg.speaker)] || 0) + 1;
+  const chosen = $("who").value;
+  const make = (value, label, sub) => { const b = el("button", { type: "button", role: "radio", "aria-checked": String(chosen === value), className: `who-btn${chosen === value ? " on" : ""}` }, value !== "none" ? el("span", { className: "avatar", "aria-hidden": "true", textContent: value === "null" ? "?" : value }) : null, el("span", { textContent: label }), sub ? el("small", { textContent: sub }) : null);
+    b.addEventListener("click", () => { $("who").value = value; $("who").dispatchEvent(new Event("change")); renderWhoButtons(); }); return b; };
+  $("who-buttons").replaceChildren(...Object.entries(counts).map(([k, n]) => make(k, `${k === "null" ? "Unlabeled" : `Speaker ${k}`} is me`, `${n} line${n > 1 ? "s" : ""}`)), make("none", "None of these is me", ""));
+}
+function renderReviewSummary() {
+  const r = capture.review; if (!r) return;
+  const mine = r.segments.filter((x) => x.who === "me").length, other = r.segments.filter((x) => x.who === "other").length, unsure = r.segments.length - mine - other;
+  $("review-summary").replaceChildren(...[el("span", {}, el("b", { textContent: String(mine) }), ` your line${mine === 1 ? "" : "s"}`), el("span", {}, el("b", { textContent: String(other) }), " dropped, not stored"), unsure ? el("span", {}, el("b", { textContent: String(unsure) }), " not sure — won't be saved") : null].filter(Boolean));
+  $("review-save").textContent = mine ? `Save ${mine} statement${mine > 1 ? "s" : ""}` : "Save my statements";
+}
 function renderSegments() {
-  const r = capture.review; $("segments").replaceChildren();
+  const r = capture.review; $("segments").replaceChildren(); renderReviewSummary();
   r.segments.forEach((seg, i) => {
     const who = el("select", { "aria-label": `Who said segment ${i + 1}` }, ...[["unsure", "Not sure — don't save"], ["me", "Me"], ["other", "Someone else — don't save"]].map(([v, t]) => el("option", { value: v, textContent: t, selected: seg.who === v })));
     const text = el("textarea", { value: seg.text, rows: 2, maxLength: 4000, "aria-label": `Text of segment ${i + 1}` });
@@ -730,7 +745,7 @@ function render() {
   if ($("mode-description")) $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations(); renderToday();
 }
 
 /* ---------- Band signals ---------- */
@@ -781,29 +796,40 @@ function archiveSession(finals, meta) {
   return ok;
 }
 function renderArchive() {
-  const list = loadArchive(), box = $("archive"); box.replaceChildren();
+  const list = loadArchive(), box = $("archive"), q = ($("archive-search")?.value || "").trim().toLowerCase();
   $("archive-caption").textContent = `Every captured session's full transcript${bandNumber ? ` for ${bandLabel()}` : ""}, stored in this browser only. Nothing is stored on the server.`;
-  if (!list.length) { box.append(el("li", { className: "empty", textContent: "No transcripts yet. Start a live capture." })); return; }
-  for (const entry of list) {
+  const shown = q ? list.filter((e) => e.lines.some((l) => l.text.toLowerCase().includes(q))) : list;
+  box.replaceChildren();
+  if (!shown.length) { box.append(el("li", { className: "empty", textContent: q ? "No session mentions that." : "No transcripts yet. Start a live capture." })); $("archive-detail").replaceChildren(el("p", { className: "caption", textContent: list.length ? "Choose a session to read its transcript." : "Transcripts appear here after a live session." })); return; }
+  if (!shown.some((e) => e.id === archiveSel)) archiveSel = shown[0].id;
+  for (const entry of shown) {
     const mins = Math.max(1, Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000));
-    const lines = el("ol", { className: "archive-lines" }, ...entry.lines.map((l) => el("li", { className: l.marked ? "marked" : "" },
-      el("span", { className: "caption", textContent: `${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${l.speakers.length ? l.speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${l.activity ? ` · ${l.activity}` : ""}${l.hr ? ` · ♥ ${l.hr}` : ""}${l.marked ? " · ★ marked" : ""}` }),
-      el("p", { textContent: l.text }))));
-    const exp = el("button", { type: "button", className: "text-button", textContent: "Export .txt" });
-    const review = el("button", { type: "button", className: "text-button", textContent: "Save statements from this" });
-    const del = el("button", { type: "button", className: "text-button", textContent: "Delete" });
-    exp.addEventListener("click", () => {
-      const text = entry.lines.map((l) => `[${new Date(l.at).toLocaleString()}] ${l.speakers.map((s) => `Speaker ${s}`).join(", ") || "Speaker ?"}${l.marked ? " ★" : ""}: ${l.text}`).join("\n");
-      const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `threadline-transcript-${entry.startedAt.slice(0, 16).replace(/[:T]/g, "-")}.txt` });
-      document.body.append(a); a.click(); a.remove();
-    });
-    review.addEventListener("click", () => openReview(entry.lines.map((l) => ({ speaker: l.speakers[0] ?? null, text: l.text, offset: l.offset })), entry.source === "browser" ? "mic" : "vexo", new Date(entry.startedAt), `${entry.device} · stored transcript from ${new Date(entry.startedAt).toLocaleString()}.`));
-    del.addEventListener("click", () => { if (confirm("Delete this transcript from this browser?")) { saveArchive(loadArchive().filter((e) => e.id !== entry.id)); renderArchive(); } });
-    box.append(el("li", {}, el("details", {},
-      el("summary", {}, el("strong", { textContent: new Date(entry.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }), ` · ${entry.device} · ${entry.lines.length} lines · ${mins} min${entry.marks ? ` · ${entry.marks} ★` : ""}`),
-      lines, el("div", { className: "row tight" }, review, exp, del))));
+    const a = el("button", { type: "button", className: `session${entry.id === archiveSel ? " current" : ""}`, "aria-pressed": String(entry.id === archiveSel) },
+      el("span", { className: "s-top" }, el("b", { textContent: new Date(entry.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }), entry.marks ? el("span", { className: "s-star", textContent: `★ ${entry.marks}` }) : null),
+      el("span", { className: "caption", textContent: `${entry.device} · ${mins} min · ${entry.lines.length} lines` }));
+    a.addEventListener("click", () => { archiveSel = entry.id; renderArchive(); });
+    box.append(el("li", {}, a));
   }
+  const entry = shown.find((e) => e.id === archiveSel);
+  const exp = el("button", { type: "button", className: "secondary", textContent: "Export .txt" });
+  const review = el("button", { type: "button", className: "primary-sm", textContent: "Save statements from this" });
+  const del = el("button", { type: "button", className: "secondary danger", textContent: "Delete" });
+  exp.addEventListener("click", () => {
+    const text = entry.lines.map((l) => `[${new Date(l.at).toLocaleString()}] ${l.speakers.map((s) => `Speaker ${s}`).join(", ") || "Speaker ?"}${l.marked ? " ★" : ""}: ${l.text}`).join("\n");
+    const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `threadline-transcript-${entry.startedAt.slice(0, 16).replace(/[:T]/g, "-")}.txt` });
+    document.body.append(a); a.click(); a.remove();
+  });
+  review.addEventListener("click", () => { location.hash = "live"; openReview(entry.lines.map((l) => ({ speaker: l.speakers[0] ?? null, text: l.text, offset: l.offset })), entry.source === "browser" ? "mic" : entry.source === "watch" ? "watch" : "vexo", new Date(entry.startedAt), `${entry.device} · stored transcript from ${new Date(entry.startedAt).toLocaleString()}.`); });
+  del.addEventListener("click", () => { if (confirm("Delete this transcript from this browser?")) { saveArchive(loadArchive().filter((e) => e.id !== entry.id)); archiveSel = ""; renderArchive(); } });
+  const mark = (text) => { if (!q) return [text]; const i = text.toLowerCase().indexOf(q); return i < 0 ? [text] : [text.slice(0, i), el("mark", { textContent: text.slice(i, i + q.length) }), text.slice(i + q.length)]; };
+  $("archive-detail").replaceChildren(
+    el("header", { className: "ad-head" }, el("div", {}, el("h3", { textContent: new Date(entry.startedAt).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" }) }), el("div", { className: "caption", textContent: `${entry.device} · Deepgram live · speaker labels are not identities` })), el("div", { className: "row tight" }, review, exp, del)),
+    el("ol", { className: "script" }, ...entry.lines.map((l) => el("li", { className: `line spk-${l.speakers[0] ?? "x"}${l.marked ? " marked" : ""}` },
+      el("span", { className: "avatar", "aria-hidden": "true", textContent: l.speakers[0] ?? "?" }),
+      el("div", {}, el("div", { className: "line-meta" }, el("b", { textContent: l.speakers.length ? `Speaker ${l.speakers[0]}` : "Speaker ?" }), el("span", { textContent: ` · ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${l.activity ? ` · ${l.activity}` : ""}${l.hr ? ` · ♥ ${l.hr}` : ""}${l.marked ? " · ★ marked" : ""}` })), el("p", {}, ...mark(l.text)))))));
 }
+let archiveSel = "";
+$("archive-search").addEventListener("input", () => renderArchive());
 $("archive-clear").addEventListener("click", () => { if (confirm("Delete every stored transcript for this band from this browser?")) { saveArchive([]); renderArchive(); } });
 
 /* ---------- Knowledge graph (rebuilds as statements are saved) ---------- */
@@ -913,7 +939,7 @@ function openWatchFeed(token) {
       renderDays(); watchMsg(added ? `Added ${added} period start date${added > 1 ? "s" : ""} from Apple Health.` : "Cycle dates from Apple Health are already here.");
     } else if (msg.type === "log_mood_sent") { $("mood-msg").textContent = "On your watch now — confirm there to save it in Apple Health.";
     } else if (msg.type === "mood_failed") { $("mood-msg").textContent = "The watch couldn't save it (needs watchOS 11 and Health permission).";
-    } else if (msg.type === "mood_logged") { $("mood-msg").textContent = "Saved to Apple Health (State of Mind) after your confirmation.";
+    } else if (msg.type === "mood_logged") { $("mood-msg").textContent = "Saved to Apple Health (State of Mind) after your confirmation."; logAction("Saved a mood to Apple Health (you confirmed on the watch)");
     } else if (msg.type === "mood_declined") { $("mood-msg").textContent = "Not saved — you declined on the watch.";
     } else if (msg.type === "haptic_sent") {
       watchMsg("Tapped your watch.");
@@ -1026,6 +1052,7 @@ function maybeNotifyCycle(info = cycleInfo()) {
   const text = `Your period is estimated around ${info.next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, from your own dates.`;
   try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline", { body: text }); } catch { /* not allowed */ }
   if (life.cycle.haptic) sendHaptic("notification", "Cycle estimate reminder");
+  logAction("Cycle reminder from your own dates");
   life.cycle.notifiedFor = key; saveThread();
   message(text);
 }
@@ -1046,8 +1073,9 @@ $("cycle-notify").addEventListener("change", async () => {
 });
 $("cycle-haptic").addEventListener("change", () => { life.cycle.haptic = $("cycle-haptic").checked; if (life.cycle.haptic && !watch.ws) message("Pair the Apple Watch (Devices) so it can tap your wrist.", true); renderDays(); });
 $("energy-words").addEventListener("change", () => { life.energyWords = $("energy-words").value; saveThread(); });
-$("day-summary").addEventListener("click", async () => {
-  const out = $("day-summary-out"), key = todayKey(), r = life.days[key];
+$("day-summary").addEventListener("click", () => summarizeToday($("day-summary-out")));
+async function summarizeToday(out) {
+  const key = todayKey(), r = life.days[key];
   const notes = sessions.reflection.notes.filter((n) => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context }));
   if (!notes.length) { out.hidden = false; out.replaceChildren(el("p", { textContent: "Nothing saved today yet — capture or type a statement first." })); return; }
   const info = cycleInfo();
@@ -1059,19 +1087,20 @@ $("day-summary").addEventListener("click", async () => {
     out.hidden = false; out.replaceChildren(el("p", { className: "provenance", textContent: "Gemini summary · check the sources" }), el("p", { textContent: data.answer }));
   } catch (e) { out.hidden = false; out.replaceChildren(el("p", { className: "error", textContent: e.message })); }
   finally { setBusy(false); }
-});
+}
 // Access token: on the deployed site it is required; remember it in this browser so the session just works.
 $("token").addEventListener("change", () => { try { localStorage.setItem("threadline.token", $("token").value.trim()); } catch { /* storage off */ } });
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { live: "Live session", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Your days", graph: "Graph", devices: "Devices", integrations: "Integrations" };
+const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Live session", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Devices", integrations: "Integrations" };
 function showView(name) {
   if (!VIEW_TITLES[name]) name = "live";
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
   document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
   $("view-title").textContent = VIEW_TITLES[name];
   if (name === "graph" && typeof drawGraph === "function") drawGraph();
+  if (name === "today") renderToday(); if (name === "transcripts") renderArchive();
   if (name === "energy") renderEnergy(); if (name === "integrations") renderIntegrations(); if (name === "tasks") renderTasks();
 }
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
@@ -1136,7 +1165,7 @@ function actOnDecision(d, statement) {
   const li = feed.firstChild;
   const btn = (label, fn) => { const b = el("button", { type: "button", className: "secondary", textContent: label }); b.addEventListener("click", () => { fn(); b.closest(".row")?.replaceChildren(el("span", { className: "done", textContent: "Done ✓" })); }); return b; };
   if (d.action === "hold_decision" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Hold “${task.title}”`, () => holdTask(task, d.note || `Held — you said “${statement.text.slice(0, 60)}”`)), el("a", { className: "secondary ics", href: gcalLink(`Decide: ${task.title}`, `Held by Threadline on a low-energy day. ${d.reason || ""}`, todayKey(new Date(Date.now() + 3 * DAY_MS))), target: "_blank", rel: "noopener", textContent: "Calendar note" })));
-  if (d.action === "move_to_today" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Move “${task.title}” to today`, () => { task.due = todayKey(); task.heldUntil = null; renderTasks(); })));
+  if (d.action === "move_to_today" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Move “${task.title}” to today`, () => { task.due = todayKey(); task.heldUntil = null; renderTasks(); logAction(`Moved “${task.title}” to today`); })));
   if (d.action === "calendar_note") li.firstChild.append(el("div", { className: "row tight" }, el("a", { className: "secondary ics", href: gcalLink(task ? task.title : "Note from Threadline", d.note || statement.text, task?.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" })));
   if (d.action === "music" && d.music) { const m = d.music.mood || "calm"; li.firstChild.append(el("div", { className: "row tight" }, el("a", { className: "secondary ics", href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: `Apple Music · ${m}` }), el("a", { className: "secondary ics", href: `https://open.spotify.com/search/${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: `Spotify · ${m}` }))); }
   // Act: low-risk actions happen now; anything outward waits for one tap.
@@ -1169,7 +1198,8 @@ function classifyEnergy(text) {
 function noteEnergy(note) {
   const c = classifyEnergy(note.text); if (!c) return;
   life.energy = { state: c.state, word: c.word, text: note.text, at: note.at, tense: Boolean(c.tense) };
-  saveThread(); renderEnergy();
+  (life.energyLog ||= []).push({ at: note.at, state: c.state, word: c.word }); life.energyLog = life.energyLog.slice(-500);
+  saveThread(); renderEnergy(); renderToday();
   if (c.state === "low") gentleCheckin(c);
 }
 /* Check-ins: ask once; if opted in, a gentle watch tap next time (at most every 10 minutes). */
@@ -1184,7 +1214,7 @@ function gentleCheckin(c) {
   }
   if (ck.optedIn && Date.now() - ck.lastTap > 10 * 60000) {
     ck.lastTap = Date.now(); saveThread();
-    sendHaptic("directionUp", "Gentle check-in");
+    sendHaptic("directionUp", "Gentle check-in"); logAction(`Gentle check-in tap on your watch (“${c.word}”, you opted in)`);
     feedNote("Gentle check-in", `A soft tap on your watch — you said “${c.word}”. You opted in to these.`, "auto");
   }
 }
@@ -1253,7 +1283,7 @@ function renderTasks() {
   const item = (t) => {
     const btns = [];
     const mk = (label, fn, cls = "text-button") => { const b = el("button", { type: "button", className: cls, textContent: label }); b.addEventListener("click", fn); btns.push(b); };
-    if (!(t.due && t.due <= today)) mk("Move to today", () => { t.due = today; t.heldUntil = null; renderTasks(); });
+    if (!(t.due && t.due <= today)) mk("Move to today", () => { t.due = today; t.heldUntil = null; renderTasks(); logAction(`Moved “${t.title}” to today`); });
     if (t.big && !(t.heldUntil > today)) mk("Hold 3 days", () => holdTask(t));
     mk("Done", () => { t.done = true; renderTasks(); });
     btns.push(el("a", { className: "text-button", href: gcalLink(t.title, t.note || "From Threadline", t.heldUntil || t.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" }));
@@ -1262,7 +1292,7 @@ function renderTasks() {
   for (const k of ["today", "later", "held"]) $(`tasks-${k}`).replaceChildren(...(lists[k].length ? lists[k].map(item) : [el("li", { className: "empty", textContent: k === "held" ? "Nothing held." : "Nothing here." })]));
   saveThread();
 }
-function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy" : ""} day`; renderTasks(); }
+function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy " : ""}day`; renderTasks(); logAction(`Held “${t.title}” until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short" })}`); }
 $("task-form").addEventListener("submit", (e) => {
   e.preventDefault(); const title = $("task-title").value.trim(); if (!title) return;
   (life.tasks ||= []).push({ id: newId("t"), title, due: $("task-due").value || null, big: $("task-big").checked, done: false });
@@ -1297,10 +1327,35 @@ $("music-gen").addEventListener("click", async () => {
     const bytes = Uint8Array.from(atob(data.audio_b64), (c) => c.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes], { type: data.mime || "audio/mpeg" }));
     $("music-player").src = url; $("music-player").hidden = false; $("music-player").play().catch(() => {});
-    $("music-gen-msg").textContent = `A ${mood} track from MiniMax (${data.model}). It stays in this page.`;
+    $("music-gen-msg").textContent = `A ${mood} track from MiniMax (${data.model}). It stays in this page.`; logAction(`Generated a ${mood} track with MiniMax`);
   } catch (e) { $("music-gen-msg").textContent = /Not Found/.test(e.message) ? "MiniMax music isn't set up on this server yet." : e.message; }
   finally { $("music-gen").disabled = false; }
 });
+
+
+/* ---------- Your day: energy timeline, moments, measured, and what Threadline did ---------- */
+function logAction(text) { (life.actions ||= []).push({ at: new Date().toISOString(), text }); life.actions = life.actions.slice(-200); saveThread(); renderToday(); }
+function renderToday() {
+  if (!$("day-arc")) return;
+  const key = todayKey(), start = parseDay(key); start.setHours(6, 0, 0, 0);
+  const end = new Date(start.getTime() + 18 * 3600000), now = new Date();
+  const events = (life.energyLog || []).filter((e) => todayKey(new Date(e.at)) === key).sort((a, b) => a.at.localeCompare(b.at));
+  const segs = []; let cursor = start, state = "none";
+  for (const e of events) { const t = new Date(e.at); if (t > cursor) segs.push({ from: cursor, to: t, state }); cursor = t < start ? start : t; state = e.state; }
+  const stop = now < end ? now : end; if (stop > cursor) segs.push({ from: cursor, to: stop, state }); if (end > stop) segs.push({ from: stop, to: end, state: "future" });
+  $("day-arc").replaceChildren(...segs.filter((s) => s.to > s.from).map((s) => el("span", { className: `arc-${s.state}`, title: `${s.state} ${s.from.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}–${s.to.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` }))); 
+  [...$("day-arc").children].forEach((c, i) => { const s = segs.filter((x) => x.to > x.from)[i]; c.style.flexGrow = String(Math.max(1, Math.round((s.to - s.from) / 60000))); });
+  $("arc-caption").textContent = events.length ? `${events.length} energy reading${events.length > 1 ? "s" : ""} from your words` : "Fills in as you save statements";
+  const marked = loadArchive().filter((e) => todayKey(new Date(e.startedAt)) === key).flatMap((e) => e.lines.filter((l) => l.marked));
+  $("day-moments").replaceChildren(...[...events.map((e) => el("span", { className: `moment m-${e.state}`, textContent: `${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${e.word}”` })),
+    ...marked.slice(-6).map((l) => el("span", { className: "moment m-mark", textContent: `★ ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${l.text.slice(0, 40)}${l.text.length > 40 ? "…" : ""}”` }))]);
+  const r = life.days[key] || {}, w = watch.sensors || {}, info = cycleInfo();
+  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Cycle day", info.dayOf ? info.dayOf(key) : null]].filter(([, v]) => v != null);
+  $("measured").replaceChildren(...(m.length ? m.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })]) : [el("dt", { className: "empty", textContent: "Nothing measured yet today." })]));
+  const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
+  $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
+}
+$("today-summary").addEventListener("click", () => summarizeToday($("today-summary-out")));
 
 render();
 showView(location.hash.slice(1) || "live");
