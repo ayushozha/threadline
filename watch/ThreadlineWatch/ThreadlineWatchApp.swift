@@ -2,14 +2,14 @@ import SwiftUI
 
 @main
 struct ThreadlineWatchApp: App {
-    @StateObject private var recorder = Recorder()
+    @StateObject private var session = StreamSession()
 
     var body: some Scene {
         WindowGroup {
             NavigationStack {
                 PairView()
             }
-            .environmentObject(recorder)
+            .environmentObject(session)
         }
     }
 }

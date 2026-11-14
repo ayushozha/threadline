@@ -372,3 +372,46 @@ def test_watch_http_fallback_streams_and_stops(client, monkeypatch):
             assert feed.receive_json() == {"type": "watch_disconnected"}
         assert any(isinstance(d, str) and "Finalize" in d for d in sent)
         assert wait_for_slots()
+
+
+def test_watch_sensors_session_forwards_clean_readings_without_deepgram(client, monkeypatch):
+    connects = []
+    monkeypatch.setattr(main, "ws_connect", lambda *a, **k: connects.append(a))
+    with client:
+        code = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"}).json()["code"]
+        with client.websocket_connect("/api/watch/feed") as feed:
+            feed.send_json({"token": "test-only-access", "code": code})
+            assert feed.receive_json() == {"type": "waiting"}
+            with client.websocket_connect("/api/watch/stream") as watch:
+                watch.send_json({"code": code, "device": "Apple Watch", "format": "sensors"})
+                assert watch.receive_json() == {"type": "ready", "source": "sensors"}
+                assert feed.receive_json() == {"type": "watch_connected", "device": "Apple Watch"}
+                watch.send_json({"type": "sensors", "t": "2026-11-14T15:00:00Z", "heart_rate": 72, "steps": 1234,
+                                 "active_kcal": 12.5, "activity": "walk", "wrist_raised": True, "secret": "x"})
+                assert feed.receive_json() == {"type": "sensors", "t": "2026-11-14T15:00:00Z", "heart_rate": 72.0, "steps": 1234,
+                                               "active_kcal": 12.5, "activity": "walk", "wrist_raised": True, "device": "Apple Watch"}
+                watch.send_json({"type": "sensors", "heart_rate": 900, "steps": -5, "activity": "flying"})  # too soon: dropped
+                import time
+                time.sleep(0.25)
+                watch.send_json({"type": "sensors", "heart_rate": 900, "steps": -5, "active_kcal": True, "activity": "flying"})
+                assert feed.receive_json() == {"type": "sensors", "device": "Apple Watch"}  # out-of-range values dropped
+                watch.send_json({"type": "stop"})
+                assert watch.receive_json() == {"type": "closed", "bytes": 0}
+            assert feed.receive_json() == {"type": "watch_disconnected"}
+    assert connects == []  # sensors-only never contacts Deepgram
+    assert main.stream_slots._value == 4
+
+
+def test_watch_sensors_over_http(client, monkeypatch):
+    monkeypatch.setattr(main, "SENSOR_IDLE_SECONDS", 0.3)
+    with client:
+        assert client.post("/api/watch/sensors", headers={"X-Watch-Code": "bad"}, json={"heart_rate": 70}).status_code == 401
+        code = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"}).json()["code"]
+        with client.websocket_connect("/api/watch/feed") as feed:
+            feed.send_json({"token": "test-only-access", "code": code})
+            assert feed.receive_json()["type"] == "waiting"
+            response = client.post("/api/watch/sensors", headers={"X-Watch-Code": code}, json={"type": "sensors", "heart_rate": 70})
+            assert response.json() == {"forwarded": True}
+            assert feed.receive_json() == {"type": "watch_connected", "device": "Apple Watch"}
+            assert feed.receive_json() == {"type": "sensors", "heart_rate": 70.0, "device": "Apple Watch"}
+            assert feed.receive_json() == {"type": "watch_disconnected"}  # stopped posting

@@ -2,26 +2,31 @@ import AVFoundation
 import Foundation
 import WatchKit
 
-/// Captures the microphone, converts it to 16 kHz mono Int16 PCM and streams it to the Threadline server,
-/// which relays it to Deepgram. Audio is never written to disk on the watch.
+/// Streams sensor readings (about once a second) and, optionally, microphone audio to the Threadline
+/// server, which forwards them to the paired web page. Audio goes on to Deepgram for transcription.
+/// Nothing is stored on the watch.
 ///
 /// Transport: a WebSocket to /api/watch/stream (works in the Simulator). watchOS blocks WebSockets for
-/// most apps on a real watch (Apple TN3135), so if the socket never becomes ready we switch to plain
-/// HTTPS POSTs of ~0.5 s chunks to /api/watch/audio, which URLSession allows everywhere.
+/// most apps on a real watch (Apple TN3135), so if the socket is not ready within 6 s we switch to plain
+/// HTTPS: sensors to /api/watch/sensors and ~0.5 s audio chunks to /api/watch/audio.
 @MainActor
-final class Recorder: ObservableObject {
-    @Published var isRecording = false
+final class StreamSession: ObservableObject {
+    @Published var isStreaming = false
+    @Published var recordAudio = false
     @Published var startedAt: Date?
-    @Published var status = "Not connected"
+    @Published var status = "Not streaming"
     @Published var lines: [String] = []
     @Published var interim = ""
+    var wristRaised: Bool?
 
-    private var server = URL(string: "https://threadline.ayushojha.com")!
+    let sensors = Sensors()
+    private(set) var server = URL(string: "https://threadline.ayushojha.com")!
     private var code = ""
     private let device = WKInterfaceDevice.current().name
 
     private let engine = AVAudioEngine()
     private let target = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)!
+    private var audioRunning = false
     private var pending = Data()
     private static let frameBytes = 3_200   // 100 ms of 16 kHz Int16 mono
     private static let postBytes = 16_000   // 500 ms per HTTP chunk
@@ -29,10 +34,13 @@ final class Recorder: ObservableObject {
     private var socket: URLSessionWebSocketTask?
     private var socketReady = false
     private var everReady = false
+    private var rejected = false
     private var useHTTP = false
     private var httpInFlight = false
     private var reconnectAttempts = 0
-    private var rejected = false
+    private var ticker: Task<Void, Never>?
+
+    var host: String { server.host ?? server.absoluteString }
 
     func configure(server: String, code: String) {
         if let url = URL(string: server.trimmingCharacters(in: .whitespaces)) { self.server = url }
@@ -40,52 +48,83 @@ final class Recorder: ObservableObject {
     }
 
     func toggle() {
-        isRecording ? stop() : start()
+        isStreaming ? stop() : start()
     }
 
-    // MARK: Recording
+    // MARK: Start / stop
 
     private func start() {
         lines = []; interim = ""; pending = Data()
-        everReady = false; useHTTP = false; reconnectAttempts = 0; rejected = false
-        AVAudioApplication.requestRecordPermission { granted in
-            Task { @MainActor in
-                guard granted else { self.status = "Microphone permission denied"; return }
-                do {
-                    try self.startAudio()
-                    self.isRecording = true
-                    self.startedAt = Date()
-                    self.connect()
-                } catch {
-                    self.status = "Audio failed: \(error.localizedDescription)"
+        everReady = false; rejected = false; useHTTP = false; reconnectAttempts = 0
+        isStreaming = true
+        startedAt = Date()
+        Task {
+            await sensors.start()
+            if recordAudio {
+                guard await AVAudioApplication.requestRecordPermission() else {
+                    status = "Microphone permission denied"; stop(); return
+                }
+                do { try startAudio() } catch { status = "Audio failed: \(error.localizedDescription)"; stop(); return }
+            }
+            guard isStreaming else { return }
+            connect()
+            ticker = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    self?.sendSensors()
                 }
             }
         }
     }
 
     private func stop() {
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        try? AVAudioSession.sharedInstance().setActive(false)
-        isRecording = false
+        ticker?.cancel(); ticker = nil
+        sensors.stop()
+        stopAudio()
+        isStreaming = false
         startedAt = nil
         if useHTTP {
-            flushHTTP(final: true)
+            if recordAudio { flushHTTP(final: true) } else { status = "Stopped" }
         } else if let socket {
-            if !pending.isEmpty { socket.send(.data(pending)) { _ in } }
+            if !pending.isEmpty && socketReady { socket.send(.data(pending)) { _ in } }
             socket.send(.string(#"{"type":"stop"}"#)) { _ in }
             status = "Finishing…"
             // The server answers {"type":"closed"} and closes; cancel anyway if it does not.
-            Task { try? await Task.sleep(for: .seconds(4)); if !self.isRecording { self.closeSocket() } }
+            Task { try? await Task.sleep(for: .seconds(4)); if !self.isStreaming { self.closeSocket(); self.status = "Stopped" } }
+        } else {
+            status = "Stopped"
         }
         pending = Data()
     }
+
+    // MARK: Sensors
+
+    private static let iso = ISO8601DateFormatter()
+
+    private func sensorFrame() -> [String: Any] {
+        var frame: [String: Any] = ["type": "sensors", "t": Self.iso.string(from: Date()), "activity": sensors.activity]
+        if let value = sensors.heartRate { frame["heart_rate"] = (value * 10).rounded() / 10 }
+        if let value = sensors.steps { frame["steps"] = value }
+        if let value = sensors.activeKcal { frame["active_kcal"] = (value * 10).rounded() / 10 }
+        if let value = wristRaised { frame["wrist_raised"] = value }
+        return frame
+    }
+
+    private func sendSensors() {
+        guard isStreaming, let body = try? JSONSerialization.data(withJSONObject: sensorFrame()) else { return }
+        if useHTTP {
+            Task { await post("/api/watch/sensors", body: body, contentType: "application/json") }
+        } else if let socket, socketReady, let text = String(data: body, encoding: .utf8) {
+            socket.send(.string(text)) { _ in }
+        }
+    }
+
+    // MARK: Audio
 
     private func startAudio() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .default)
         try session.setActive(true)
-
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard let converter = AVAudioConverter(from: inputFormat, to: target) else {
@@ -98,6 +137,15 @@ final class Recorder: ObservableObject {
         }
         engine.prepare()
         try engine.start()
+        audioRunning = true
+    }
+
+    private func stopAudio() {
+        guard audioRunning else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        try? AVAudioSession.sharedInstance().setActive(false)
+        audioRunning = false
     }
 
     nonisolated private static func convert(_ buffer: AVAudioPCMBuffer, with converter: AVAudioConverter, to target: AVAudioFormat) -> Data? {
@@ -117,15 +165,14 @@ final class Recorder: ObservableObject {
     }
 
     private func enqueue(_ data: Data) {
-        guard isRecording else { return }
+        guard isStreaming, recordAudio else { return }
         pending.append(data)
         if useHTTP {
             if pending.count >= Self.postBytes { flushHTTP(final: false) }
             return
         }
         guard let socket, socketReady else {
-            // Keep at most ~5 s while (re)connecting.
-            if pending.count > 160_000 { pending.removeFirst(pending.count - 160_000) }
+            if pending.count > 160_000 { pending.removeFirst(pending.count - 160_000) }  // keep ~5 s while connecting
             return
         }
         while pending.count >= Self.frameBytes {
@@ -145,20 +192,21 @@ final class Recorder: ObservableObject {
     }
 
     private func connect() {
-        guard isRecording, let url = endpoint("/api/watch/stream", websocket: true) else { return }
+        guard isStreaming, let url = endpoint("/api/watch/stream", websocket: true) else { return }
         closeSocket()
         status = reconnectAttempts == 0 ? "Connecting…" : "Reconnecting…"
         let task = URLSession.shared.webSocketTask(with: url)
         socket = task
         task.resume()
-        let hello = ["code": code, "device": device, "format": "pcm16"]
-        let text = String(data: try! JSONSerialization.data(withJSONObject: hello), encoding: .utf8)!
-        task.send(.string(text)) { _ in }
+        let hello = ["code": code, "device": device, "format": recordAudio ? "pcm16" : "sensors"]
+        if let data = try? JSONSerialization.data(withJSONObject: hello), let text = String(data: data, encoding: .utf8) {
+            task.send(.string(text)) { _ in }
+        }
         receive(on: task)
-        // If the socket has not said "ready" in 6 s on the first try, assume WebSockets are blocked.
+        // If the first socket is not ready in 6 s, assume WebSockets are blocked (real watch) and use HTTPS.
         Task {
             try? await Task.sleep(for: .seconds(6))
-            if self.socket === task, !self.socketReady, !self.everReady, self.isRecording { self.switchToHTTP() }
+            if self.socket === task, !self.socketReady, !self.everReady, self.isStreaming { self.switchToHTTP() }
         }
     }
 
@@ -181,7 +229,7 @@ final class Recorder: ObservableObject {
 
     private func socketDropped() {
         socketReady = false
-        guard isRecording else { closeSocket(); status = "Stopped"; return }
+        guard isStreaming else { closeSocket(); status = "Stopped"; return }
         if rejected { let reason = status; stop(); status = reason; return }  // e.g. bad code: retrying will not help
         if !everReady { switchToHTTP(); return }
         reconnectAttempts += 1
@@ -196,7 +244,7 @@ final class Recorder: ObservableObject {
         socketReady = false
     }
 
-    // MARK: HTTP fallback transport
+    // MARK: HTTPS fallback transport
 
     private func switchToHTTP() {
         closeSocket()
@@ -219,13 +267,13 @@ final class Recorder: ObservableObject {
         }
     }
 
-    private func post(_ path: String, body: Data?) async {
+    private func post(_ path: String, body: Data?, contentType: String = "application/octet-stream") async {
         guard let url = endpoint(path, websocket: false) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(code, forHTTPHeaderField: "X-Watch-Code")
         request.setValue(device, forHTTPHeaderField: "X-Watch-Device")
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -233,7 +281,7 @@ final class Recorder: ObservableObject {
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             for message in json?["messages"] as? [[String: Any]] ?? [] { handle(message) }
         } catch {
-            status = "Network error, retrying…"  // the next chunk retries; this one is dropped
+            if isStreaming { status = "Network error, retrying…" }  // the next post retries
         }
     }
 
@@ -249,7 +297,7 @@ final class Recorder: ObservableObject {
         switch message["type"] as? String {
         case "ready":
             socketReady = true; everReady = true; reconnectAttempts = 0
-            status = useHTTP ? "Streaming (HTTPS)" : "Streaming"
+            status = "Streaming"
             enqueue(Data())
         case "result":
             let transcript = message["transcript"] as? String ?? ""
@@ -263,7 +311,7 @@ final class Recorder: ObservableObject {
             status = message["message"] as? String ?? "Server error"
             if !everReady { rejected = true }
         case "closed":
-            if !isRecording { status = "Stopped"; closeSocket() }
+            if !isStreaming { status = "Stopped"; closeSocket() }
         default:
             break
         }

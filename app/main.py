@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 import os
 import secrets
 import time
@@ -406,7 +407,8 @@ class Pairing:
     feeds: set = field(default_factory=set)
     watches: int = 0
     device: str = ""
-    http: dict | None = None  # HTTP-fallback session: queue, outbox, task
+    http: dict | None = None  # HTTP-fallback audio session: queue, outbox, task
+    sensors: dict | None = None  # HTTP sensors session: last frame time, watchdog task
 
 
 pairings: dict[str, Pairing] = {}
@@ -416,7 +418,7 @@ background: set[asyncio.Task] = set()
 def prune_pairings() -> None:
     now = time.monotonic()
     for code, pairing in list(pairings.items()):
-        busy = pairing.watches or (pairing.http and not pairing.http["task"].done())
+        busy = pairing.watches or any(s and not s["task"].done() for s in (pairing.http, pairing.sensors))
         if pairing.expires < now and not busy:
             del pairings[code]
 
@@ -500,9 +502,69 @@ async def watch_feed(client: WebSocket):
         pairing.feeds.discard(client)
 
 
+# Sensor readings are forwarded to feeds as they arrive and never stored. They are plain readings:
+# nothing here infers stress, mood, health or cycle state from them.
+SENSOR_RANGES = {"heart_rate": (25, 250), "steps": (0, 200_000), "active_kcal": (0, 10_000)}
+ACTIVITIES = {"still", "walk", "run", "unknown"}
+SENSOR_MIN_INTERVAL = 0.2  # at most ~5 frames/s per watch
+SENSOR_IDLE_SECONDS = 10  # HTTP sensors: report the watch gone after this long without a frame
+
+
+def clean_sensors(frame: dict, device: str) -> dict:
+    """Keep only known fields with sane values; anything else (unknown keys, out-of-range numbers) is dropped."""
+    out: dict = {"type": "sensors"}
+    if isinstance(frame.get("t"), str) and len(frame["t"]) <= 40:
+        out["t"] = frame["t"]
+    for key, (low, high) in SENSOR_RANGES.items():
+        value = frame.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high:
+            out[key] = int(value) if key == "steps" else round(float(value), 1)
+    if frame.get("activity") in ACTIVITIES:
+        out["activity"] = frame["activity"]
+    if isinstance(frame.get("wrist_raised"), bool):
+        out["wrist_raised"] = frame["wrist_raised"]
+    out["device"] = device
+    return out
+
+
+def sensor_forwarder(pairing: Pairing, device: str) -> Callable[[dict], Awaitable[bool]]:
+    last = {"at": 0.0}
+
+    async def forward(frame: dict) -> bool:
+        now = time.monotonic()
+        if now - last["at"] < SENSOR_MIN_INTERVAL:
+            return False  # too fast: dropped
+        last["at"] = now
+        await fanout(pairing, clean_sensors(frame, device))
+        return True
+
+    return forward
+
+
+def watch_receiver(client: WebSocket, forward: Callable[[dict], Awaitable[bool]]) -> Receive:
+    """Like socket_receiver, but sensor text frames are forwarded instead of ending the stream."""
+    async def receive() -> bytes | str | None:
+        while True:
+            message = await client.receive()
+            if message["type"] == "websocket.disconnect":
+                return None
+            if message.get("bytes") is not None:
+                return message["bytes"]
+            try:
+                frame = json.loads(message.get("text") or "")
+            except ValueError:
+                frame = None
+            if isinstance(frame, dict) and frame.get("type") == "sensors":
+                await forward(frame)
+                continue
+            return "stop"
+    return receive
+
+
 @app.websocket("/api/watch/stream")
 async def watch_stream(client: WebSocket):
-    """Watch side: the pairing code is the credential. Binary frames are 16 kHz mono linear16 PCM."""
+    """Watch side; the pairing code is the only credential. format "sensors": text sensor frames only,
+    no Deepgram connection. format "pcm16": binary 16 kHz mono linear16 PCM, sensor frames may be interleaved."""
     await client.accept()
     fail = socket_fail(client)
     if (hello := await socket_hello(client, fail)) is None:
@@ -510,9 +572,25 @@ async def watch_stream(client: WebSocket):
     pairing = find_pairing(hello.get("code"))
     if not pairing:
         return await fail("Unknown or expired pairing code. Create a new one on the website.")
-    if hello.get("format", "pcm16") != "pcm16":
-        return await fail("Send 16 kHz mono linear16 PCM (format pcm16).")
-    on_ready, on_end = watch_hooks(pairing, watch_device(hello.get("device")))
+    source = hello.get("format", "pcm16")
+    if source not in {"pcm16", "sensors"}:
+        return await fail('Use format "sensors" or "pcm16" (16 kHz mono linear16 PCM).')
+    device = watch_device(hello.get("device"))
+    on_ready, on_end = watch_hooks(pairing, device)
+    receive = watch_receiver(client, sensor_forwarder(pairing, device))
+
+    if source == "sensors":
+        try:
+            await client.send_json({"type": "ready", "source": "sensors"})
+            await on_ready()
+            while (data := await receive()) is not None:
+                if data == "stop":
+                    return await close_cleanly(client, 0)
+                # binary frames are ignored in sensors mode
+        except (WebSocketDisconnect, RuntimeError):
+            return
+        finally:
+            on_end()
 
     async def send(message: dict) -> None:
         if message["type"] in RESULT_TYPES:
@@ -520,10 +598,45 @@ async def watch_stream(client: WebSocket):
         await client.send_json(message)
 
     try:
-        sent = await relay_audio("pcm16", socket_receiver(client), send, fail, on_ready)
+        sent = await relay_audio("pcm16", receive, send, fail, on_ready)
     finally:
         on_end()
     await close_cleanly(client, sent)
+
+
+@app.post("/api/watch/sensors")
+async def watch_sensors(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+    """HTTP form of a sensors frame for real watches (no WebSocket). A watch that stops posting is reported gone."""
+    pairing = find_pairing(x_watch_code)
+    if not pairing:
+        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    body = await request.body()
+    if len(body) > 4096:
+        raise HTTPException(413, "Sensor frame too large.")
+    try:
+        frame = json.loads(body)
+    except ValueError:
+        raise HTTPException(422, "Send one JSON sensors frame.") from None
+    if not isinstance(frame, dict):
+        raise HTTPException(422, "Send one JSON sensors frame.")
+    device = watch_device(x_watch_device)
+    session = pairing.sensors
+    if not session or session["task"].done():
+        on_ready, on_end = watch_hooks(pairing, device)
+        session = {"last": time.monotonic(), "forward": sensor_forwarder(pairing, device)}
+
+        async def watchdog():
+            try:
+                while time.monotonic() - session["last"] < SENSOR_IDLE_SECONDS:
+                    await asyncio.sleep(1)
+            finally:
+                on_end()
+
+        await on_ready()
+        session["task"] = asyncio.create_task(watchdog())
+        pairing.sensors = session
+    session["last"] = time.monotonic()
+    return {"forwarded": await session["forward"](frame)}
 
 
 # HTTP fallback for real watches: watchOS blocks URLSessionWebSocketTask for ordinary apps (Apple TN3135),
