@@ -283,6 +283,12 @@ $("band-connect").addEventListener("click", async () => {
       bandStatus(e.reason === "closed" ? "" : `Band disconnected (${e.reason}).${e.message ? " " + e.message : ""}`, e.reason !== "closed"); setRecUI();
     });
     band.on("double-tap", () => { if (capture.ws) stopLive(); else if (!busy) $("rec-start").click(); });
+    band.on("stream-taken", (e) => {
+      // Another program (often the Vexo dashboard) started the mic last, so the audio goes there.
+      recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true);
+      $("rec-takeback").hidden = false;
+    });
+    band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
     await band.configure({ events: true });
     bandStatus(); setRecUI();
   } catch (error) { bandStatus(error.message || "Could not connect to the band.", true); setRecUI(); }
@@ -303,7 +309,8 @@ $("rec-start").addEventListener("click", async () => {
   }
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
   ws.binaryType = "arraybuffer";
-  Object.assign(capture, { ws, source, stream, startedAt: new Date(), finals: [], interim: "", stopping: false, packets: 0 });
+  Object.assign(capture, { ws, source, stream, startedAt: new Date(), finals: [], interim: "", stopping: false, packets: 0, chunks: 0, warnedSilent: false, lastError: "" });
+  $("rec-takeback").hidden = true;
   $("live-on").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = SOURCE_LABELS_LIVE[source];
   recState("Connecting to Deepgram…"); setRecUI();
   ws.onopen = () => ws.send(JSON.stringify({ token, source: vexo ? "vexo" : "browser" }));
@@ -315,12 +322,20 @@ $("rec-start").addEventListener("click", async () => {
         try { await capture.band.configure({ audio: true }); } catch (e) { return stopLive(`The band refused the microphone: ${e.message}`); }
       } else {
         capture.recorder = new MediaRecorder(stream);
-        capture.recorder.ondataavailable = (e) => { if (e.data.size && ws.readyState === 1 && !capture.stopping) ws.send(e.data); };
+        capture.recorder.ondataavailable = (e) => { if (e.data.size && ws.readyState === 1 && !capture.stopping) { ws.send(e.data); capture.chunks += 1; } };
         capture.recorder.start(250);
       }
+      capture.audioStarted = Date.now();
       capture.timer = setInterval(() => {
         const s = Math.round((Date.now() - capture.startedAt) / 1000);
-        $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+        const sent = vexo ? `${capture.packets} audio packets` : `${capture.chunks} audio chunks`;
+        $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${sent}`;
+        const count = vexo ? capture.packets : capture.chunks;
+        if (count === 0 && Date.now() - capture.audioStarted > 3000 && !capture.warnedSilent) {
+          capture.warnedSilent = true;
+          recState(vexo ? "No audio is arriving from the band. If the Vexo dashboard (or another tab) is connected to it, close that, then press “Take it back”." : "No audio is arriving from the microphone. Check the browser's microphone permission and input device.", true);
+          if (vexo) $("rec-takeback").hidden = false;
+        }
       }, 500);
       recState(vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
     } else if (msg.type === "result") {
@@ -355,6 +370,15 @@ async function stopLive(reason) {
   setTimeout(() => { if (capture.ws) capture.ws.close(); }, 6000);
 }
 $("rec-stop").addEventListener("click", () => stopLive());
+$("rec-takeback").addEventListener("click", async () => {
+  if (!capture.band) return;
+  try {
+    await capture.band.takeBack();
+    if (capture.ws) await capture.band.configure({ audio: true });
+    capture.warnedSilent = false; capture.audioStarted = Date.now();
+    $("rec-takeback").hidden = true; recState("Took the microphone back. Listening through the band.");
+  } catch (e) { recState(`Could not take the band back: ${e.message}`, true); }
+});
 function finishLive() {
   if (!capture.ws) return;
   clearInterval(capture.timer); $("live-timer").textContent = "stopped";

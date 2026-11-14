@@ -9,13 +9,14 @@ from typing import Literal
 
 import httpx
 from websockets.asyncio.client import connect as ws_connect
-from websockets.exceptions import WebSocketException
+from websockets.exceptions import ConnectionClosed, WebSocketException
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.graph import GraphRequest, gemini_graph, local_graph, validate_request
 from app.schedule import BookRequest, SlotRequest, book, find_slot
 
 ROOT = Path(__file__).resolve().parent
@@ -147,6 +148,18 @@ async def reflect(body: Reflection):
         raise HTTPException(502, "Gemini response unavailable. Please retry.") from None
 
 
+@app.post("/api/graph", dependencies=[Depends(authorize)])
+async def graph(body: GraphRequest):
+    """Stateless knowledge graph from the supplied notes. Local mode is rule-based; Gemini mode never falls back."""
+    validate_request(body)
+    if body.mode == "local":
+        return local_graph(body.notes)
+    key, model = os.getenv("GOOGLE_API_KEY"), os.getenv("GEMINI_MODEL")
+    if not key or not model:
+        raise HTTPException(503, "Set GOOGLE_API_KEY and GEMINI_MODEL to build the graph with Gemini.")
+    return await gemini_graph(body, key, model, provider_slots)
+
+
 @app.post("/api/transcribe", dependencies=[Depends(authorize)])
 async def transcribe(request: Request):
     key, model = os.getenv("DEEPGRAM_API_KEY"), os.getenv("DEEPGRAM_MODEL")
@@ -231,8 +244,11 @@ async def live_transcribe(client: WebSocket):
     await client.accept()
 
     async def fail(message: str, code: int = 1008):
-        await client.send_json({"type": "error", "message": message})
-        await client.close(code)
+        try:
+            await client.send_json({"type": "error", "message": message})
+            await client.close(code)
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # the browser already left
 
     try:
         hello = await asyncio.wait_for(client.receive_json(), timeout=10)
@@ -261,28 +277,29 @@ async def live_transcribe(client: WebSocket):
 
                 async def upstream():
                     while True:
-                        try:
-                            message = await asyncio.wait_for(client.receive(), timeout=4)
-                        except asyncio.TimeoutError:
-                            if not state["closing"]:
-                                await deepgram.send(json.dumps({"type": "KeepAlive"}))
-                            continue
+                        message = await client.receive()
                         if message["type"] == "websocket.disconnect":
                             break
-                        if (data := message.get("bytes")) is not None:
+                        data = message.get("bytes")
+                        if data is not None:
                             state["bytes"] += len(data)
-                            if state["bytes"] > LIVE_MAX_BYTES or loop.time() - state["started"] > LIVE_MAX_SECONDS:
-                                await client.send_json({"type": "error", "message": "Live session limit reached; stopping."})
-                                data = None
-                            else:
+                            state["last"] = loop.time()
+                            if state["bytes"] <= LIVE_MAX_BYTES and loop.time() - state["started"] <= LIVE_MAX_SECONDS:
                                 await deepgram.send(data)
                                 continue
-                        if data is None or "stop" in (message.get("text") or ""):
-                            state["closing"] = True
-                            await deepgram.send(json.dumps({"type": "Finalize"}))  # flush the words still in progress
-                            await asyncio.sleep(1.5)
-                            await deepgram.send(json.dumps({"type": "CloseStream"}))
-                            return
+                            await client.send_json({"type": "error", "message": "Live session limit reached; stopping."})
+                        state["closing"] = True
+                        await deepgram.send(json.dumps({"type": "Finalize"}))  # flush the words still in progress
+                        await asyncio.sleep(1.5)
+                        await deepgram.send(json.dumps({"type": "CloseStream"}))
+                        return
+
+                async def keepalive():
+                    # Deepgram hangs up after ~10 s without audio; keep the line open while the band is quiet.
+                    while not state["closing"]:
+                        await asyncio.sleep(3)
+                        if not state["closing"] and loop.time() - state["last"] >= 3:
+                            await deepgram.send(json.dumps({"type": "KeepAlive"}))
 
                 async def downstream():
                     async for raw in deepgram:
@@ -293,11 +310,21 @@ async def live_transcribe(client: WebSocket):
                         if simple:
                             await client.send_json(simple)
 
-                sender = asyncio.create_task(upstream())
-                await downstream()
-                sender.cancel()
-                await client.send_json({"type": "closed"})
-                await client.close()
+                tasks = [asyncio.create_task(upstream()), asyncio.create_task(keepalive())]
+                try:
+                    await downstream()
+                except ConnectionClosed as exc:
+                    reason = exc.rcvd.reason if exc.rcvd else ""
+                    await fail(f"Deepgram closed the stream: {reason or 'connection lost'}", 1011)
+                    return
+                finally:
+                    for task in tasks:
+                        task.cancel()
+                try:
+                    await client.send_json({"type": "closed", "bytes": state["bytes"]})
+                    await client.close()
+                except (WebSocketDisconnect, RuntimeError):
+                    pass
         except WebSocketDisconnect:
             return
         except (WebSocketException, OSError, asyncio.TimeoutError) as exc:

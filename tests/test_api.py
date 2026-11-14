@@ -129,3 +129,90 @@ def test_loopback_trust_is_opt_in_and_local_only(monkeypatch):
     assert main.trusted_local("127.0.0.1", "localhost:8000")
     assert not main.trusted_local("10.0.1.5", "localhost:8000")          # e.g. a reverse proxy
     assert not main.trusted_local("127.0.0.1", "threadline.ayushojha.com")
+
+
+GRAPH_NOTES = [
+    {"id": "n1", "text": "Felt exhausted after the budget meeting with Priya. I will email the landlord tomorrow evening.", "at": "2026-11-12"},
+    {"id": "n2", "text": "Still exhausted this evening. Dinner with Priya was calm.", "at": "2026-11-13", "speaker": "Speaker 1", "device": "vexo"},
+]
+
+
+def test_local_graph_builds_feeling_time_nodes_and_cooccurrence_edges(client, monkeypatch):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "local", "notes": GRAPH_NOTES})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["engine"] == "local"
+    nodes = {node["id"]: node for node in data["nodes"]}
+    assert nodes["feeling:exhausted"]["sources"] == ["n1", "n2"] and nodes["feeling:exhausted"]["weight"] == 2
+    assert nodes["time:evening"]["type"] == "time" and nodes["time:tomorrow"]["sources"] == ["n1"]
+    assert nodes["person:priya"]["type"] == "person"
+    assert nodes["commitment:email-the-landlord"]["label"] == "email the landlord"
+    assert "person:speaker-1" not in nodes
+    edge = next(e for e in data["edges"] if {e["source"], e["target"]} == {"feeling:exhausted", "time:evening"})
+    assert edge["label"] == "mentioned with" and edge["weight"] == 2 and edge["sources"] == ["n1", "n2"]
+    assert len(data["nodes"]) <= 40 and len(data["edges"]) <= 80
+
+
+def test_graph_rejects_duplicate_note_ids(client):
+    notes = [GRAPH_NOTES[0], {**GRAPH_NOTES[1], "id": "n1"}]
+    response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "local", "notes": notes})
+    assert response.status_code == 422
+
+
+def test_gemini_graph_requires_provider_configuration(client, monkeypatch):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "gemini", "notes": GRAPH_NOTES})
+    assert response.status_code == 503
+    assert "GOOGLE_API_KEY" in response.json()["detail"]
+
+
+def test_gemini_graph_drops_invented_sources_and_dangling_edges(client, monkeypatch):
+    import json
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-only-key")
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    real_client = httpx.AsyncClient
+    graph = {
+        "nodes": [
+            {"id": "feeling:exhausted", "label": "exhausted", "type": "feeling", "weight": 2, "sources": ["n1", "n2", "n99"]},
+            {"id": "person:priya", "label": "Priya", "type": "person", "weight": 2, "sources": ["n1", "n2"]},
+            {"id": "topic:invented", "label": "invented", "type": "topic", "weight": 1, "sources": ["n99"]},
+        ],
+        "edges": [
+            {"source": "feeling:exhausted", "target": "person:priya", "label": "mentioned with", "weight": 2, "sources": ["n1", "n42"]},
+            {"source": "feeling:exhausted", "target": "place:nowhere", "label": "mentioned with", "weight": 1, "sources": ["n1"]},
+        ],
+    }
+
+    def respond(request):
+        payload = json.loads(request.content)
+        assert payload["store"] is False
+        assert payload["model"] == "test-model"
+        assert "budget meeting with Priya" in payload["input"]
+        return httpx.Response(200, json={"steps": [{"type": "model_output", "content": [
+            {"type": "text", "text": "```json\n" + json.dumps(graph) + "\n```"}
+        ]}]})
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
+    response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "gemini", "notes": GRAPH_NOTES})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["engine"] == "gemini"
+    nodes = {node["id"]: node for node in data["nodes"]}
+    assert set(nodes) == {"feeling:exhausted", "person:priya"}
+    assert nodes["feeling:exhausted"]["sources"] == ["n1", "n2"]
+    assert data["edges"] == [{"source": "feeling:exhausted", "target": "person:priya", "label": "mentioned with", "weight": 2.0, "sources": ["n1"]}]
+
+
+def test_gemini_graph_reports_unparseable_output(client, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-only-key")
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    real_client = httpx.AsyncClient
+
+    def respond(request):
+        return httpx.Response(200, json={"steps": [{"type": "model_output", "content": [{"type": "text", "text": "Not JSON."}]}]})
+
+    monkeypatch.setattr(main.httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
+    response = client.post("/api/graph", headers={"X-App-Token": "test-only-access"}, json={"mode": "gemini", "notes": GRAPH_NOTES})
+    assert response.status_code == 502
