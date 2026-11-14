@@ -1,5 +1,27 @@
 # API setup
 
+## Current Vexo-first setup
+
+The public page creates a short-lived, HttpOnly browser session automatically;
+there is no user-facing provider switch or access-token field. Keep the recording
+and processing consent on the page. All provider credentials stay server-side.
+
+Configure the server with `APP_GUEST_SESSIONS=1`,
+`APP_PUBLIC_ORIGIN=https://threadline.ayushojha.com`, a strong `APP_ACCESS_TOKEN`,
+the Gemini and Deepgram keys/models, `VEXO_BAND_NUMBER=73`, and
+`GEMINI_DECISION_MODEL=gemini-decision-1`. Never enable `APP_TRUST_LOOPBACK` on the
+public server. Local development can continue to use its loopback-only option.
+Existing nonempty ElevenLabs settings must be preserved when updating credentials.
+
+Automatic sessions are a bounded public demo allowance, not user identity or
+private account access. They expire, enforce request and streaming limits, and
+cannot create Apple Watch pairings. Operator scripts can still send
+`X-App-Token`; the browser does not receive that token. Run one backend worker
+while these sessions live in process memory; a restart requires a new session.
+
+The older endpoint details below remain reference material; the old instructions
+to type an access token or turn on provider controls no longer describe the UI.
+
 Threadline uses FastAPI, Uvicorn, HTTPX, and python-dotenv for a small hackathon prototype: Deepgram transcribes uploaded audio and Gemini answers from selected memory evidence through server-side REST calls. The browser must not receive provider credentials. ElevenLabs fields are reserved for a future speech integration; speech generation is not implemented.
 
 This document describes the configuration contract. A configured key is not proof that a provider call, a wearable connection, or an end-to-end feature has been tested.

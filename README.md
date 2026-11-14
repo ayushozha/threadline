@@ -37,6 +37,11 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 
 ## Run locally (PowerShell)
 
+The entry page is **Your band**: connect your assigned Vexo band, accept recording
+and processing, then start or stop. Provider settings and access tokens are not
+shown. Camera and Apple Watch controls are held out of this simplified flow.
+Server-side setup is described in [API setup](docs/API_SETUP.md).
+
 Install [uv](https://docs.astral.sh/uv/) if it is not available, then:
 
 ```powershell

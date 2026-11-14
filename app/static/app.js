@@ -289,7 +289,8 @@ async function run(task) { if (busy) return; setBusy(true); try { await task(); 
 // Deepgram; the provider key never reaches the page. If Deepgram or the band link drops, capture reconnects
 // by itself and keeps everything heard so far.
 const SOURCE_LABELS_LIVE = { vexo: "Vexo band", browser: "Browser microphone" };
-let kit = null, logic = null, bandNumber = null, tokenRequired = true, configuredBand = null;
+let kit = null, logic = null, bandNumber = null, configuredBand = null;
+const service = { ready: false, loading: null, reflection: false, transcription: false };
 const loadKit = async () => {
   kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
   logic = logic || await import("/static/vendor/vexo-open/dashboard/logic.js");  // the dashboard's own wording
@@ -301,18 +302,31 @@ function rememberBand(number) { try { localStorage.setItem(RECENT_KEY, JSON.stri
 const bandLabel = (n = bandNumber) => `Vexo-HACK-${String(n).padStart(2, "0")}`;
 const pair = { state: "idle", attempt: 0, busy: false, slow: 0 };
 
-fetch("/api/device").then((r) => r.json()).then((d) => {
-  configuredBand = d.vexo_band_number; tokenRequired = d.token_required !== false;
-  if (tokenRequired) {
-    try { const saved = localStorage.getItem("threadline.token"); if (saved) $("token").value = saved; } catch { /* storage off */ }
-    if (!$("token").value) { $("token").closest("details").open = true; $("provider-summary").textContent = "· enter the access token to record"; }
-  }
-  if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
+fetch("/api/device").then((r) => r.json()).then(async (d) => {
+  configuredBand = d.vexo_band_number;
+  try { localStorage.removeItem("threadline.token"); } catch { /* storage off */ }
   const fromUrl = new URLSearchParams(location.search).get("band");
   const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : recentBands()[0] || configuredBand;
   if (start) chooseBand(start, false); else { loadThread("browser"); render(); }
   renderPair(); setRecUI();
-}).catch(() => renderPair());
+  await ensureService();
+}).catch(() => { renderPair(); recState("Couldn't connect to Threadline. Reload to try again.", true); });
+
+async function ensureService() {
+  if (service.ready) return;
+  if (service.loading) return service.loading;
+  service.loading = (async () => {
+    const d = await request("/api/device");
+    if (d.guest_sessions) await request("/api/session", { method: "POST" });
+    else if (d.token_required) throw new Error("Threadline is not available yet. Please try again shortly.");
+    const c = await request("/api/config");
+    service.reflection = c.reflection_ready;
+    service.transcription = c.transcription_ready;
+    service.ready = true;
+    renderIntegrations();
+  })();
+  try { await service.loading; } finally { service.loading = null; }
+}
 
 function chooseBand(number, remember = true) {
   if (capture.band || pair.busy) return;
@@ -431,8 +445,8 @@ $("band-disconnect").addEventListener("click", async () => { try { await capture
 $("rec-start").addEventListener("click", async () => {
   if (capture.active) return;
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
-  const token = $("token").value.trim();
-  if (tokenRequired && !token) { $("token").closest("details").open = true; $("token").focus(); return recState("Enter the app access token (Live providers, above) to stream audio.", true); }
+  try { await ensureService(); } catch (e) { return recState(e.message, true); }
+  if (!service.transcription) return recState("Transcription is temporarily unavailable. Please try again later.", true);
   const source = $("source").value, vexo = source === "vexo", camera = $("cam-on").checked;
   if (vexo && !capture.band) return recState("Connect the band first.", true);
   let stream = null;
@@ -445,7 +459,7 @@ $("rec-start").addEventListener("click", async () => {
       stream = new MediaStream([...(audio ? audio.getTracks() : []), ...(video ? video.getVideoTracks() : [])]);
     } catch { return recState(`${camera ? "Camera" : "Microphone"} permission was not granted. Nothing was recorded.`, true); }
   }
-  Object.assign(capture, { active: true, token, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
+  Object.assign(capture, { active: true, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now() });
   $("rec-takeback").hidden = true;
   $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
@@ -475,7 +489,7 @@ function openSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
   ws.binaryType = "arraybuffer"; capture.ws = ws;
   const opened = Date.now();
-  ws.onopen = () => ws.send(JSON.stringify({ token: capture.token, source: capture.vexo ? "vexo" : "browser" }));
+  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? "vexo" : "browser" }));
   ws.onmessage = (event) => {
     if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
@@ -503,7 +517,7 @@ function openSocket() {
       // Unexpected drop (network, provider limit): keep recording on a fresh socket.
       const quick = Date.now() - opened < 3000;
       capture.reconnects += 1;
-      if (capture.reconnects > 20 || (quick && capture.lastError && /token|configure|Set DEEPGRAM|Another live transcript/i.test(capture.lastError))) return finishLive();
+      if (capture.reconnects > 20 || (capture.lastError && /session expired|limit reached/i.test(capture.lastError)) || (quick && capture.lastError && /token|configure|Set DEEPGRAM|Another live transcript/i.test(capture.lastError))) return finishLive();
       recState("Transcription connection dropped — reconnecting. Recording continues.", true);
       if (capture.recorder && capture.recorder.state === "recording") capture.recorder.stop();  // a new WebM stream needs its own header
       setTimeout(() => { if (capture.active && !capture.stopping) openSocket(); }, quick ? 2000 : 300);
@@ -685,25 +699,15 @@ function setBusy(value) {
   if (!value) setRecUI();
 }
 function liveHeaders() {
-  if (!$("live-on").checked) throw new Error("Open “Live providers” and enable them to use Deepgram or Gemini.");
-  if (!$("consent").checked) throw new Error("Confirm permission before sending notes or audio.");
-  if (tokenRequired && !$("token").value.trim()) throw new Error("Enter the app access token for live processing.");
-  return tokenRequired ? { "X-App-Token": $("token").value.trim() } : {};
+  if (!$("rec-consent").checked) throw new Error("Allow recording and processing on Your band before sending notes or audio.");
+  if (!service.ready) throw new Error("Threadline is still connecting. Try again in a moment.");
+  return {};
 }
 async function request(url, options) {
   const response = await fetch(url, options), data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "The request could not be completed.");
   return data;
 }
-function updateProviderSummary() { $("provider-summary").textContent = $("live-on").checked ? "· on — requests go to configured providers" : "· off — local demo only"; }
-$("live-on").addEventListener("change", updateProviderSummary);
-$("check-config").addEventListener("click", async () => {
-  try {
-    const token = $("token").value.trim(); if (tokenRequired && !token) throw new Error("Enter the access token first.");
-    const c = await request("/api/config", { headers: tokenRequired ? { "X-App-Token": token } : {} });
-    $("config-result").textContent = `Gemini: ${c.reflection_ready ? "configured" : "not configured"} · Deepgram: ${c.transcription_ready ? "configured" : "not configured"} · Vexo band: ${c.wearable_connected ? "connected" : "not connected"}`;
-  } catch (e) { $("config-result").textContent = e.message; }
-});
 
 document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => {
   if (busy) return; sessions[mode].question = $("question").value; mode = button.dataset.mode;
@@ -724,7 +728,7 @@ $("question-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const question = $("question").value.trim(), notes = sessions[mode].notes;
   if (busy || !question) return;
   if (!notes.length) return message("Add a note before asking a question.", true);
-  if (!$("live-on").checked) {
+  if (!service.reflection || !$("rec-consent").checked) {
     const stop = new Set(["what", "did", "the", "and", "when", "last", "time", "where", "was", "with", "that", "this", "for", "about", "felt", "feel"]);
     const words = (question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((w) => !stop.has(w));
     const matches = notes.filter((note) => words.some((word) => note.text.toLowerCase().includes(word)));
@@ -849,8 +853,9 @@ async function buildGraph() {
   const version = ++graph.version;
   $("graph-status").textContent = engine === "gemini" ? "Updating with Gemini…" : "Updating…";
   try {
-    const token = $("token").value.trim();
-    const data = await request("/api/graph", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify({ mode: engine, notes }) });
+    await ensureService();
+    if (engine === "gemini") liveHeaders();
+    const data = await request("/api/graph", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: engine, notes }) });
     if (version !== graph.version) return;
     graph.data = data; graph.signature = signature;
     $("graph-status").textContent = `${data.engine === "gemini" ? "Gemini" : "Keywords · no AI"} · ${data.nodes.length} nodes · ${notes.length} statements · ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
@@ -903,9 +908,7 @@ function watchMsg(text, error = false) { $("watch-msg").textContent = text; $("w
 $("watch-pair-btn").addEventListener("click", async () => {
   if (watch.ws) return;
   try {
-    const token = $("token").value.trim();
-    const headers = tokenRequired && token ? { "X-App-Token": token } : {};
-    if (tokenRequired && !token) throw new Error("Enter the app access token (Live providers, above) first.");
+    const token = "", headers = {};
     const data = await request("/api/watch/pair", { method: "POST", headers });
     watch.code = data.code;
     $("watch-code").textContent = data.code.replace(/(\d{3})(\d{3})/, "$1 $2");
@@ -1088,14 +1091,12 @@ async function summarizeToday(out) {
   } catch (e) { out.hidden = false; out.replaceChildren(el("p", { className: "error", textContent: e.message })); }
   finally { setBusy(false); }
 }
-// Access token: on the deployed site it is required; remember it in this browser so the session just works.
-$("token").addEventListener("change", () => { try { localStorage.setItem("threadline.token", $("token").value.trim()); } catch { /* storage off */ } });
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Live session", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Devices", integrations: "Integrations" };
+const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations" };
 function showView(name) {
-  if (!VIEW_TITLES[name]) name = "live";
+  if (!VIEW_TITLES[name] || name === "devices" || name === "integrations") name = "live";
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
   document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
   $("view-title").textContent = VIEW_TITLES[name];
@@ -1105,7 +1106,7 @@ function showView(name) {
 }
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
 // chips and inner links (#pair, #watch-pair) lead to Devices
-document.addEventListener("click", (e) => { const a = e.target.closest("a[href='#pair'], a[href='#watch-pair']"); if (a) { e.preventDefault(); location.hash = "devices"; } });
+document.addEventListener("click", (e) => { const a = e.target.closest("a[href='#pair'], a[href='#watch-pair']"); if (a) { e.preventDefault(); location.hash = "live"; } });
 // first view is shown at the end of the script, after every view's code has loaded
 
 /* Recorder waveform from the band's loudness */
@@ -1119,7 +1120,7 @@ function pushWave(level) {
 
 /* ---------- Agent: Gemini Decisions API chooses what would help; rules are enforced on the server ---------- */
 const agentState = { busyUntil: 0, pending: null, lastOfferPref: "" };
-function agentEngine() { return ($("rec-consent").checked || ($("live-on").checked && $("consent").checked)) ? "gemini" : "local"; }
+function agentEngine() { return service.reflection && $("rec-consent").checked ? "gemini" : "local"; }
 function agentPayload(statement) {
   const info = cycleInfo(), r = life.days[todayKey()];
   return {
@@ -1142,8 +1143,8 @@ async function agentDecide(statement) {
   agentState.busyUntil = Date.now() + 2500;
   let d = null;
   try {
-    const token = $("token").value.trim();
-    d = await request("/api/agent/decide", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify(agentPayload(statement)) });
+    await ensureService();
+    d = await request("/api/agent/decide", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(agentPayload(statement)) });
   } catch {
     if (statement.speaker_confirmed) checkPreferences(sessions.reflection.notes.find((n) => n.id === statement.id) || statement);  // local fallback
   } finally {
@@ -1311,8 +1312,8 @@ function renderIntegrations() {
     card("Cycle · Apple Health", life.cycle.starts.some((x) => x.source === "health"), "Reads the period days you logged; saves a mood to State of Mind only after you confirm on the watch.", "Watch → Share cycle dates"),
     card("Music", true, "Calm, steady or uplifting search to match your energy.", "Opens Apple Music or Spotify — nothing is played or tracked"),
     card("Messages", sessions.reflection.prefs.some((p) => p.action === "update"), "Your pre-approved update to close friends.", "Your share sheet or Messages — Threadline never sends"),
-    card("Deepgram", !tokenRequired || Boolean($("token").value), "Speech to text while you record.", "Server-side key · not kept for training"),
-    card("Gemini Decisions API", true, "Chooses one action per new line, with a confidence.", "gemini-decision-1 · server-side key"));
+    card("Deepgram", service.transcription, "Speech to text while you record.", "Configured by the app"),
+    card("Gemini Decisions API", service.reflection, "Chooses one action per new line, with a confidence.", "Configured by the app"));
 }
 
 
@@ -1322,8 +1323,9 @@ $("music-gen").addEventListener("click", async () => {
   $("music-gen-msg").textContent = `Generating a ${mood} track with MiniMax… this can take a minute.`;
   $("music-gen").disabled = true;
   try {
-    const token = $("token").value.trim();
-    const data = await request("/api/music/generate", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify({ mood }) });
+    await ensureService();
+    liveHeaders();
+    const data = await request("/api/music/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mood }) });
     const bytes = Uint8Array.from(atob(data.audio_b64), (c) => c.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes], { type: data.mime || "audio/mpeg" }));
     $("music-player").src = url; $("music-player").hidden = false; $("music-player").play().catch(() => {});

@@ -16,48 +16,86 @@
         <span>threadline</span>
       </a>
       <div class="nav-list">
-        <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Live session</span><span class="nav-live" id="nav-live" hidden></span></a>
+        <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Your band</span><span class="nav-live" id="nav-live" hidden></span></a>
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
         <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Energy</span></a>
         <a href="#tasks" class="nav-item" data-view-link="tasks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"></path></svg><span>Tasks</span></a>
-        <a href="#integrations" class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
+        <a href="#integrations" hidden class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
         <a href="#transcripts" class="nav-item" data-view-link="transcripts"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path></svg><span>Transcripts</span></a>
         <a href="#days" class="nav-item" data-view-link="days"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Daily log</span></a>
         <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Graph</span></a>
-        <a href="#devices" class="nav-item" data-view-link="devices"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
+        <a href="#live" class="nav-item" data-view-link="devices" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
       </div>
-      <a href="#devices" class="side-band" id="side-band">
+      <a href="#live" class="side-band" id="side-band">
         <svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true"><rect x="5" y="2" width="24" height="40" rx="12" fill="#16161A"></rect><rect x="9" y="12" width="16" height="20" rx="6" fill="#2A2A31"></rect><circle cx="17" cy="22" r="3.2" class="side-led"></circle></svg>
-        <span><span class="side-band-name" id="side-band-name">No band</span><span class="side-band-state" id="side-band-state">Pair in Devices</span></span>
+        <span><span class="side-band-name" id="side-band-name">No band</span><span class="side-band-state" id="side-band-state">Connect your band</span></span>
       </a>
     </nav>
 
     <main class="content">
       <header class="topbar">
-        <div><div class="crumb" id="crumb">Threadline</div><h1 id="view-title">Live session</h1></div>
+        <div><div class="crumb" id="crumb">Threadline</div><h1 id="view-title">Your band</h1></div>
         <div class="topbar-right"><div class="device-chips" aria-label="Devices in this session">
-          <a href="#pair" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
-          <a href="#watch-pair" class="dchip" id="chip-watch" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
-          <span class="dchip" id="chip-cam" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
+          <a href="#live" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
+          <a href="#watch-pair" class="dchip" id="chip-watch" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
+          <span class="dchip" id="chip-cam" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
         </div></div>
       </header>
-      <details class="live-settings strip">
-      <summary>Live providers <span id="provider-summary" class="caption">· off — keyword search only</span></summary>
-      <div class="strip-body">
-        <label class="check"><input id="live-on" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
-        <label for="token">App access token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Provided by your app operator">
-        <label class="check"><input id="consent" type="checkbox"><span>I have permission to send these notes and any recorded or uploaded audio to the configured providers.</span></label>
-        <div class="row"><button type="button" id="check-config" class="secondary">Check provider status</button><span id="config-result" class="caption"></span></div>
-        <p class="caption">Nothing is sent until you run a live request. This browser does not save your notes or token.</p>
-      </div>
-    </details>
-
       <section class="view" data-view="live">
+        <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Connect your Vexo band.</h2><p>Choose your band, connect, and talk. Threadline keeps your words together.</p></div>
+        <div class="pair" id="pair" data-state="idle">
+          <div class="pair-head">
+            <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
+              <rect x="10" y="2" width="44" height="100" rx="22" class="band-body"></rect>
+              <rect x="17" y="28" width="30" height="48" rx="13" class="band-face"></rect>
+              <circle cx="32" cy="52" r="13" class="band-glow"></circle>
+              <circle cx="32" cy="52" r="6" class="band-led"></circle>
+            </svg>
+            <div class="pair-id">
+              <span class="pair-eyebrow">Vexo band</span>
+              <span id="pair-name" class="pair-name">No band chosen</span>
+              <span id="pair-status" class="pair-status" role="status" aria-live="polite">Not connected</span>
+            </div>
+          </div>
+
+          <form id="pick-form" class="pick">
+            <label for="pick-number">Which band? Type the number written on your band's bag</label>
+            <div class="pick-row">
+              <span class="pick-prefix" aria-hidden="true">Vexo-HACK-</span>
+              <input id="pick-number" class="pick-number" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="42" autocomplete="off" required>
+              <button type="submit" class="secondary">Use this band</button>
+            </div>
+            <p id="pick-message" class="pair-msg error" role="status" aria-live="polite"></p>
+            <div id="recent-bands" class="recent" aria-label="Bands paired on this computer"></div>
+          </form>
+
+          <ol id="connect-steps" class="steps">
+            <li><b>Double-tap</b> your band to wake it up. Its light blinks blue.</li>
+            <li>Press <b>Connect</b> and pick <b id="step-name">your band</b> from the list.</li>
+            <li>Watch the band <b>flash</b>.</li>
+          </ol>
+          <div id="band-controls" class="pair-buttons">
+            <button type="button" id="btn-ble" class="primary-sm">Connect</button>
+            <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
+            <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
+            <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
+          </div>
+          <p id="no-ble" class="pair-hint" hidden></p>
+          <p id="usb-help" class="pair-hint"><b>By USB cable:</b> the browser lists every port on this computer. Pick <b>Vexo Open band</b> — <b>cu.usbmodem…</b> on a Mac, <b>COM</b> and a number on Windows (maybe "USB Serial Device"). Not "Bluetooth-Incoming-Port". No band in the list? Try another cable; some only charge.</p>
+          <p id="band-state" class="pair-msg" role="status" aria-live="polite"></p>
+          <dl id="band-info" class="band-info" hidden>
+            <div><dt>Link</dt><dd id="info-link">—</dd></div>
+            <div><dt>Battery</dt><dd id="info-battery">—</dd></div>
+            <div><dt>Firmware</dt><dd id="info-fw">—</dd></div>
+          </dl>
+          <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
+        </div>
+
         <div class="live-grid">
           <div class="live-main">
             <div class="setup">
-              <div class="setup-row"><div class="setup-field"><label for="source">Record audio from</label>
+              <div class="setup-row" hidden><div class="setup-field"><label for="source">Record audio from</label>
           <select id="source">
             <option value="vexo">Vexo band (Devices, below)</option>
             <option value="browser">This browser's microphone</option>
@@ -67,11 +105,11 @@
             <div class="row tight"><select id="cam-device"><option value="">Default camera</option></select><button type="button" id="cam-connect" class="secondary">Connect camera</button></div>
             <p class="caption">Pick “GoPro Webcam” if it's plugged in and its app is running. The camera's own mic is not used.</p>
           </div>
-              <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram; new lines go to Google Gemini so the agent can decide what helps.</span></label>
+              <label class="check"><input id="rec-consent" type="checkbox"><span>Everyone speaking agrees to recording and processing by Deepgram and Google. I can stop at any time.</span></label>
             </div>
             <div class="recorder">
-              <button type="button" id="rec-start" class="rec-btn" aria-label="Start session"><span class="rec-dot"></span></button>
-              <button type="button" id="rec-stop" class="rec-btn stop" aria-label="Stop session" disabled><span class="rec-square"></span></button>
+              <button type="button" id="rec-start" class="rec-btn" aria-label="Start recording"><span class="rec-dot"></span></button>
+              <button type="button" id="rec-stop" class="rec-btn stop" aria-label="Stop recording" disabled><span class="rec-square"></span></button>
               <div class="rec-meta"><div class="rec-timer" id="live-timer">00:00</div><div class="rec-source" id="live-source">Ready</div></div>
               <div class="wave" id="wave" aria-hidden="true"></div>
               <button type="button" id="rec-takeback" class="rec-ghost" hidden>Take it back</button>
@@ -89,7 +127,7 @@
             <div id="live" class="transcript-card" aria-live="polite">
               <div class="tc-head"><h2>Live transcript</h2><span class="caption">Speaker labels separate voices, not identities</span></div>
               <ol id="live-lines" class="script"></ol>
-              <p id="live-interim" class="interim">Connect your band in Devices, tick consent, and press the red button. Words appear here as they are spoken.</p>
+              <p id="live-interim" class="interim">Connect your band above, allow recording, and press the red button. Words appear here as they are spoken.</p>
             </div>
             <section id="review" class="block review" aria-labelledby="review-heading" hidden>
           <h3 id="review-heading">Review before saving</h3>
@@ -290,53 +328,7 @@
           <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
           <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
         </section></section>
-      <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair" id="pair" data-state="idle">
-          <div class="pair-head">
-            <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
-              <rect x="10" y="2" width="44" height="100" rx="22" class="band-body"></rect>
-              <rect x="17" y="28" width="30" height="48" rx="13" class="band-face"></rect>
-              <circle cx="32" cy="52" r="13" class="band-glow"></circle>
-              <circle cx="32" cy="52" r="6" class="band-led"></circle>
-            </svg>
-            <div class="pair-id">
-              <span class="pair-eyebrow">Vexo band</span>
-              <span id="pair-name" class="pair-name">No band chosen</span>
-              <span id="pair-status" class="pair-status" role="status" aria-live="polite">Not connected</span>
-            </div>
-          </div>
-
-          <form id="pick-form" class="pick">
-            <label for="pick-number">Which band? Type the number written on your band's bag</label>
-            <div class="pick-row">
-              <span class="pick-prefix" aria-hidden="true">Vexo-HACK-</span>
-              <input id="pick-number" class="pick-number" inputmode="numeric" pattern="[0-9]{1,3}" maxlength="3" placeholder="42" autocomplete="off" required>
-              <button type="submit" class="secondary">Use this band</button>
-            </div>
-            <p id="pick-message" class="pair-msg error" role="status" aria-live="polite"></p>
-            <div id="recent-bands" class="recent" aria-label="Bands paired on this computer"></div>
-          </form>
-
-          <ol id="connect-steps" class="steps">
-            <li><b>Double-tap</b> your band to wake it up. Its light blinks blue.</li>
-            <li>Press <b>Connect</b> and pick <b id="step-name">your band</b> from the list.</li>
-            <li>Watch the band <b>flash</b>.</li>
-          </ol>
-          <div id="band-controls" class="pair-buttons">
-            <button type="button" id="btn-ble" class="primary-sm">Connect</button>
-            <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
-            <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
-            <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
-          </div>
-          <p id="no-ble" class="pair-hint" hidden></p>
-          <p id="usb-help" class="pair-hint"><b>By USB cable:</b> the browser lists every port on this computer. Pick <b>Vexo Open band</b> — <b>cu.usbmodem…</b> on a Mac, <b>COM</b> and a number on Windows (maybe "USB Serial Device"). Not "Bluetooth-Incoming-Port". No band in the list? Try another cable; some only charge.</p>
-          <p id="band-state" class="pair-msg" role="status" aria-live="polite"></p>
-          <dl id="band-info" class="band-info" hidden>
-            <div><dt>Link</dt><dd id="info-link">—</dd></div>
-            <div><dt>Battery</dt><dd id="info-battery">—</dd></div>
-            <div><dt>Firmware</dt><dd id="info-fw">—</dd></div>
-          </dl>
-          <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
-        </div><div class="pair watch" id="watch-pair" data-state="idle">
+      <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair watch" id="watch-pair" hidden data-state="idle">
           <div class="pair-head">
             <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
               <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
@@ -372,7 +364,7 @@
           <p class="pair-hint">A web page cannot reach a watch over Bluetooth: the Threadline watch app sends its readings (and, if you choose, its microphone) to this server, and the code links it to this page. Readings are numbers, not feelings.</p>
         </div></div></section>
 
-      <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
+      <footer><p>Your recordings stay on this device until you delete them.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
     </main>
   </div>
 </body>

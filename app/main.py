@@ -5,12 +5,14 @@ import json
 import math
 import os
 import secrets
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 from websockets.asyncio.client import connect as ws_connect
@@ -36,6 +38,141 @@ stream_slots = asyncio.Semaphore(4)
 
 LOOPBACK = {"127.0.0.1", "::1"}
 
+# Anonymous browser sessions are a bounded public demo allowance, not user identities.
+GUEST_COOKIE = "threadline_session"
+GUEST_TTL = 2 * 3600
+GUEST_MAX_SESSIONS = 64
+GUEST_ISSUE_WINDOW = 600
+GUEST_ISSUE_IP_LIMIT = 4
+GUEST_ISSUE_GLOBAL_LIMIT = 24
+GUEST_MAX_ISSUE_IPS = 256
+GUEST_REQUEST_WINDOW = 60
+GUEST_REQUEST_LIMIT = 30
+GUEST_TOTAL_REQUEST_LIMIT = 300
+GUEST_GLOBAL_REQUEST_LIMIT = 120
+GUEST_GLOBAL_HOUR_LIMIT = 2000
+GUEST_STREAM_START_LIMIT = 10
+GUEST_STREAM_SECONDS = 10 * 60
+GUEST_STREAM_BYTES = 20 * 1024 * 1024
+GUEST_MAX_ACTIVE_STREAMS = 2
+
+
+@dataclass
+class GuestWindow:
+    started: float = 0
+    count: int = 0
+
+    def used(self, now: float, seconds: float) -> int:
+        if now - self.started >= seconds:
+            self.started, self.count = now, 0
+        return self.count
+
+
+@dataclass
+class GuestSession:
+    expires: float
+    requests: int = 0
+    request_window: GuestWindow = field(default_factory=GuestWindow)
+    stream_starts: int = 0
+    stream_seconds: float = 0
+    stream_bytes: int = 0
+    streaming: bool = False
+
+
+guest_sessions: dict[str, GuestSession] = {}
+guest_issue_ips: dict[str, GuestWindow] = {}
+guest_issue_global = GuestWindow()
+guest_requests_global = GuestWindow()
+guest_requests_hour = GuestWindow()
+guest_active_streams = 0
+guest_lock = threading.RLock()
+
+
+def guest_origin() -> str | None:
+    """Require an explicitly configured HTTP origin, never derive trust from request headers."""
+    origin = os.getenv("APP_PUBLIC_ORIGIN", "")
+    try:
+        parsed = urlsplit(origin)
+        valid = (parsed.scheme in {"http", "https"} and parsed.hostname and not parsed.username
+                 and not parsed.password and not parsed.path and not parsed.query and not parsed.fragment)
+        _ = parsed.port  # Reject malformed ports too.
+    except ValueError:
+        return None
+    return origin if valid else None
+
+
+def guest_enabled() -> bool:
+    return os.getenv("APP_GUEST_SESSIONS") == "1" and bool(os.getenv("APP_ACCESS_TOKEN") and guest_origin())
+
+
+def same_guest_origin(connection: Request | WebSocket, *, required: bool) -> bool:
+    origin = guest_origin()
+    if not origin:
+        return False
+    parsed = urlsplit(origin)
+    supplied = connection.headers.get("origin")
+    # TLS may terminate at the configured reverse proxy, so the app-facing scheme can be HTTP.
+    return (connection.headers.get("host") == parsed.netloc
+            and (supplied == origin if required or supplied is not None else True))
+
+
+def prune_guest_sessions(now: float) -> None:
+    for token, session in list(guest_sessions.items()):
+        if session.expires <= now:
+            del guest_sessions[token]
+    for host, window in list(guest_issue_ips.items()):
+        if now - window.started >= GUEST_ISSUE_WINDOW:
+            del guest_issue_ips[host]
+
+
+def get_guest(connection: Request | WebSocket) -> GuestSession | None:
+    token = connection.cookies.get(GUEST_COOKIE, "")
+    if not token or len(token) > 128 or not guest_enabled():
+        return None
+    with guest_lock:
+        prune_guest_sessions(time.monotonic())
+        return guest_sessions.get(token)
+
+
+def charge_guest(session: GuestSession) -> None:
+    with guest_lock:
+        now = time.monotonic()
+        if session.expires <= now:
+            raise HTTPException(401, "Demo session expired. Reload the page.")
+        if (session.requests >= GUEST_TOTAL_REQUEST_LIMIT
+                or session.request_window.used(now, GUEST_REQUEST_WINDOW) >= GUEST_REQUEST_LIMIT
+                or guest_requests_global.used(now, GUEST_REQUEST_WINDOW) >= GUEST_GLOBAL_REQUEST_LIMIT
+                or guest_requests_hour.used(now, 3600) >= GUEST_GLOBAL_HOUR_LIMIT):
+            raise HTTPException(429, "Demo request limit reached. Please try later.")
+        session.requests += 1
+        session.request_window.count += 1
+        guest_requests_global.count += 1
+        guest_requests_hour.count += 1
+
+
+def start_guest_stream(session: GuestSession) -> tuple[float, int]:
+    global guest_active_streams
+    with guest_lock:
+        now = time.monotonic()
+        remaining = min(GUEST_STREAM_SECONDS - session.stream_seconds, session.expires - now)
+        remaining_bytes = GUEST_STREAM_BYTES - session.stream_bytes
+        if (remaining <= 0 or remaining_bytes <= 0 or session.streaming
+                or session.stream_starts >= GUEST_STREAM_START_LIMIT
+                or guest_active_streams >= GUEST_MAX_ACTIVE_STREAMS):
+            raise HTTPException(429, "Demo streaming limit reached. Please try later.")
+        session.stream_starts += 1
+        session.streaming = True
+        guest_active_streams += 1
+        return remaining, remaining_bytes
+
+
+def end_guest_stream(session: GuestSession, started: float) -> None:
+    global guest_active_streams
+    with guest_lock:
+        session.stream_seconds += max(0, time.monotonic() - started)
+        session.streaming = False
+        guest_active_streams -= 1
+
 
 def trusted_local(client_host: str | None, host_header: str) -> bool:
     """Opt-in (APP_TRUST_LOOPBACK=1) for a server you run on your own laptop: requests from this
@@ -50,8 +187,55 @@ def authorize(request: Request, x_app_token: str = Header(default="")) -> None:
     expected = os.getenv("APP_ACCESS_TOKEN", "")
     if not expected:
         raise HTTPException(503, "Set APP_ACCESS_TOKEN in the server environment.")
-    if not secrets.compare_digest(x_app_token.encode(), expected.encode()):
-        raise HTTPException(401, "Enter the project access token to use live providers.")
+    if x_app_token and secrets.compare_digest(x_app_token.encode(), expected.encode()):
+        return
+    if request.cookies.get(GUEST_COOKIE) and guest_enabled():
+        if not same_guest_origin(request, required=request.method not in {"GET", "HEAD", "OPTIONS"}):
+            raise HTTPException(403, "Use the configured app origin.")
+        if session := get_guest(request):
+            charge_guest(session)
+            request.state.guest_session = session
+            return
+    raise HTTPException(401, "Demo session missing or expired. Reload the page, or use an operator token.")
+
+
+def authorize_operator(request: Request, x_app_token: str = Header(default="")) -> None:
+    authorize(request, x_app_token)
+    if getattr(request.state, "guest_session", None):
+        raise HTTPException(403, "This action requires operator access.")
+
+
+@app.post("/api/session")
+async def browser_session(request: Request):
+    if not guest_enabled():
+        raise HTTPException(503, "Browser demo sessions are not available.")
+    if not same_guest_origin(request, required=True):
+        raise HTTPException(403, "Use the configured app origin.")
+    now = time.monotonic()
+    with guest_lock:
+        prune_guest_sessions(now)
+        token = request.cookies.get(GUEST_COOKIE, "")
+        session = guest_sessions.get(token)
+        if not session:
+            host = request.client.host if request.client else "unknown"
+            if len(guest_sessions) >= GUEST_MAX_SESSIONS:
+                raise HTTPException(429, "The demo is busy. Please try later.")
+            if host not in guest_issue_ips and len(guest_issue_ips) >= GUEST_MAX_ISSUE_IPS:
+                raise HTTPException(429, "The demo is busy. Please try later.")
+            window = guest_issue_ips.setdefault(host, GuestWindow(started=now))
+            if (window.used(now, GUEST_ISSUE_WINDOW) >= GUEST_ISSUE_IP_LIMIT
+                    or guest_issue_global.used(now, GUEST_ISSUE_WINDOW) >= GUEST_ISSUE_GLOBAL_LIMIT):
+                raise HTTPException(429, "Demo session limit reached. Please try later.")
+            window.count += 1
+            guest_issue_global.count += 1
+            token = secrets.token_urlsafe(32)
+            session = GuestSession(expires=now + GUEST_TTL)
+            guest_sessions[token] = session
+        lifetime = max(0, int(session.expires - now))
+    response = JSONResponse({"session": "guest", "expires_in": lifetime})
+    response.set_cookie(GUEST_COOKIE, token, max_age=lifetime, httponly=True, secure=guest_origin().startswith("https://"),
+                        samesite="strict", path="/")
+    return response
 
 
 @app.middleware("http")
@@ -89,7 +273,8 @@ async def device(request: Request):
     raw = os.getenv("VEXO_BAND_NUMBER", "").strip()
     number = int(raw) if raw.isdigit() and 1 <= int(raw) <= 999 else None
     local = trusted_local(request.client.host if request.client else None, request.headers.get("host", ""))
-    return {"vexo_band_number": number, "token_required": not local}
+    return {"vexo_band_number": number, "token_required": not (local or guest_enabled()),
+            "guest_sessions": guest_enabled()}
 
 
 class Note(BaseModel):
@@ -266,7 +451,8 @@ Fail = Callable[..., Awaitable[None]]
 
 
 async def relay_audio(source: str, receive: Receive, send: Send, fail: Fail,
-                      on_ready: Callable[[], Awaitable[None]] | None = None) -> int | None:
+                      on_ready: Callable[[], Awaitable[None]] | None = None,
+                      max_seconds: float = LIVE_MAX_SECONDS, max_bytes: int = LIVE_MAX_BYTES) -> int | None:
     """Relay one audio stream to Deepgram and simplified results back. The key stays on the server and
     nothing is stored. Returns the byte count on a clean end, None if it failed or the sender left."""
     key, model = os.getenv("DEEPGRAM_API_KEY"), os.getenv("DEEPGRAM_MODEL")
@@ -295,7 +481,7 @@ async def relay_audio(source: str, receive: Receive, send: Send, fail: Fail,
                         if isinstance(data, bytes):
                             state["bytes"] += len(data)
                             state["last"] = loop.time()
-                            if state["bytes"] <= LIVE_MAX_BYTES and loop.time() - state["started"] <= LIVE_MAX_SECONDS:
+                            if state["bytes"] <= max_bytes and loop.time() - state["started"] <= max_seconds:
                                 await deepgram.send(data)
                                 continue
                             await send({"type": "error", "message": "Live session limit reached; stopping."})
@@ -312,6 +498,12 @@ async def relay_audio(source: str, receive: Receive, send: Send, fail: Fail,
                         if not state["closing"] and loop.time() - state["last"] >= 3:
                             await deepgram.send(json.dumps({"type": "KeepAlive"}))
 
+                async def deadline():
+                    await asyncio.sleep(max_seconds)
+                    state["closing"] = True
+                    await send({"type": "error", "message": "Live session limit reached; stopping."})
+                    await deepgram.close()
+
                 async def downstream():
                     async for raw in deepgram:
                         try:
@@ -325,7 +517,7 @@ async def relay_audio(source: str, receive: Receive, send: Send, fail: Fail,
                                 await deepgram.close()
                                 return
 
-                tasks = [asyncio.create_task(upstream()), asyncio.create_task(keepalive())]
+                tasks = [asyncio.create_task(upstream()), asyncio.create_task(keepalive()), asyncio.create_task(deadline())]
                 try:
                     await downstream()
                 except ConnectionClosed as exc:
@@ -373,11 +565,20 @@ async def socket_hello(client: WebSocket, fail: Fail) -> dict | None:
     return None
 
 
-def socket_token_ok(client: WebSocket, hello: dict) -> bool:
+def socket_token_ok(client: WebSocket, hello: dict, *, allow_guest: bool = False) -> bool:
     expected = os.getenv("APP_ACCESS_TOKEN", "")
     token = str(hello.get("token", ""))
     local = trusted_local(client.client.host if client.client else None, client.headers.get("host", ""))
-    return local or bool(expected and secrets.compare_digest(token.encode(), expected.encode()))
+    if local or bool(expected and secrets.compare_digest(token.encode(), expected.encode())):
+        return True
+    if allow_guest and same_guest_origin(client, required=True) and (session := get_guest(client)):
+        try:
+            charge_guest(session)
+        except HTTPException:
+            return False
+        client.state.guest_session = session
+        return True
+    return False
 
 
 async def close_cleanly(client: WebSocket, sent: int | None) -> None:
@@ -397,12 +598,33 @@ async def live_transcribe(client: WebSocket):
     fail = socket_fail(client)
     if (hello := await socket_hello(client, fail)) is None:
         return
-    if not socket_token_ok(client, hello):
-        return await fail("Enter the project access token to use live providers.")
+    if not socket_token_ok(client, hello, allow_guest=True):
+        return await fail("Recording session expired. Reload the page to reconnect.")
     source = hello.get("source")
     if source not in {"vexo", "browser"}:
         return await fail("Unknown audio source.")
-    await close_cleanly(client, await relay_audio(source, socket_receiver(client), client.send_json, fail))
+    session = getattr(client.state, "guest_session", None)
+    if not session:
+        return await close_cleanly(client, await relay_audio(source, socket_receiver(client), client.send_json, fail))
+    try:
+        max_seconds, max_bytes = start_guest_stream(session)
+    except HTTPException as exc:
+        return await fail(exc.detail, 1013)
+    started = time.monotonic()
+    receive = socket_receiver(client)
+
+    async def guest_receive():
+        data = await receive()
+        if isinstance(data, bytes):
+            session.stream_bytes += len(data)
+        return data
+
+    try:
+        sent = await relay_audio(source, guest_receive, client.send_json, fail,
+                                 max_seconds=max_seconds, max_bytes=max_bytes)
+    finally:
+        end_guest_stream(session, started)
+    await close_cleanly(client, sent)
 
 
 # --- Apple Watch ---------------------------------------------------------------------------------
@@ -485,7 +707,7 @@ def watch_device(value: object) -> str:
     return (str(value or "").strip() or "Apple Watch")[:40]
 
 
-@app.post("/api/watch/pair", dependencies=[Depends(authorize)])
+@app.post("/api/watch/pair", dependencies=[Depends(authorize_operator)])
 async def watch_pair():
     prune_pairings()
     if len(pairings) >= MAX_PAIRINGS:
