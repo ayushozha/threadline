@@ -98,7 +98,7 @@ function addNotes(items) {
     if (hit) dayRec(todayKey(new Date(n.at))).energy.push({ word: hit, id: n.id });
   }
   renderTimeline(); renderDays();
-  for (const note of added) checkPreferences(note);
+  for (const note of added) agentDecide({ id: note.id, text: note.text, at: note.at, source: note.source, speaker_confirmed: true });
   return added;
 }
 
@@ -158,7 +158,7 @@ function renderSupport() {
     el("p", { className: "eyebrow", textContent: "Support you asked for" }),
     el("h3", { textContent: offer.pref.action === "schedule" ? "Want to look at tomorrow and make some space?" : offer.pref.action === "update" ? `Send your update${offer.pref.updateTo ? ` to ${offer.pref.updateTo}` : ""}?` : "Here's what you said before." }),
     el("p", { className: "caption", textContent: "Why this is showing:" }), why,
-    el("p", { className: "caption", textContent: `Matched by your own word “${offer.hit}” using a local rule — no AI, and no inference about your mood, cycle, or judgment.` }),
+    el("p", { className: "caption", textContent: offer.decided ? `Decided by ${offer.decided} from your own words and preferences — no inference about your mood, cycle, or judgment.` : `Matched by your own word “${offer.hit}” using a local rule — no AI, and no inference about your mood, cycle, or judgment.` }),
   ];
   if (offer.status === "offered" && offer.pref.action === "schedule") {
     const yes = el("button", { type: "button", className: "primary", innerHTML: "Review my schedule <span aria-hidden=\"true\">→</span>" });
@@ -328,6 +328,8 @@ $("pick-form").addEventListener("submit", (e) => {
 });
 function setPairState(state, text) {
   pair.state = state; $("pair").dataset.state = state; $("pair-status").textContent = text;
+  if ($("side-band")) { $("side-band").dataset.state = state; $("side-band-name").textContent = bandNumber ? bandLabel() : "No band"; $("side-band-state").textContent = text; }
+  if ($("nav-live")) $("nav-live").hidden = !capture.active;
   chip("band", state === "connected" || state === "mic", state === "busy" ? text : capture.band ? `${capture.band.name}${capture.active ? " · recording" : ""}` : "not connected");
 }
 function chip(id, on, text) { const c = $(`chip-${id}`); if (!c) return; c.dataset.on = String(on); $(`chip-${id}-v`).textContent = text; }
@@ -443,7 +445,7 @@ $("rec-start").addEventListener("click", async () => {
   Object.assign(capture, { active: true, token, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now() });
   $("rec-takeback").hidden = true;
-  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
+  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
   if (camera) startVideo(stream);
   capture.marks = [];
   if (vexo) { try { await capture.band.configure({ audio: true }); await startSignals(); } catch (e) { capture.active = false; setRecUI(); return recState(`The band refused the microphone: ${e.message}`, true); } }
@@ -458,7 +460,8 @@ $("rec-start").addEventListener("click", async () => {
 });
 function tick() {
   const s = Math.round((Date.now() - capture.startedAt) / 1000), count = capture.vexo ? capture.packets : capture.chunks;
-  $("live-timer").textContent = `● live · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} · ${count} ${capture.vexo ? "audio packets" : "audio chunks"}${capture.reconnects ? ` · ${capture.reconnects} reconnect${capture.reconnects > 1 ? "s" : ""}` : ""}`;
+  $("live-timer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  $("live-source").textContent = `${capture.sourceLabel || ""} · ${count} ${capture.vexo ? "packets" : "chunks"}${capture.reconnects ? ` · ${capture.reconnects} reconnect${capture.reconnects > 1 ? "s" : ""}` : ""}`;
   if (count === 0 && capture.ws?.readyState === 1 && Date.now() - capture.audioStarted > 4000 && !capture.warnedSilent && !capture.band?.reconnecting) {
     capture.warnedSilent = true;
     recState(capture.vexo ? "No audio is arriving from the band. If the Vexo dashboard (or another tab) is connected to it, close that, then press “Take it back”." : "No audio is arriving from the microphone. Check the browser's microphone permission and input device.", true);
@@ -505,12 +508,18 @@ function openSocket() {
   };
 }
 function addLiveLine(msg) {
-  const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
+  const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((x) => x != null))];
+  const who = speakers.length ? speakers[0] : null;
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
-  $("live-lines").append(el("li", {},
-    el("span", { className: "caption", textContent: `${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` }),
-    el("p", { textContent: msg.transcript })));
+  $("live-interim").textContent = "";
+  $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
+    el("span", { className: "avatar", "aria-hidden": "true", textContent: who ?? "?" }),
+    el("div", {},
+      el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }),
+        el("span", { textContent: ` · ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` })),
+      el("p", { textContent: msg.transcript }))));
   $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+  if (typeof agentDecide === "function") agentDecide({ id: newId("live"), text: msg.transcript, at: at.toISOString(), source: capture.vexo ? "vexo" : "mic", speaker_confirmed: false });
 }
 async function stopLive(reason) {
   if (!capture.active || capture.stopping) return;
@@ -715,7 +724,7 @@ $("question-form").addEventListener("submit", async (event) => {
 });
 
 function render() {
-  $("mode-description").textContent = MODES[mode].description;
+  if ($("mode-description")) $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays();
@@ -726,7 +735,7 @@ function render() {
 // These describe the device and the room, never the wearer's feelings.
 const signals = { level: 0, activity: "", steps0: null, steps: 0, taps: 0, battery: "" };
 function attachSignals(band) {
-  band.on("mic-level", (e) => { signals.level = Math.max(0, Math.min(1, (52 - e.rmsDb) / 40)); $("sig-loud").style.width = `${Math.round(signals.level * 100)}%`; });
+  band.on("mic-level", (e) => { signals.level = Math.max(0, Math.min(1, (52 - e.rmsDb) / 40)); $("sig-loud").style.width = `${Math.round(signals.level * 100)}%`; pushWave(signals.level); });
   band.on("activity", (e) => {
     if (signals.steps0 == null) signals.steps0 = e.steps;
     signals.activity = e.state; signals.steps = e.steps - signals.steps0;
@@ -1046,5 +1055,81 @@ $("day-summary").addEventListener("click", async () => {
 });
 // Access token: on the deployed site it is required; remember it in this browser so the session just works.
 $("token").addEventListener("change", () => { try { localStorage.setItem("threadline.token", $("token").value.trim()); } catch { /* storage off */ } });
+
+
+/* ---------- Views (sidebar) ---------- */
+const VIEW_TITLES = { live: "Live session", thread: "Thread", days: "Your days", graph: "Graph", devices: "Devices" };
+function showView(name) {
+  if (!VIEW_TITLES[name]) name = "live";
+  document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
+  document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
+  $("view-title").textContent = VIEW_TITLES[name];
+  if (name === "graph" && typeof drawGraph === "function") drawGraph();
+}
+window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+// chips and inner links (#pair, #watch-pair) lead to Devices
+document.addEventListener("click", (e) => { const a = e.target.closest("a[href='#pair'], a[href='#watch-pair']"); if (a) { e.preventDefault(); location.hash = "devices"; } });
+showView(location.hash.slice(1) || "live");
+
+/* Recorder waveform from the band's loudness */
+const WAVE_BARS = 48, waveLevels = new Array(WAVE_BARS).fill(0);
+$("wave").replaceChildren(...waveLevels.map(() => el("span")));
+function pushWave(level) {
+  waveLevels.shift(); waveLevels.push(level);
+  [...$("wave").children].forEach((b, i) => { b.style.height = `${4 + Math.round(waveLevels[i] * 40)}px`; });
+}
+
+
+/* ---------- Agent: Gemini Decisions API chooses what would help; rules are enforced on the server ---------- */
+const agentState = { busyUntil: 0, pending: null, lastOfferPref: "" };
+function agentEngine() { return ($("rec-consent").checked || ($("live-on").checked && $("consent").checked)) ? "gemini" : "local"; }
+function agentPayload(statement) {
+  const info = cycleInfo(), r = life.days[todayKey()];
+  return {
+    statement,
+    recent: sessions.reflection.notes.filter((n) => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
+    preferences: sessions.reflection.prefs.slice(-20).map(({ id, text, triggers, action }) => ({ id, text, triggers, action })),
+    today: { low_energy_words: r?.energy.length || 0, lines_from_others: r?.others || 0, steps: r?.watchSteps ?? (r?.bandSteps || null), heart_rate_avg: r?.hrN ? Math.round(r.hrSum / r.hrN) : null,
+      cycle_day: info.dayOf ? info.dayOf(todayKey()) : null, next_period_estimate: info.next ? todayKey(info.next) : null },
+    devices: { band: Boolean(capture.band), watch: Boolean(watch.ws && $("watch-pair").dataset.state === "connected") },
+    engine: agentEngine(),
+  };
+}
+async function agentDecide(statement) {
+  if (mode !== "reflection" || statement.text.trim().split(/\s+/).length < 3) return;
+  // one decision at a time; if lines arrive faster, decide on the newest when free
+  if (Date.now() < agentState.busyUntil) { agentState.pending = statement; return; }
+  agentState.busyUntil = Date.now() + 2500;
+  let d = null;
+  try {
+    const token = $("token").value.trim();
+    d = await request("/api/agent/decide", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify(agentPayload(statement)) });
+  } catch {
+    if (statement.speaker_confirmed) checkPreferences(sessions.reflection.notes.find((n) => n.id === statement.id) || statement);  // local fallback
+  } finally {
+    agentState.busyUntil = 0;
+    if (agentState.pending) { const next = agentState.pending; agentState.pending = null; setTimeout(() => agentDecide(next), 50); }
+  }
+  if (d) actOnDecision(d, statement);
+}
+function actOnDecision(d, statement) {
+  const feed = $("agent-feed"); feed.querySelector(".agent-empty")?.remove();
+  const engine = d.engine === "gemini" ? `Gemini${d.confidence != null ? ` · ${Math.round(d.confidence * 100)}%` : ""}` : `local rules${d.fallback_reason ? " (Gemini unavailable)" : ""}`;
+  const label = { none: "Just listening", offer_schedule: "Offer: make space in your schedule", offer_update: "Offer: send your pre-approved update", show_evidence: "Showing what you said before", watch_tap: "Tapped your watch", ask_checkin: "Asking how you'd like support" }[d.action] || d.action;
+  if (d.action === "none" && feed.children.length > 6) return;  // keep the feed about decisions that matter
+  feed.prepend(el("li", { className: d.action === "none" ? "" : d.auto ? "auto" : "act" },
+    el("div", {}, el("b", { textContent: label }), el("div", { textContent: d.message || "" }),
+      el("div", { className: "why-line", textContent: `${d.reason || ""}${d.reason ? " · " : ""}${engine}${statement.speaker_confirmed ? "" : " · speaker not yet confirmed"}` }))));
+  while (feed.children.length > 12) feed.lastChild.remove();
+  // Act: low-risk actions happen now; anything outward waits for one tap.
+  if (d.action === "watch_tap") sendHaptic("notification", (d.message || "Threadline").slice(0, 80));
+  const pref = sessions.reflection.prefs.find((p) => p.id === d.preference_id);
+  if ((d.action === "offer_schedule" || d.action === "offer_update" || d.action === "show_evidence") && (pref || d.action === "show_evidence")) {
+    if (agent.offer?.status === "offered" && agent.offer.pref?.id === pref?.id) return;  // don't repeat the same offer
+    const evidence = (d.evidence || []).map((id) => sessions.reflection.notes.find((n) => n.id === id)).filter(Boolean);
+    agent.offer = { note: { id: statement.id, text: statement.text, at: statement.at, source: statement.source }, pref: pref || { text: "Show me what I said before.", action: "remind", at: new Date().toISOString() }, hit: d.reason || "", evidence, status: "offered", decided: engine };
+    renderSupport();
+  }
+}
 
 render();

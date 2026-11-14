@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app.agent import DecideRequest, decide
 from app.graph import GraphRequest, gemini_graph, local_graph, validate_request
 from app.schedule import BookRequest, SlotRequest, book, find_slot
 
@@ -163,6 +164,13 @@ async def graph(body: GraphRequest):
     if not key or not model:
         raise HTTPException(503, "Set GOOGLE_API_KEY and GEMINI_MODEL to build the graph with Gemini.")
     return await gemini_graph(body, key, model, provider_slots)
+
+
+@app.post("/api/agent/decide", dependencies=[Depends(authorize)])
+async def agent_decide(body: DecideRequest):
+    """One proposed next step for a saved statement. Gemini proposes; app/agent.py enforces every rule.
+    Gemini unavailable -> deterministic local decision with fallback_reason (still 200)."""
+    return await decide(body, os.environ, provider_slots)
 
 
 @app.post("/api/transcribe", dependencies=[Depends(authorize)])

@@ -9,25 +9,35 @@
   <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <main class="shell">
-    <header class="masthead">
-      <a href="/" class="brand" aria-label="Threadline home">
-        <svg width="28" height="28" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M5 15c3-5 6 3 9-2s5-1 7-3" fill="none" stroke="#E8452C" stroke-width="2.2" stroke-linecap="round"></path></svg>
+  <div class="app">
+    <nav class="side" aria-label="Main">
+      <a href="#live" class="brand" aria-label="Threadline">
+        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M5 15c3-5 6 3 9-2s5-1 7-3" fill="none" stroke="#E8452C" stroke-width="2.2" stroke-linecap="round"></path></svg>
         <span>threadline</span>
       </a>
-      <span class="tag">VexoHacks · prototype</span>
-    </header>
-    <section class="intro">
-      <h1>Pick up your <em>thread.</em></h1>
-      <p class="lead">Your own words, kept with their source. Support you chose, offered only when it fits.</p>
-    </section>
-    <div class="modes" role="group" aria-label="Choose a mode">
-      <button type="button" data-mode="reflection" aria-pressed="true">01 <span>Personal reflection</span></button>
-      <button type="button" data-mode="routine" aria-pressed="false">02 <span>Resume a routine</span></button>
-    </div>
-    <p id="mode-description" class="description"></p>
+      <div class="nav-list">
+        <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Live session</span><span class="nav-live" id="nav-live" hidden></span></a>
+        <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
+        <a href="#days" class="nav-item" data-view-link="days"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Your days</span></a>
+        <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Graph</span></a>
+        <a href="#devices" class="nav-item" data-view-link="devices"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
+      </div>
+      <a href="#devices" class="side-band" id="side-band">
+        <svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true"><rect x="5" y="2" width="24" height="40" rx="12" fill="#16161A"></rect><rect x="9" y="12" width="16" height="20" rx="6" fill="#2A2A31"></rect><circle cx="17" cy="22" r="3.2" class="side-led"></circle></svg>
+        <span><span class="side-band-name" id="side-band-name">No band</span><span class="side-band-state" id="side-band-state">Pair in Devices</span></span>
+      </a>
+    </nav>
 
-    <details class="live-settings strip">
+    <main class="content">
+      <header class="topbar">
+        <div><div class="crumb" id="crumb">Threadline</div><h1 id="view-title">Live session</h1></div>
+        <div class="topbar-right"><div class="device-chips" aria-label="Devices in this session">
+          <a href="#pair" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
+          <a href="#watch-pair" class="dchip" id="chip-watch" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
+          <span class="dchip" id="chip-cam" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
+        </div></div>
+      </header>
+      <details class="live-settings strip">
       <summary>Live providers <span id="provider-summary" class="caption">· off — keyword search only</span></summary>
       <div class="strip-body">
         <label class="check"><input id="live-on" type="checkbox"><span>Use the configured providers (Deepgram for transcription, Gemini for answers)</span></label>
@@ -38,51 +48,31 @@
       </div>
     </details>
 
-    <section class="stage" aria-labelledby="capture-heading">
-      <div class="stage-top">
-        <div>
-          <p class="stage-eyebrow">Session</p>
-          <h2 id="capture-heading">Record a conversation</h2>
-        </div>
-        <div class="device-chips" aria-label="Devices in this session">
-          <a href="#pair" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
-          <a href="#watch-pair" class="dchip" id="chip-watch" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
-          <span class="dchip" id="chip-cam" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
-        </div>
-      </div>
-
-      <div class="stage-grid">
-        <div class="stage-controls">
-          <label for="source">Record audio from</label>
+      <section class="view" data-view="live">
+        <div class="live-grid">
+          <div class="live-main">
+            <div class="setup">
+              <div class="setup-row"><div class="setup-field"><label for="source">Record audio from</label>
           <select id="source">
             <option value="vexo">Vexo band (Devices, below)</option>
             <option value="browser">This browser's microphone</option>
-          </select>
-          <label class="check"><input id="cam-on" type="checkbox"><span>Add video (e.g. a GoPro via the GoPro Webcam app). Video stays in this browser; it is never uploaded.</span></label>
-          <div id="cam-pick" class="cam-pick" hidden>
+          </select></div><label class="check"><input id="cam-on" type="checkbox"><span>Add video (e.g. a GoPro via the GoPro Webcam app). Video stays in this browser; it is never uploaded.</span></label></div>
+              <div id="cam-pick" class="cam-pick" hidden>
             <label for="cam-device">Camera</label>
             <div class="row tight"><select id="cam-device"><option value="">Default camera</option></select><button type="button" id="cam-connect" class="secondary">Connect camera</button></div>
             <p class="caption">Pick “GoPro Webcam” if it's plugged in and its app is running. The camera's own mic is not used.</p>
           </div>
-          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram while recording.</span></label>
-          <div class="row">
-            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start session</button>
-            <button type="button" id="rec-stop" class="secondary" disabled>Stop session</button>
-            <button type="button" id="rec-takeback" class="secondary" hidden>Take it back</button>
-          </div>
-          <p id="rec-state" class="rec-state" role="status">Not recording.</p>
-          <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
-          <details class="audio-option">
-            <summary>Upload a recording instead</summary>
-            <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
-            <button type="button" id="transcribe" class="secondary">Transcribe file</button>
-          </details>
-        </div>
-
-        <div class="stage-live">
-          <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
-          <div id="live" class="live-transcript" aria-live="polite">
-            <div class="live-head"><span id="live-source" class="badge mic">No session yet</span><span id="live-timer" class="caption"></span></div>
+              <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram; new lines go to Google Gemini so the agent can decide what helps.</span></label>
+            </div>
+            <div class="recorder">
+              <button type="button" id="rec-start" class="rec-btn" aria-label="Start session"><span class="rec-dot"></span></button>
+              <button type="button" id="rec-stop" class="rec-btn stop" aria-label="Stop session" disabled><span class="rec-square"></span></button>
+              <div class="rec-meta"><div class="rec-timer" id="live-timer">00:00</div><div class="rec-source" id="live-source">Ready</div></div>
+              <div class="wave" id="wave" aria-hidden="true"></div>
+              <button type="button" id="rec-takeback" class="rec-ghost" hidden>Take it back</button>
+            </div>
+            <p id="rec-state" class="rec-state" role="status">Not recording.</p>
+            <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
             <div id="signals" class="signals" hidden aria-label="Band signals">
               <div class="sig"><span class="sig-k">Loudness</span><span class="meter"><span id="sig-loud"></span></span></div>
               <div class="sig"><span class="sig-k">Movement</span><span id="sig-activity" class="sig-v">—</span></div>
@@ -91,17 +81,121 @@
               <div class="sig"><span class="sig-k">Battery</span><span id="sig-battery" class="sig-v">—</span></div>
               <p class="sig-note">Tap the band once to mark a moment. Signals describe the band (sound level, movement), not your feelings.</p>
             </div>
-            <ol id="live-lines"></ol>
-            <p id="live-interim" class="interim">Connect your band, tick consent, and press Start session. Words appear here as they are spoken.</p>
+            <div id="live" class="transcript-card" aria-live="polite">
+              <div class="tc-head"><h2>Live transcript</h2><span class="caption">Speaker labels separate voices, not identities</span></div>
+              <ol id="live-lines" class="script"></ol>
+              <p id="live-interim" class="interim">Connect your band in Devices, tick consent, and press the red button. Words appear here as they are spoken.</p>
+            </div>
+            <section id="review" class="block review" aria-labelledby="review-heading" hidden>
+          <h3 id="review-heading">Review before saving</h3>
+          <p class="caption" id="review-source"></p>
+          <label for="who">Which speaker is you?</label>
+          <select id="who"></select>
+          <ol id="segments" class="segments"></ol>
+          <div class="row"><button type="button" id="review-save" class="secondary">Save my statements</button><button type="button" id="review-discard" class="text-button">Discard all</button></div>
+          <p class="caption">Only segments marked “Me” are saved. Other people's speech is dropped, not stored.</p>
+        </section>
+            <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
+            <details class="audio-option">
+            <summary>Upload a recording instead</summary>
+            <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
+            <button type="button" id="transcribe" class="secondary">Transcribe file</button>
+          </details>
           </div>
+          <aside class="agent-col" aria-labelledby="agent-h">
+            <div class="agent-card">
+              <p class="agent-eyebrow">Agent</p>
+              <h2 id="agent-h">What Threadline noticed</h2>
+              <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and your cycle dates, decides what would help, and says why.</li></ol>
+            </div>
+            <div id="support" class="support" hidden></div>
+            <div id="calendar" class="calendar" hidden></div>
+          </aside>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <div class="workspace">
-      <aside class="devices-col" aria-label="Devices">
-        <h2 class="col-title">Devices</h2>
-          <div class="pair" id="pair" data-state="idle">
+      <section class="view" data-view="thread" hidden>
+        <div class="two-col">
+          <div><section class="block thread" aria-labelledby="notes-heading">
+        <div class="section-top"><h2 id="notes-heading">Your thread</h2><button type="button" id="clear" class="text-button">Clear session</button></div>
+          <p class="caption" id="sample-label"></p>
+          <ol id="timeline" class="timeline"></ol>
+  
+          <section id="prefs-section" class="block" aria-labelledby="prefs-heading">
+            <h3 id="prefs-heading">Support preferences you saved</h3>
+            <p class="caption">Threadline only offers help you asked for, and only when your own words match.</p>
+            <ul id="prefs" class="prefs"></ul>
+            <details class="add-pref">
+              <summary>Save a new preference</summary>
+              <label for="pref-text">When I say something like…</label>
+              <textarea id="pref-text" rows="2" maxlength="300" placeholder="When I describe feeling overloaded, offer to help make space in my schedule."></textarea>
+              <label for="pref-triggers">Words that should match (comma-separated)</label>
+              <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
+              <label for="pref-action">Then</label>
+              <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="update">Offer to send my pre-approved update to close friends</option><option value="remind">Only show what I said before</option></select>
+              <div id="pref-update-fields" hidden>
+                <label for="pref-update-text">My pre-approved update</label>
+                <textarea id="pref-update-text" rows="2" maxlength="400" placeholder="Low-energy week — I'm staying in, not ignoring you. Talk soon."></textarea>
+                <label for="pref-update-to">Who it's for</label>
+                <input id="pref-update-to" type="text" maxlength="200" placeholder="Close friends">
+              </div>
+              <button type="button" id="pref-save" class="secondary">Save preference</button>
+            </details>
+          </section>
+        <form id="note-form" class="block">
+          <label for="note">Or type a note</label>
+          <textarea id="note" rows="2" maxlength="4000" placeholder="Something you want to remember…" required></textarea>
+          <div class="capture-row"><span class="caption">Timestamp added automatically</span><button type="submit" class="secondary">Add note <span aria-hidden="true">+</span></button></div>
+        </form>
+        </section></div>
+          <div class="stack"><div class="card ask"><p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like to revisit?</h2>
+        <form id="question-form">
+          <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required placeholder="e.g. What did I say about evenings?"></textarea>
+          <button id="run" type="submit" class="primary">Revisit my notes <span aria-hidden="true">↗</span></button>
+        </form>
+        <p id="status" class="status" role="status">Keyword search · no AI request</p>
+        <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div></div><section class="block" aria-labelledby="archive-heading">
+          <div class="section-top"><h3 id="archive-heading">Transcripts</h3><button type="button" id="archive-clear" class="text-button">Delete all</button></div>
+          <p class="caption" id="archive-caption">Every captured session's full transcript, stored in this browser for this band. Nothing is stored on the server.</p>
+          <ol id="archive" class="archive"></ol>
+        </section></div>
+        </div>
+      </section>
+
+      <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
+          <div class="section-top"><h2 id="days-heading">Your days</h2><button type="button" id="day-summary" class="secondary">Summarize today</button></div>
+          <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>
+          <div class="table-wrap"><table class="days-table">
+            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy words</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Cycle day</th></tr></thead>
+            <tbody id="days-body"></tbody>
+          </table></div>
+          <div id="day-summary-out" class="answer" hidden></div>
+          <details class="add-pref">
+            <summary>Words that mean low energy for me</summary>
+            <input id="energy-words" type="text" maxlength="300" aria-label="Low-energy words, comma-separated">
+            <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
+          </details>
+
+          <div class="cycle" aria-labelledby="cycle-heading">
+            <h3 id="cycle-heading">Cycle</h3>
+            <p id="cycle-estimate" class="cycle-estimate">Add the first day of your last periods, or share them from Apple Health on the watch.</p>
+            <div class="row tight"><label for="cycle-date" class="visually-hidden">Period start date</label><input id="cycle-date" type="date"><button type="button" id="cycle-add" class="secondary">Add start date</button></div>
+            <ul id="cycle-dates" class="cycle-dates"></ul>
+            <label class="check"><input id="cycle-notify" type="checkbox"><span>Notify me 2 days before the estimate (this browser)</span></label>
+            <label class="check"><input id="cycle-haptic" type="checkbox"><span>Also tap my Apple Watch when that notification comes</span></label>
+            <p class="caption">An estimate from your own dates, not a prediction of symptoms or a medical result.</p>
+          </div>
+        </section></section>
+      <section class="view" data-view="graph" hidden><section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
+          <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>
+          <div class="row tight" role="radiogroup" aria-label="Graph engine">
+            <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
+            <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
+          </div>
+          <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
+          <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
+        </section></section>
+      <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair" id="pair" data-state="idle">
           <div class="pair-head">
             <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
               <rect x="10" y="2" width="44" height="100" rx="22" class="band-body"></rect>
@@ -147,9 +241,7 @@
             <div><dt>Firmware</dt><dd id="info-fw">—</dd></div>
           </dl>
           <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
-        </div>
-
-        <div class="pair watch" id="watch-pair" data-state="idle">
+        </div><div class="pair watch" id="watch-pair" data-state="idle">
           <div class="pair-head">
             <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
               <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
@@ -183,111 +275,10 @@
           <p id="ws-age" class="pair-hint" hidden></p>
           <p id="watch-msg" class="pair-msg" role="status" aria-live="polite"></p>
           <p class="pair-hint">A web page cannot reach a watch over Bluetooth: the Threadline watch app sends its readings (and, if you choose, its microphone) to this server, and the code links it to this page. Readings are numbers, not feelings.</p>
-        </div>
+        </div></div></section>
 
-      </aside>
-
-      <section class="notes-panel" aria-labelledby="capture-heading">
-
-        <section id="review" class="block review" aria-labelledby="review-heading" hidden>
-          <h3 id="review-heading">Review before saving</h3>
-          <p class="caption" id="review-source"></p>
-          <label for="who">Which speaker is you?</label>
-          <select id="who"></select>
-          <ol id="segments" class="segments"></ol>
-          <div class="row"><button type="button" id="review-save" class="secondary">Save my statements</button><button type="button" id="review-discard" class="text-button">Discard all</button></div>
-          <p class="caption">Only segments marked “Me” are saved. Other people's speech is dropped, not stored.</p>
-        </section>
-
-        <section class="block" aria-labelledby="archive-heading">
-          <div class="section-top"><h3 id="archive-heading">Transcripts</h3><button type="button" id="archive-clear" class="text-button">Delete all</button></div>
-          <p class="caption" id="archive-caption">Every captured session's full transcript, stored in this browser for this band. Nothing is stored on the server.</p>
-          <ol id="archive" class="archive"></ol>
-        </section>
-
-        <section class="block thread" aria-labelledby="notes-heading">
-        <div class="section-top"><h2 id="notes-heading">Your thread</h2><button type="button" id="clear" class="text-button">Clear session</button></div>
-          <p class="caption" id="sample-label"></p>
-          <ol id="timeline" class="timeline"></ol>
-  
-          <section id="prefs-section" class="block" aria-labelledby="prefs-heading">
-            <h3 id="prefs-heading">Support preferences you saved</h3>
-            <p class="caption">Threadline only offers help you asked for, and only when your own words match.</p>
-            <ul id="prefs" class="prefs"></ul>
-            <details class="add-pref">
-              <summary>Save a new preference</summary>
-              <label for="pref-text">When I say something like…</label>
-              <textarea id="pref-text" rows="2" maxlength="300" placeholder="When I describe feeling overloaded, offer to help make space in my schedule."></textarea>
-              <label for="pref-triggers">Words that should match (comma-separated)</label>
-              <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
-              <label for="pref-action">Then</label>
-              <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="update">Offer to send my pre-approved update to close friends</option><option value="remind">Only show what I said before</option></select>
-              <div id="pref-update-fields" hidden>
-                <label for="pref-update-text">My pre-approved update</label>
-                <textarea id="pref-update-text" rows="2" maxlength="400" placeholder="Low-energy week — I'm staying in, not ignoring you. Talk soon."></textarea>
-                <label for="pref-update-to">Who it's for</label>
-                <input id="pref-update-to" type="text" maxlength="200" placeholder="Close friends">
-              </div>
-              <button type="button" id="pref-save" class="secondary">Save preference</button>
-            </details>
-          </section>
-        <form id="note-form" class="block">
-          <label for="note">Or type a note</label>
-          <textarea id="note" rows="2" maxlength="4000" placeholder="Something you want to remember…" required></textarea>
-          <div class="capture-row"><span class="caption">Timestamp added automatically</span><button type="submit" class="secondary">Add note <span aria-hidden="true">+</span></button></div>
-        </form>
-        </section>
-      </section>
-
-      <section class="reflection-panel" aria-labelledby="ask-heading">
-        <div id="support" class="support" hidden></div>
-        <div id="calendar" class="calendar" hidden></div>
-
-        <p class="eyebrow">Make room to remember</p><h2 id="ask-heading">What would you like to revisit?</h2>
-        <form id="question-form">
-          <label for="question">Your question</label><textarea id="question" rows="3" maxlength="2000" required placeholder="e.g. What did I say about evenings?"></textarea>
-          <button id="run" type="submit" class="primary">Revisit my notes <span aria-hidden="true">↗</span></button>
-        </form>
-        <p id="status" class="status" role="status">Keyword search · no AI request</p>
-        <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div>
-
-        <section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
-          <div class="section-top"><h2 id="days-heading">Your days</h2><button type="button" id="day-summary" class="secondary">Summarize today</button></div>
-          <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>
-          <div class="table-wrap"><table class="days-table">
-            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy words</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Cycle day</th></tr></thead>
-            <tbody id="days-body"></tbody>
-          </table></div>
-          <div id="day-summary-out" class="answer" hidden></div>
-          <details class="add-pref">
-            <summary>Words that mean low energy for me</summary>
-            <input id="energy-words" type="text" maxlength="300" aria-label="Low-energy words, comma-separated">
-            <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
-          </details>
-
-          <div class="cycle" aria-labelledby="cycle-heading">
-            <h3 id="cycle-heading">Cycle</h3>
-            <p id="cycle-estimate" class="cycle-estimate">Add the first day of your last periods, or share them from Apple Health on the watch.</p>
-            <div class="row tight"><label for="cycle-date" class="visually-hidden">Period start date</label><input id="cycle-date" type="date"><button type="button" id="cycle-add" class="secondary">Add start date</button></div>
-            <ul id="cycle-dates" class="cycle-dates"></ul>
-            <label class="check"><input id="cycle-notify" type="checkbox"><span>Notify me 2 days before the estimate (this browser)</span></label>
-            <label class="check"><input id="cycle-haptic" type="checkbox"><span>Also tap my Apple Watch when that notification comes</span></label>
-            <p class="caption">An estimate from your own dates, not a prediction of symptoms or a medical result.</p>
-          </div>
-        </section>
-
-        <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
-          <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>
-          <div class="row tight" role="radiogroup" aria-label="Graph engine">
-            <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
-            <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
-          </div>
-          <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
-          <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
-        </section>
-      </section>
-    </div>
-    <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
-  </main>
+      <footer><p>Session-only prototype. Refreshing closes this thread.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
+    </main>
+  </div>
 </body>
 </html>

@@ -505,3 +505,115 @@ def test_watch_haptic_queued_for_https_sensors_response(client):
             assert body["forwarded"] is True
             assert [h["kind"] for h in body["haptics"]] == ["success", "click", "notification"]  # queue keeps 3
             assert "haptics" not in client.post("/api/watch/sensors", headers=headers, json={}).json()
+
+
+# --- /api/agent/decide ---------------------------------------------------------------------------
+
+AUTH = {"X-App-Token": "test-only-access"}
+
+
+def decide_body(engine="local", watch=False, **extra):
+    body = {
+        "statement": {"id": "s9", "text": "I'm exhausted and every evening is booked", "at": "2026-11-14T17:00", "source": "typed", "speaker_confirmed": True},
+        "recent": [
+            {"id": "s1", "text": "Evening plans again, I'm exhausted", "at": "2026-11-12T20:00"},
+            {"id": "s2", "text": "Lunch with Sam was fun", "at": "2026-11-13T13:00"},
+        ],
+        "preferences": [
+            {"id": "p-remind", "text": "Remind me about Sam", "triggers": ["sam"], "action": "remind"},
+            {"id": "p-rest", "text": "When I'm exhausted, protect a quiet evening", "triggers": ["exhausted"], "action": "schedule"},
+        ],
+        "today": {"low_energy_words": 3, "lines_from_others": 10, "steps": None, "heart_rate_avg": None, "cycle_day": 26, "next_period_estimate": "2026-11-17"},
+        "devices": {"band": True, "watch": watch},
+        "engine": engine,
+    }
+    body.update(extra)
+    return body
+
+
+def mock_gemini(monkeypatch, reply: dict, seen: list | None = None):
+    import json
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-only-key")
+    monkeypatch.setenv("GEMINI_MODEL", "test-model")
+    monkeypatch.delenv("GEMINI_DECISION_MODEL", raising=False)
+    real_client = httpx.AsyncClient
+
+    def respond(request):
+        if seen is not None:
+            seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"steps": [{"type": "model_output", "content": [{"type": "text", "text": json.dumps(reply)}]}]})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
+
+
+def test_decide_requires_token(client):
+    assert client.post("/api/agent/decide", json=decide_body()).status_code == 401
+
+
+def test_local_decide_uses_first_matching_preference(client):
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body()).json()
+    assert result["engine"] == "local" and result["action"] == "offer_schedule"
+    assert result["preference_id"] == "p-rest" and result["evidence"] == ["s1"] and result["auto"] is False
+    assert "exhausted" in result["reason"] and len(result["reason"]) <= 160
+    none = client.post("/api/agent/decide", headers=AUTH, json=decide_body(preferences=[])).json()
+    assert none["action"] == "none" and none["auto"] is True and none["preference_id"] is None
+
+
+def test_gemini_invented_preference_and_cycle_claim_are_corrected(client, monkeypatch):
+    seen = []
+    mock_gemini(monkeypatch, {
+        "action": "offer_schedule", "preference_id": "p-invented", "evidence": ["s1", "s404"], "auto": False,
+        "reason": "You're tired because of your cycle", "message": "This is PMS, so I booked rest.",
+    }, seen)
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini")).json()
+    assert seen and seen[0]["model"] == "test-model" and seen[0]["store"] is False
+    assert result["engine"] == "gemini" and result["action"] == "show_evidence" and result["preference_id"] is None
+    assert result["evidence"] == ["s1"] and result["auto"] is True
+    assert "cycle" not in result["reason"].lower() and "pms" not in result["message"].lower()
+
+
+def test_gemini_bad_action_becomes_none_and_auto_is_server_computed(client, monkeypatch):
+    mock_gemini(monkeypatch, {"action": "book_flight", "preference_id": None, "evidence": [], "auto": False, "reason": "x", "message": "y"})
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini")).json()
+    assert result["action"] == "none" and result["auto"] is True
+    mock_gemini(monkeypatch, {"action": "offer_schedule", "preference_id": "p-rest", "evidence": ["s1"], "auto": True,
+                              "reason": 'You said "every evening is booked".', "message": "Want a quiet slot?"})
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini")).json()
+    assert result["action"] == "offer_schedule" and result["preference_id"] == "p-rest" and result["auto"] is False
+
+
+def test_watch_tap_without_watch_is_downgraded(client, monkeypatch):
+    reply = {"action": "watch_tap", "preference_id": None, "evidence": ["s1"], "reason": 'You said "exhausted".', "message": "Tap"}
+    mock_gemini(monkeypatch, reply)
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini", watch=False)).json()
+    assert result["action"] == "show_evidence" and result["evidence"] == ["s1"]
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini", watch=True)).json()
+    assert result["action"] == "watch_tap" and result["auto"] is True
+
+
+def test_gemini_unconfigured_falls_back_to_local(client, monkeypatch):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    response = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini"))
+    assert response.status_code == 200
+    assert response.json()["engine"] == "local" and response.json()["fallback_reason"]
+
+
+def test_decisions_api_choice_is_rechecked(client, monkeypatch):
+    import json
+    monkeypatch.setenv("GOOGLE_API_KEY", "test-only-key")
+    monkeypatch.setenv("GEMINI_DECISION_MODEL", "test-decision-model")
+    real_client = httpx.AsyncClient
+    seen = []
+
+    def respond(request):
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"answers": {
+            "action": {"type": "choice", "choice": "offer_update", "confidence": 0.9},
+            "preference": {"type": "choice", "choice": "p-rest", "confidence": 0.9},
+        }})
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_client(transport=httpx.MockTransport(respond), **kwargs))
+    result = client.post("/api/agent/decide", headers=AUTH, json=decide_body("gemini")).json()
+    assert seen[0][0] == "/v1beta/decisions" and seen[0][1]["model"] == "test-decision-model"
+    # p-rest is a schedule preference, so offer_update is downgraded
+    assert result["action"] == "show_evidence" and result["preference_id"] is None and result["auto"] is True
