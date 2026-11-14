@@ -328,7 +328,7 @@
           <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
           <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
         </section></section>
-      <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair watch" id="watch-pair" hidden data-state="idle">
+      <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair watch" id="watch-pair" data-state="idle">
           <div class="pair-head">
             <svg class="watch-art" viewBox="0 0 70 104" aria-hidden="true">
               <rect x="20" y="0" width="30" height="22" rx="6" class="strap"></rect>
@@ -350,8 +350,16 @@
             <output id="watch-code" class="watch-code">——————</output>
             <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Stream</b>. Heart rate, steps and activity appear here; turn on audio only if the band isn't recording.</li></ol>
           </div>
+          <form id="watch-claim-form" class="watch-claim">
+            <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch — it shows a 6-digit code.</li><li>Type that code here and press <b>Pair</b>.</li><li>The watch taps your wrist and shows <b>Paired ✓</b>.</li></ol>
+            <label for="watch-claim-code">Code shown on your watch</label>
+            <div class="row tight">
+              <input id="watch-claim-code" class="pick-number code6" inputmode="numeric" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="000 000" autocomplete="one-time-code" required>
+              <button type="submit" class="primary-sm">Pair</button>
+            </div>
+          </form>
           <div class="pair-buttons">
-            <button type="button" id="watch-pair-btn" class="primary-sm">Pair Apple Watch</button>
+            <button type="button" id="watch-pair-btn" class="text-button">Or get a code to type on the watch</button>
             <button type="button" id="watch-unpair" class="secondary" hidden>Unpair</button>
           </div>
           <dl id="watch-sensors" class="band-info watch-sensors" hidden>

@@ -912,7 +912,7 @@ $("watch-pair-btn").addEventListener("click", async () => {
     const data = await request("/api/watch/pair", { method: "POST", headers });
     watch.code = data.code;
     $("watch-code").textContent = data.code.replace(/(\d{3})(\d{3})/, "$1 $2");
-    $("watch-code-box").hidden = false; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false;
+    $("watch-code-box").hidden = false; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false; $("watch-claim-form").hidden = true;
     watchState("busy", "Waiting for your watch…"); watchMsg(`Code expires in ${Math.round(data.expires_in / 60)} minutes if unused.`);
     openWatchFeed(token);
   } catch (e) { watchMsg(e.message.includes("Not Found") ? "Apple Watch pairing is not available on this server yet." : e.message, true); }
@@ -961,7 +961,7 @@ function openWatchFeed(token) {
       finishWatchSession();
     } else if (msg.type === "error") { watchMsg(msg.message, true); }
   };
-  ws.onclose = () => { if (watch.ws === ws) { watch.ws = null; finishWatchSession(); watchState("idle", "Not paired"); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; } };
+  ws.onclose = () => { if (watch.ws === ws) { watch.ws = null; finishWatchSession(); watchState("idle", "Not paired"); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; } };
 }
 function finishWatchSession() {
   if (!watch.finals.length) return;
@@ -970,7 +970,7 @@ function finishWatchSession() {
   openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), "watch", watch.startedAt || new Date(), `${watch.device} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
   recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
 }
-$("watch-unpair").addEventListener("click", () => { const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; });
+$("watch-unpair").addEventListener("click", () => { const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
 
 
 /* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. Video only. */
@@ -1096,6 +1096,11 @@ async function summarizeToday(out) {
 /* ---------- Views (sidebar) ---------- */
 const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations" };
 function showView(name) {
+  if (name === "watch") {  // Apple Watch pairing lives at #watch; the redesign keeps it out of the menu
+    document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== "devices"; });
+    document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", "false"));
+    $("view-title").textContent = "Apple Watch"; return;
+  }
   if (!VIEW_TITLES[name] || name === "devices" || name === "integrations") name = "live";
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
   document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
@@ -1358,6 +1363,24 @@ function renderToday() {
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
 }
 $("today-summary").addEventListener("click", () => summarizeToday($("today-summary-out")));
+
+
+/* Pair from the watch: the watch shows a code; you enter it here (the session cookie authorizes the claim). */
+$("watch-claim-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (watch.ws) return watchMsg("Already paired. Unpair first to pair another watch.");
+  const code = $("watch-claim-code").value.replace(/\D/g, "");
+  if (code.length !== 6) return watchMsg("Type the 6 digits shown on your watch.", true);
+  try {
+    const data = await request("/api/watch/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+    watch.code = code; watch.device = data.device || "Apple Watch";
+    $("watch-claim-form").hidden = true; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false;
+    watchState("busy", `${watch.device} · paired, waiting for readings`); watchMsg("Paired. Your watch shows Paired ✓ and starts sending readings.");
+    if (typeof logAction === "function") logAction(`Paired ${watch.device}`);
+    openWatchFeed("");
+  } catch (err) { watchMsg(/Not Found/.test(err.message) ? "This server doesn't support pairing from the watch yet — redeploy it." : err.message, true); }
+});
+$("watch-claim-code").addEventListener("input", () => { const d = $("watch-claim-code").value.replace(/\D/g, "").slice(0, 6); $("watch-claim-code").value = d.length > 3 ? `${d.slice(0, 3)} ${d.slice(3)}` : d; });
 
 render();
 showView(location.hash.slice(1) || "live");
