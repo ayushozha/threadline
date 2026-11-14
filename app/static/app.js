@@ -292,7 +292,11 @@ $("pick-form").addEventListener("submit", (e) => {
   if (!/^\d{1,3}$/.test(raw) || Number(raw) < 1) { $("pick-message").textContent = "A band number is one to three digits, like 07 or 42."; return; }
   $("pick-message").textContent = ""; chooseBand(Number(raw));
 });
-function setPairState(state, text) { pair.state = state; $("pair").dataset.state = state; $("pair-status").textContent = text; }
+function setPairState(state, text) {
+  pair.state = state; $("pair").dataset.state = state; $("pair-status").textContent = text;
+  chip("band", state === "connected" || state === "mic", state === "busy" ? text : capture.band ? `${capture.band.name}${capture.active ? " · recording" : ""}` : "not connected");
+}
+function chip(id, on, text) { const c = $(`chip-${id}`); if (!c) return; c.dataset.on = String(on); $(`chip-${id}-v`).textContent = text; }
 function renderPair() {
   const linked = Boolean(capture.band), recon = capture.band?.reconnecting;
   $("pair-name").textContent = bandNumber ? bandLabel() : "No band chosen";
@@ -395,8 +399,12 @@ $("rec-start").addEventListener("click", async () => {
   let stream = null;
   if (!vexo || camera) {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record from the microphone or camera.", true);
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: !vexo, video: camera }); }
-    catch { return recState(`${camera ? "Camera" : "Microphone"} permission was not granted. Nothing was recorded.`, true); }
+    try {
+      // Audio comes from the band when it records, so the camera's own microphone is never requested.
+      const audio = vexo ? null : await navigator.mediaDevices.getUserMedia({ audio: true });
+      const video = camera ? (capture.camStream || await navigator.mediaDevices.getUserMedia({ video: cameraConstraint() })) : null;
+      stream = new MediaStream([...(audio ? audio.getTracks() : []), ...(video ? video.getVideoTracks() : [])]);
+    } catch { return recState(`${camera ? "Camera" : "Microphone"} permission was not granted. Nothing was recorded.`, true); }
   }
   Object.assign(capture, { active: true, token, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now() });
@@ -477,7 +485,7 @@ async function stopLive(reason) {
   if (capture.band && !capture.band.reconnecting) { try { await capture.band.configure({ audio: false }); } catch { /* band gone */ } await stopSignals(); }
   if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
   stopVideo();
-  capture.stream?.getTracks().forEach((t) => t.stop());
+  capture.stream?.getTracks().forEach((t) => t.stop()); releaseCamera();
   const ws = capture.ws;
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "stop" })); else finishLive();
   setTimeout(() => { if (capture.ws === ws && ws) ws.close(); }, 6000);
@@ -500,7 +508,7 @@ function finishLive() {
   if (capture.band && !capture.stopping && !capture.band.reconnecting) capture.band.configure({ audio: false }).catch(() => {});
   if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
   stopVideo();
-  capture.stream?.getTracks().forEach((t) => t.stop());
+  capture.stream?.getTracks().forEach((t) => t.stop()); releaseCamera();
   Object.assign(capture, { active: false, ws: null, recorder: null, stream: null, stopping: false });
   setRecUI();
   if (!capture.vexo) $("signals").hidden = true;
@@ -512,6 +520,7 @@ function finishLive() {
 
 /* Camera: explicit opt-in, previewed live, recorded only in this browser (never uploaded). */
 function startVideo(stream) {
+  chip("cam", true, `${stream.getVideoTracks()[0]?.label || "camera"} · recording`);
   const tracks = stream.getVideoTracks(); if (!tracks.length) return;
   clearVideo();
   const preview = $("cam-preview"); preview.srcObject = new MediaStream(tracks); preview.hidden = false; preview.play().catch(() => {});
@@ -815,7 +824,7 @@ function showGraphNode(n, edges, byId) {
 /* ---------- Apple Watch (companion app streams to this server; this page follows it by code) ---------- */
 const watch = { ws: null, code: "", finals: [], startedAt: null, device: "Apple Watch", sensors: null, sensorsAt: 0, owningLive: false };
 setInterval(() => { if (watch.sensorsAt) { const s = Math.round((Date.now() - watch.sensorsAt) / 1000); $("ws-age").hidden = false; $("ws-age").textContent = s < 5 ? "Live from the watch" : `Last reading ${s} s ago`; } }, 1000);
-function watchState(state, text) { $("watch-pair").dataset.state = state; $("watch-status").textContent = text; }
+function watchState(state, text) { $("watch-pair").dataset.state = state; $("watch-status").textContent = text; chip("watch", state === "connected", state === "idle" ? "not paired" : text); }
 function watchMsg(text, error = false) { $("watch-msg").textContent = text; $("watch-msg").classList.toggle("error", error); }
 $("watch-pair-btn").addEventListener("click", async () => {
   if (watch.ws) return;
@@ -871,5 +880,34 @@ function finishWatchSession() {
   recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
 }
 $("watch-unpair").addEventListener("click", () => { const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = false; $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; });
+
+
+/* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. Video only. */
+function cameraConstraint() { const id = $("cam-device").value; return id ? { deviceId: { exact: id } } : true; }
+async function listCameras() {
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+    const current = $("cam-device").value;
+    $("cam-device").replaceChildren(el("option", { value: "", textContent: "Default camera" }), ...cams.map((c, i) => el("option", { value: c.deviceId, textContent: c.label || `Camera ${i + 1} (connect to see its name)`, selected: c.deviceId === current })));
+    const gopro = cams.find((c) => /gopro/i.test(c.label));
+    if (gopro && !current) $("cam-device").value = gopro.deviceId;
+  } catch { /* no device list */ }
+}
+function releaseCamera() { capture.camStream?.getTracks().forEach((t) => t.stop()); capture.camStream = null; if (!capture.active) { $("cam-preview").srcObject = null; $("cam-preview").hidden = true; } chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); }
+$("cam-on").addEventListener("change", () => { $("cam-pick").hidden = !$("cam-on").checked; if ($("cam-on").checked) listCameras(); else releaseCamera(); chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); });
+$("cam-device").addEventListener("change", () => { if (capture.camStream) $("cam-connect").click(); });
+$("cam-connect").addEventListener("click", async () => {
+  if (capture.active) return;
+  try {
+    capture.camStream?.getTracks().forEach((t) => t.stop());
+    capture.camStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraint() });
+    const track = capture.camStream.getVideoTracks()[0];
+    $("cam-preview").srcObject = capture.camStream; $("cam-preview").hidden = false; $("cam-preview").play().catch(() => {});
+    await listCameras();
+    chip("cam", true, track?.label || "connected");
+    track?.addEventListener("ended", () => { chip("cam", false, "disconnected"); recState("The camera disconnected.", true); });
+  } catch (e) { chip("cam", false, "not allowed"); recState(`Camera unavailable: ${e.message}`, true); }
+});
+navigator.mediaDevices?.addEventListener?.("devicechange", () => { if ($("cam-on").checked) listCameras(); });
 
 render();

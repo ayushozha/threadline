@@ -38,6 +38,66 @@
       </div>
     </details>
 
+    <section class="stage" aria-labelledby="capture-heading">
+      <div class="stage-top">
+        <div>
+          <p class="stage-eyebrow">Session</p>
+          <h2 id="capture-heading">Record a conversation</h2>
+        </div>
+        <div class="device-chips" aria-label="Devices in this session">
+          <a href="#pair" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
+          <a href="#watch-pair" class="dchip" id="chip-watch" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
+          <span class="dchip" id="chip-cam" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
+        </div>
+      </div>
+
+      <div class="stage-grid">
+        <div class="stage-controls">
+          <label for="source">Record audio from</label>
+          <select id="source">
+            <option value="vexo">Vexo band (Devices, below)</option>
+            <option value="browser">This browser's microphone</option>
+          </select>
+          <label class="check"><input id="cam-on" type="checkbox"><span>Add video (e.g. a GoPro via the GoPro Webcam app). Video stays in this browser; it is never uploaded.</span></label>
+          <div id="cam-pick" class="cam-pick" hidden>
+            <label for="cam-device">Camera</label>
+            <div class="row tight"><select id="cam-device"><option value="">Default camera</option></select><button type="button" id="cam-connect" class="secondary">Connect camera</button></div>
+            <p class="caption">Pick “GoPro Webcam” if it's plugged in and its app is running. The camera's own mic is not used.</p>
+          </div>
+          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram while recording.</span></label>
+          <div class="row">
+            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start session</button>
+            <button type="button" id="rec-stop" class="secondary" disabled>Stop session</button>
+            <button type="button" id="rec-takeback" class="secondary" hidden>Take it back</button>
+          </div>
+          <p id="rec-state" class="rec-state" role="status">Not recording.</p>
+          <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
+          <details class="audio-option">
+            <summary>Upload a recording instead</summary>
+            <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
+            <button type="button" id="transcribe" class="secondary">Transcribe file</button>
+          </details>
+        </div>
+
+        <div class="stage-live">
+          <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
+          <div id="live" class="live-transcript" aria-live="polite">
+            <div class="live-head"><span id="live-source" class="badge mic">No session yet</span><span id="live-timer" class="caption"></span></div>
+            <div id="signals" class="signals" hidden aria-label="Band signals">
+              <div class="sig"><span class="sig-k">Loudness</span><span class="meter"><span id="sig-loud"></span></span></div>
+              <div class="sig"><span class="sig-k">Movement</span><span id="sig-activity" class="sig-v">—</span></div>
+              <div class="sig"><span class="sig-k">Steps</span><span id="sig-steps" class="sig-v">—</span></div>
+              <div class="sig"><span class="sig-k">Marks</span><span id="sig-taps" class="sig-v">0</span></div>
+              <div class="sig"><span class="sig-k">Battery</span><span id="sig-battery" class="sig-v">—</span></div>
+              <p class="sig-note">Tap the band once to mark a moment. Signals describe the band (sound level, movement), not your feelings.</p>
+            </div>
+            <ol id="live-lines"></ol>
+            <p id="live-interim" class="interim">Connect your band, tick consent, and press Start session. Words appear here as they are spoken.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div class="workspace">
       <aside class="devices-col" aria-label="Devices">
         <h2 class="col-title">Devices</h2>
@@ -128,42 +188,6 @@
       </aside>
 
       <section class="notes-panel" aria-labelledby="capture-heading">
-        <section class="block capture" aria-labelledby="capture-heading">
-          <h3 id="capture-heading">Capture</h3>
-          <label for="source">Record from</label>
-          <select id="source">
-            <option value="vexo">The Vexo band above</option>
-            <option value="browser">This browser's microphone</option>
-          </select>
-          <label class="check"><input id="cam-on" type="checkbox"><span>Also record video from my camera. It stays in this browser and is never uploaded.</span></label>
-          <label class="check"><input id="rec-consent" type="checkbox"><span>I'm choosing to record now, and everyone who can be heard has agreed. Audio streams to Deepgram while capture is on.</span></label>
-          <div class="row">
-            <button type="button" id="rec-start" class="secondary"><span class="dot" aria-hidden="true"></span> Start live capture</button>
-            <button type="button" id="rec-stop" class="secondary" disabled>Stop</button>
-            <button type="button" id="rec-takeback" class="secondary" hidden>Take it back</button>
-          </div>
-          <p id="rec-state" class="rec-state" role="status">Not recording.</p>
-          <div id="live" class="live-transcript" hidden aria-live="polite">
-            <div class="live-head"><span id="live-source" class="badge mic"></span><span id="live-timer" class="caption"></span></div>
-            <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
-            <div id="signals" class="signals" hidden aria-label="Band signals">
-              <div class="sig"><span class="sig-k">Loudness</span><span class="meter"><span id="sig-loud"></span></span></div>
-              <div class="sig"><span class="sig-k">Movement</span><span id="sig-activity" class="sig-v">—</span></div>
-              <div class="sig"><span class="sig-k">Steps</span><span id="sig-steps" class="sig-v">—</span></div>
-              <div class="sig"><span class="sig-k">Marks</span><span id="sig-taps" class="sig-v">0</span></div>
-              <div class="sig"><span class="sig-k">Battery</span><span id="sig-battery" class="sig-v">—</span></div>
-              <p class="sig-note">Tap the band once to mark a moment. Signals describe the band (sound level, movement), not your feelings.</p>
-            </div>
-            <ol id="live-lines"></ol>
-            <p id="live-interim" class="interim"></p>
-          </div>
-          <div id="cam-result" class="cam-result" hidden><a id="cam-download" href="#" download>Download video</a> <span id="cam-size" class="caption"></span> <button type="button" id="cam-delete" class="text-button">Delete video</button></div>
-          <details class="audio-option">
-            <summary>Upload a recording instead</summary>
-            <label for="audio">Upload an audio file (live transcription)</label><input id="audio" type="file" accept="audio/*">
-            <button type="button" id="transcribe" class="secondary">Transcribe file</button>
-          </details>
-        </section>
 
         <section id="review" class="block review" aria-labelledby="review-heading" hidden>
           <h3 id="review-heading">Review before saving</h3>
