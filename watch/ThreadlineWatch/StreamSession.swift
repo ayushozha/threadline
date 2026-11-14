@@ -17,6 +17,10 @@ final class StreamSession: ObservableObject {
     @Published var status = "Not streaming"
     @Published var lines: [String] = []
     @Published var interim = ""
+    @Published var shareCycle = false  // explicit opt-in, off every launch
+    @Published var cycleNote: String?
+    @Published var hapticReason: String?
+    private var cycleSent = false
     var wristRaised: Bool?
 
     let sensors = Sensors()
@@ -55,7 +59,7 @@ final class StreamSession: ObservableObject {
 
     private func start() {
         lines = []; interim = ""; pending = Data()
-        everReady = false; rejected = false; useHTTP = false; reconnectAttempts = 0
+        everReady = false; rejected = false; useHTTP = false; reconnectAttempts = 0; cycleSent = false
         isStreaming = true
         status = "Starting…"
         Task {
@@ -118,6 +122,43 @@ final class StreamSession: ObservableObject {
         } else if let socket, socketReady, let text = String(data: body, encoding: .utf8) {
             socket.send(.string(text)) { _ in }
         }
+    }
+
+    // MARK: Cycle dates and haptics
+
+    /// Sends logged period start dates once per streaming session, only while "Share cycle dates" is on.
+    func sendCycleIfShared() {
+        guard shareCycle, isStreaming, !cycleSent, useHTTP || socketReady else { return }
+        cycleSent = true
+        Task {
+            let starts = await sensors.periodStarts()
+            guard shareCycle, isStreaming,
+                  let body = try? JSONSerialization.data(withJSONObject: ["type": "cycle", "period_starts": starts]) else {
+                cycleSent = false; return
+            }
+            if useHTTP {
+                await post("/api/watch/cycle", body: body, contentType: "application/json")
+            } else if let socket, socketReady, let text = String(data: body, encoding: .utf8) {
+                socket.send(.string(text)) { _ in }
+            } else {
+                cycleSent = false; return
+            }
+            cycleNote = starts.isEmpty ? "No logged periods found in Health" : "Shared \(starts.count) period start dates"
+        }
+    }
+
+    func shareCycleChanged() {
+        if shareCycle { sendCycleIfShared() } else { cycleSent = false; cycleNote = nil }
+    }
+
+    private func playHaptic(_ message: [String: Any]) {
+        let types: [String: WKHapticType] = ["notification": .notification, "success": .success,
+                                             "directionUp": .directionUp, "click": .click]
+        WKInterfaceDevice.current().play(types[message["kind"] as? String ?? ""] ?? .notification)
+        let reason = (message["reason"] as? String ?? "").prefix(80)
+        hapticReason = reason.isEmpty ? "Tap from your Threadline page" : String(reason)
+        let shown = hapticReason
+        Task { try? await Task.sleep(for: .seconds(4)); if self.hapticReason == shown { self.hapticReason = nil } }
     }
 
     // MARK: Audio
@@ -251,6 +292,7 @@ final class StreamSession: ObservableObject {
         closeSocket()
         useHTTP = true
         status = "Streaming (HTTPS)"
+        sendCycleIfShared()
     }
 
     private func flushHTTP(final: Bool) {
@@ -281,6 +323,7 @@ final class StreamSession: ObservableObject {
             if (response as? HTTPURLResponse)?.statusCode == 401 { status = "Code expired. Pair again."; return }
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             for message in json?["messages"] as? [[String: Any]] ?? [] { handle(message) }
+            for haptic in json?["haptics"] as? [[String: Any]] ?? [] { playHaptic(haptic) }
         } catch {
             if isStreaming { status = "Network error, retrying…" }  // the next post retries
         }
@@ -300,6 +343,9 @@ final class StreamSession: ObservableObject {
             socketReady = true; everReady = true; reconnectAttempts = 0
             status = "Streaming"
             enqueue(Data())
+            sendCycleIfShared()
+        case "haptic":
+            playHaptic(message)
         case "result":
             let transcript = message["transcript"] as? String ?? ""
             if message["is_final"] as? Bool == true {

@@ -59,6 +59,9 @@ private struct StreamContent: View {
                     }
                 }
                 Text(session.status).font(.footnote).foregroundStyle(.secondary)
+                if let reason = session.hapticReason {
+                    Label(reason, systemImage: "hand.tap").font(.footnote).foregroundStyle(.yellow)
+                }
 
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 2) {
                     row("Heart rate", sensors.heartRate.map { "\(Int($0)) bpm" })
@@ -71,6 +74,11 @@ private struct StreamContent: View {
 
                 Toggle("Record audio too", isOn: $session.recordAudio)
                     .disabled(session.isStreaming)
+
+                Toggle("Share cycle dates", isOn: $session.shareCycle)
+                    .onChange(of: session.shareCycle) { _, _ in session.shareCycleChanged() }
+                Text(session.cycleNote ?? "Off by default. When on, sends the first day of each period you logged in Health (last 12 months) to your page. No flow levels, no predictions.")
+                    .font(.caption2).foregroundStyle(.secondary)
 
                 Text(sharingText).font(.caption2).foregroundStyle(.secondary)
 
@@ -94,7 +102,7 @@ private struct StreamContent: View {
         let audio = session.recordAudio
             ? "Microphone audio is sent too and transcribed by Deepgram."
             : "No audio is sent."
-        return "While streaming, heart rate, steps, active energy, activity and whether the screen is awake go to \(session.host) about once a second and on to your paired page. \(audio) Nothing is saved on the watch or in Health."
+        return "While streaming, heart rate, steps, active energy, activity and whether the screen is awake go to \(session.host) about once a second and on to your paired page. \(audio) Nothing is saved on the watch or in Health. Your page can tap your wrist with a haptic."
     }
 
     @ViewBuilder private func row(_ label: String, _ value: String?) -> some View {

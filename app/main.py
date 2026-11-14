@@ -8,6 +8,7 @@ import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -409,6 +410,9 @@ class Pairing:
     device: str = ""
     http: dict | None = None  # HTTP-fallback audio session: queue, outbox, task
     sensors: dict | None = None  # HTTP sensors session: last frame time, watchdog task
+    sockets: set = field(default_factory=set)  # watch-side WebSockets, for haptics
+    haptics: list = field(default_factory=list)  # pending haptics for an HTTPS watch (max 3)
+    last_haptic: float = 0.0
 
 
 pairings: dict[str, Pairing] = {}
@@ -494,8 +498,13 @@ async def watch_feed(client: WebSocket):
         pairing.feeds.add(client)
         if pairing.watches:
             await client.send_json({"type": "watch_connected", "device": pairing.device})
-        while (await client.receive())["type"] != "websocket.disconnect":
-            pass
+        while (message := await client.receive())["type"] != "websocket.disconnect":
+            try:
+                frame = json.loads(message.get("text") or "")
+            except ValueError:
+                continue
+            if isinstance(frame, dict) and frame.get("type") == "haptic":
+                await client.send_json(await send_haptic(pairing, frame))
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
@@ -541,6 +550,71 @@ def sensor_forwarder(pairing: Pairing, device: str) -> Callable[[dict], Awaitabl
     return forward
 
 
+# Cycle dates: only period start days the user logged in Apple Health, sent by the watch after an explicit
+# opt-in. Forwarded to feeds and never stored; nothing here predicts or infers anything from them.
+CYCLE_MAX_ENTRIES = 24
+CYCLE_MAX_AGE_DAYS = 731
+
+
+def clean_cycle(frame: dict, device: str) -> dict | None:
+    """Keep valid ISO dates (not in the future, within 2 years); None if the frame is not a usable list."""
+    starts = frame.get("period_starts")
+    if not isinstance(starts, list) or len(starts) > CYCLE_MAX_ENTRIES:
+        return None
+    # The watch uses its local calendar; allow one day ahead of UTC for time zones east of it.
+    today = datetime.now(timezone.utc).date()
+    valid = set()
+    for value in starts:
+        if not isinstance(value, str) or len(value) != 10:
+            continue
+        try:
+            day = date.fromisoformat(value)
+        except ValueError:
+            continue
+        if today - timedelta(days=CYCLE_MAX_AGE_DAYS) <= day <= today + timedelta(days=1):
+            valid.add(day.isoformat())
+    return {"type": "cycle", "period_starts": sorted(valid), "device": device}
+
+
+async def forward_cycle(pairing: Pairing, frame: dict, device: str) -> bool:
+    cleaned = clean_cycle(frame, device)
+    if cleaned is None:
+        return False
+    await fanout(pairing, cleaned)
+    return True
+
+
+# Haptics: the paired page may tap the wrist. Delivered over the watch's WebSocket, or queued for the
+# next HTTPS sensors response when the watch uses the fallback.
+HAPTIC_KINDS = {"notification", "success", "directionUp", "click"}
+HAPTIC_MIN_INTERVAL = 3.0
+HAPTIC_QUEUE_MAX = 3
+
+
+async def send_haptic(pairing: Pairing, frame: dict) -> dict:
+    if not pairing.watches and not pairing.sockets:
+        return {"type": "error", "message": "No watch connected"}
+    now = time.monotonic()
+    if now - pairing.last_haptic < HAPTIC_MIN_INTERVAL:
+        return {"type": "error", "message": "Haptics are limited to one every 3 seconds."}
+    kind = frame.get("kind") if frame.get("kind") in HAPTIC_KINDS else "notification"
+    reason = frame.get("reason")
+    haptic = {"type": "haptic", "kind": kind, "reason": reason.strip()[:80] if isinstance(reason, str) else ""}
+    delivered = False
+    for socket in list(pairing.sockets):
+        try:
+            await socket.send_json(haptic)
+            delivered = True
+        except (WebSocketDisconnect, RuntimeError):
+            pairing.sockets.discard(socket)
+    if not delivered:
+        if not pairing.watches:
+            return {"type": "error", "message": "No watch connected"}
+        pairing.haptics = (pairing.haptics + [haptic])[-HAPTIC_QUEUE_MAX:]
+    pairing.last_haptic = now
+    return {"type": "haptic_sent"}
+
+
 def watch_receiver(client: WebSocket, forward: Callable[[dict], Awaitable[bool]]) -> Receive:
     """Like socket_receiver, but sensor text frames are forwarded instead of ending the stream."""
     async def receive() -> bytes | str | None:
@@ -554,7 +628,7 @@ def watch_receiver(client: WebSocket, forward: Callable[[dict], Awaitable[bool]]
                 frame = json.loads(message.get("text") or "")
             except ValueError:
                 frame = None
-            if isinstance(frame, dict) and frame.get("type") == "sensors":
+            if isinstance(frame, dict) and frame.get("type") in {"sensors", "cycle"}:
                 await forward(frame)
                 continue
             return "stop"
@@ -577,7 +651,15 @@ async def watch_stream(client: WebSocket):
         return await fail('Use format "sensors" or "pcm16" (16 kHz mono linear16 PCM).')
     device = watch_device(hello.get("device"))
     on_ready, on_end = watch_hooks(pairing, device)
-    receive = watch_receiver(client, sensor_forwarder(pairing, device))
+    sensors = sensor_forwarder(pairing, device)
+
+    async def forward(frame: dict) -> bool:
+        if frame.get("type") == "cycle":
+            return await forward_cycle(pairing, frame, device)
+        return await sensors(frame)
+
+    receive = watch_receiver(client, forward)
+    pairing.sockets.add(client)
 
     if source == "sensors":
         try:
@@ -590,6 +672,7 @@ async def watch_stream(client: WebSocket):
         except (WebSocketDisconnect, RuntimeError):
             return
         finally:
+            pairing.sockets.discard(client)
             on_end()
 
     async def send(message: dict) -> None:
@@ -600,6 +683,7 @@ async def watch_stream(client: WebSocket):
     try:
         sent = await relay_audio("pcm16", receive, send, fail, on_ready)
     finally:
+        pairing.sockets.discard(client)
         on_end()
     await close_cleanly(client, sent)
 
@@ -636,7 +720,28 @@ async def watch_sensors(request: Request, x_watch_code: str = Header(default="")
         session["task"] = asyncio.create_task(watchdog())
         pairing.sensors = session
     session["last"] = time.monotonic()
-    return {"forwarded": await session["forward"](frame)}
+    response: dict = {"forwarded": await session["forward"](frame)}
+    if pairing.haptics:
+        response["haptics"], pairing.haptics = pairing.haptics, []
+    return response
+
+
+@app.post("/api/watch/cycle")
+async def watch_cycle(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+    """HTTPS form of the cycle frame: logged period start dates, forwarded to feeds and not stored."""
+    pairing = find_pairing(x_watch_code)
+    if not pairing:
+        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    body = await request.body()
+    if len(body) > 4096:
+        raise HTTPException(413, "Cycle frame too large.")
+    try:
+        frame = json.loads(body)
+    except ValueError:
+        raise HTTPException(422, "Send one JSON cycle frame.") from None
+    if not isinstance(frame, dict) or not await forward_cycle(pairing, frame, watch_device(x_watch_device)):
+        raise HTTPException(422, "Send period_starts as a list of at most 24 ISO dates.")
+    return {"forwarded": True}
 
 
 # HTTP fallback for real watches: watchOS blocks URLSessionWebSocketTask for ordinary apps (Apple TN3135),

@@ -22,6 +22,11 @@ Apple Watch app ──(code)──> Threadline server ──> paired web page(s)
 3. Tap **Start streaming**. The first time, watchOS asks for Health access (heart rate and active energy, plus workout write access, which a workout session needs), Motion access, and Microphone access if audio is on.
 4. The screen lists exactly what is being shared and with which host.
 
+## Cycle dates (opt-in) and haptics
+
+- **Share cycle dates** is off by default. When you turn it on, the watch asks Health for read access to menstrual flow, reads the flow days you logged in the last 12 months, groups consecutive days into periods and sends only each period's first day, once per streaming session: `{"type":"cycle","period_starts":["YYYY-MM-DD",…]}` (ascending, at most 24, no flow levels, no predictions). The server checks the dates (valid ISO date, within 2 years, not after tomorrow UTC), forwards them to the paired page and stores nothing.
+- **Haptics:** the paired page can send `{"type":"haptic","kind":"notification"|"success"|"directionUp"|"click","reason":"…"}` on its feed socket (at most one every 3 seconds per code). The watch plays the haptic and shows the reason for a few seconds.
+
 ## Run in the watchOS Simulator
 
 You need Xcode with a watchOS simulator runtime. XcodeGen is optional: the generated `ThreadlineWatch.xcodeproj` is checked in. If you edit `project.yml`, run `xcodegen generate` in this folder.
@@ -55,4 +60,4 @@ To test against a server on your Mac, run it with `uv run uvicorn app.main:app -
 
 Watch → `WS /api/watch/stream`. The first text frame is `{"code","device","format":"sensors"|"pcm16"}`, and the server replies `{"type":"ready","source":…}`. In `sensors` mode, the watch sends text frames like `{"type":"sensors","t","heart_rate","steps","active_kcal","activity","wrist_raised"}`. In `pcm16` mode, the watch sends binary frames of 16 kHz mono little-endian Int16 PCM (100 ms each), and can interleave sensor text frames on the same socket. Sending `{"type":"stop"}` ends the session.
 
-HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post.
+HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post. Cycle dates go as the same `cycle` text frame on the socket, or to `POST /api/watch/cycle`. Haptics reach the watch as a `{"type":"haptic","kind","reason"}` text frame, or in the next `POST /api/watch/sensors` response as `{"forwarded":…,"haptics":[…]}` (up to 3 queued). The feed replies `{"type":"haptic_sent"}` or `{"type":"error","message":…}`.

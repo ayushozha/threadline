@@ -28,7 +28,7 @@
 		<true/>
 	</dict>
 	<key>NSHealthShareUsageDescription</key>
-	<string>While you stream, Threadline reads your live heart rate and active energy and sends them to your paired Threadline page. Nothing is saved.</string>
+	<string>While you stream, Threadline reads your live heart rate and active energy and sends them to your paired Threadline page. Only if you turn on Share cycle dates, it also reads the period days you logged in Health, only to show your own dates in Threadline. Nothing is saved.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Threadline runs a workout session only to read live heart rate while streaming. The workout is discarded and not saved to Health.</string>
 	<key>NSMicrophoneUsageDescription</key>

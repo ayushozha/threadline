@@ -417,3 +417,91 @@ def test_watch_sensors_over_http(client, monkeypatch):
             assert feed.receive_json() == {"type": "watch_connected", "device": "Apple Watch"}
             assert feed.receive_json() == {"type": "sensors", "heart_rate": 70.0, "device": "Apple Watch"}
             assert feed.receive_json() == {"type": "watch_disconnected"}  # stopped posting
+
+
+def pair_and_feed(client, feed):
+    code = client.post("/api/watch/pair", headers={"X-App-Token": "test-only-access"}).json()["code"]
+    feed.send_json({"token": "test-only-access", "code": code})
+    assert feed.receive_json() == {"type": "waiting"}
+    return code
+
+
+def recent_days(*offsets):
+    from datetime import date, timedelta
+    return [(date.today() - timedelta(days=n)).isoformat() for n in offsets]
+
+
+def test_watch_cycle_frame_forwarded_over_ws_with_invalid_dates_dropped(client):
+    older, newer = recent_days(60, 30)
+    with client:
+        with client.websocket_connect("/api/watch/feed") as feed:
+            code = pair_and_feed(client, feed)
+            with client.websocket_connect("/api/watch/stream") as watch:
+                watch.send_json({"code": code, "device": "Apple Watch", "format": "sensors"})
+                assert watch.receive_json()["type"] == "ready"
+                assert feed.receive_json()["type"] == "watch_connected"
+                watch.send_json({"type": "cycle", "period_starts": [newer, "2099-01-01", "2020-01-01", "nope", 5, older, newer],
+                                 "flow": "heavy"})
+                assert feed.receive_json() == {"type": "cycle", "period_starts": [older, newer], "device": "Apple Watch"}
+                watch.send_json({"type": "cycle", "period_starts": recent_days(*range(25))})  # too many: dropped
+                watch.send_json({"type": "cycle", "period_starts": []})
+                assert feed.receive_json() == {"type": "cycle", "period_starts": [], "device": "Apple Watch"}
+                watch.send_json({"type": "stop"})
+                assert watch.receive_json()["type"] == "closed"
+
+
+def test_watch_cycle_over_http(client):
+    (day,) = recent_days(10)
+    with client:
+        assert client.post("/api/watch/cycle", headers={"X-Watch-Code": "bad"}, json={"period_starts": []}).status_code == 401
+        with client.websocket_connect("/api/watch/feed") as feed:
+            code = pair_and_feed(client, feed)
+            headers = {"X-Watch-Code": code, "X-Watch-Device": "Wrist"}
+            response = client.post("/api/watch/cycle", headers=headers, json={"type": "cycle", "period_starts": [day, "2099-12-31"]})
+            assert response.json() == {"forwarded": True}
+            assert feed.receive_json() == {"type": "cycle", "period_starts": [day], "device": "Wrist"}
+            assert client.post("/api/watch/cycle", headers=headers, json={"period_starts": "2026-01-01"}).status_code == 422
+            assert client.post("/api/watch/cycle", headers=headers, json={"period_starts": recent_days(*range(25))}).status_code == 422
+
+
+def test_watch_haptic_reaches_ws_watch_and_is_rate_limited(client, monkeypatch):
+    with client:
+        with client.websocket_connect("/api/watch/feed") as feed:
+            code = pair_and_feed(client, feed)
+            feed.send_json({"type": "haptic", "kind": "success", "reason": "Check in"})
+            assert feed.receive_json() == {"type": "error", "message": "No watch connected"}
+            with client.websocket_connect("/api/watch/stream") as watch:
+                watch.send_json({"code": code, "device": "Apple Watch", "format": "sensors"})
+                assert watch.receive_json()["type"] == "ready"
+                assert feed.receive_json()["type"] == "watch_connected"
+                feed.send_json({"type": "haptic", "kind": "buzz", "reason": "x" * 100})
+                assert feed.receive_json() == {"type": "haptic_sent"}
+                assert watch.receive_json() == {"type": "haptic", "kind": "notification", "reason": "x" * 80}
+                feed.send_json({"type": "haptic", "kind": "click", "reason": "again"})  # within 3 s
+                assert feed.receive_json()["type"] == "error"
+                main.pairings[code].last_haptic -= 3
+                feed.send_json({"type": "haptic", "kind": "click", "reason": "again"})
+                assert feed.receive_json() == {"type": "haptic_sent"}
+                assert watch.receive_json() == {"type": "haptic", "kind": "click", "reason": "again"}
+                watch.send_json({"type": "stop"})
+                assert watch.receive_json()["type"] == "closed"
+
+
+def test_watch_haptic_queued_for_https_sensors_response(client):
+    with client:
+        with client.websocket_connect("/api/watch/feed") as feed:
+            code = pair_and_feed(client, feed)
+            headers = {"X-Watch-Code": code}
+            assert client.post("/api/watch/sensors", headers=headers, json={"type": "sensors"}).json() == {"forwarded": True}
+            assert feed.receive_json()["type"] == "watch_connected"
+            assert feed.receive_json()["type"] == "sensors"
+            for kind in ("directionUp", "success", "click", "notification"):
+                main.pairings[code].last_haptic = 0
+                feed.send_json({"type": "haptic", "kind": kind, "reason": kind})
+                assert feed.receive_json() == {"type": "haptic_sent"}
+            import time
+            time.sleep(0.25)
+            body = client.post("/api/watch/sensors", headers=headers, json={"type": "sensors"}).json()
+            assert body["forwarded"] is True
+            assert [h["kind"] for h in body["haptics"]] == ["success", "click", "notification"]  # queue keeps 3
+            assert "haptics" not in client.post("/api/watch/sensors", headers=headers, json={}).json()
