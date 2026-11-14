@@ -1,19 +1,34 @@
 # Threadline
 
-Personal memory, with the thread still attached. A VexoHacks starter for exploring lived-experience reflection and resuming interrupted routines.
+Personal memory, with the thread still attached. Built at VexoHacks (AI wearables, Y Combinator, November 14, 2026).
 
-[Live prototype](https://threadline.ayushojha.com) · [API setup](docs/API_SETUP.md) · [Deployment](deploy/README.md)
+[Live prototype](https://threadline.ayushojha.com) · [Demo script](docs/DEMO.md) · [API setup](docs/API_SETUP.md) · [Deployment](deploy/README.md)
+
+## The problem
+
+When mood, energy, or concentration fluctuate, it can be hard to reconstruct what happened, recognize your own patterns, and remember what helped — without the extra work of keeping a diary. Threadline keeps your own words from a consented conversation, with their time and source, and carries out only the support you chose in advance.
+
+The chain: **captured statement → your own memory, attributed to you → relevant earlier evidence → a preference you saved → one action you approve.**
+
+Threadline does not tell anyone their feelings are invalid, infer hormones, diagnose, or judge capacity. Cycle timing, when present, is optional self-reported context — never a cause.
 
 ## Status
 
 | Surface | Status |
 | --- | --- |
-| Two fictional memory scenarios, editable notes, local response | Implemented prototype |
+| Two scenarios (personal reflection, resume a routine) with labeled fictional history | Implemented |
+| Browser-microphone capture: consent, start/stop, recording state, playback, delete | Implemented (browser mic, not the bracelet) |
+| Review before saving: pick which speaker is you, correct text, drop other people's speech | Implemented |
+| Correct or delete saved notes; source badges (fictional / typed / mic / file / scripted) | Implemented |
+| Saved support preferences matched against your own words (local keyword rule, labeled) | Implemented; not AI |
+| Support offer showing why: the new statement, the preference, and earlier dated evidence | Implemented |
+| Approved action: find time, propose, re-check, recover from a conflict, create, undo | Implemented on a **local demo calendar** in the browser; no external calendar |
+| Scripted demo conversation for use without microphone or keys | Implemented; labeled as scripted |
 | Gemini grounded-response adapter | Implemented; requires your API key and accessible model |
 | Deepgram audio-file transcription | Implemented; requires your API key |
 | Vexo live BLE audio and motion | Pending the event Bluetooth contract |
 | Pipecat streaming voice, ElevenLabs playback | Planned; not connected |
-| Calendar, purchases, health assessment | Not implemented |
+| Google/real calendar, purchases, messages, health assessment | Not implemented |
 
 ## Run locally (PowerShell)
 
@@ -31,13 +46,15 @@ The root task created an ignored `.env` with a generated access token. Fill the 
 
 ## Minimal architecture
 
-Browser memory and consent controls → authenticated FastAPI adapters → Gemini / Deepgram. Local demo replies do not use AI. Responses identify source note IDs. Only explicitly submitted notes or audio reach providers; the server does not persist them. The public deployment is for synthetic demonstrations until individual accounts and data controls are implemented.
+Browser memory and consent controls → authenticated FastAPI adapters → Gemini / Deepgram, plus a stateless demo-calendar planner (`app/schedule.py`). Local demo replies and preference matching do not use AI. Responses identify source note IDs. Only explicitly submitted notes or audio reach providers; the server does not persist them. The public deployment is for synthetic demonstrations until individual accounts and data controls are implemented.
 
 ## API
 
 - `GET /api/health`: public deployment health.
 - `GET /api/config`: provider-readiness flags; requires `X-App-Token`.
 - `POST /api/reflect`: `{mode, question, notes:[{id,text,at}]}`; requires token. Stateless grounded response.
+- `POST /api/schedule/find-slot`: `{events, date, window_start, window_end, duration_minutes, skip}`; public, stateless. Returns the first free slot and every time it checked. Operates only on the demo calendar the browser sends.
+- `POST /api/schedule/book`: `{events, event}`; public, stateless. Re-checks for conflicts and returns `409` with the conflicting events, or the created event. Nothing is stored server-side.
 - `POST /api/transcribe`: raw audio body and supported `audio/*` content type, maximum 10 MB; requires token. Speaker labels are not identity verification. Automatic live BLE capture is not connected.
 
 ## Repository

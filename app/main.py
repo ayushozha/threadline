@@ -10,9 +10,11 @@ from typing import Literal
 import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from app.schedule import BookRequest, SlotRequest, book, find_slot
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -62,6 +64,8 @@ class Note(BaseModel):
     id: str = Field(min_length=1, max_length=100)
     text: str = Field(min_length=1, max_length=4000)
     at: str = Field(max_length=100)
+    source: str = Field(default="", max_length=40)
+    context: str = Field(default="", max_length=200)
 
 
 class Reflection(BaseModel):
@@ -85,6 +89,8 @@ async def reflect(body: Reflection):
         "Cite each factual memory using its exact note ID in square brackets. Say when evidence is missing. "
         "Do not infer a speaker's identity, emotions, hormones, cycle phase, diagnosis, capacity, or safety. "
         "Do not treat a reported action as objectively verified. Never invent memories or causal medical patterns. "
+        "A note whose source is 'fictional' is labeled demo history; say so if you cite it. "
+        "Any 'context' field (such as approximate cycle timing) is optional self-reported context, never a cause. "
         "For reflection, help compare explicit self-reports and ask what support the user wants. "
         "For routines, recover the stated intention and offer one small next step, asking about unknown progress. "
         "Never claim an external action was performed; no external action tools are connected. "
@@ -151,6 +157,19 @@ async def transcribe(request: Request):
         raise HTTPException(502, f"Deepgram request failed ({exc.response.status_code}). Check server configuration.") from None
     except (httpx.RequestError, KeyError, IndexError, ValueError, TypeError):
         raise HTTPException(502, "Transcription unavailable. Please retry.") from None
+
+
+@app.post("/api/schedule/find-slot")
+async def schedule_find_slot(body: SlotRequest):
+    """Check the browser-held demo calendar for a free slot. No external calendar."""
+    return find_slot(body)
+
+
+@app.post("/api/schedule/book")
+async def schedule_book(body: BookRequest):
+    """Re-check availability, then return the demo calendar with the approved event."""
+    ok, result = book(body)
+    return result if ok else JSONResponse(result, status_code=409)
 
 
 @app.get("/")
