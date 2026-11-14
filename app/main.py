@@ -729,7 +729,7 @@ async def watch_feed(client: WebSocket):
     if not socket_token_ok(client, hello):
         return await fail("Enter the project access token to use live providers.")
     pairing = find_pairing(hello.get("code"))
-    if not pairing:
+    if not pairing or not watch_claim.claimed(pairing):
         return await fail("Unknown or expired pairing code. Create a new one.")
     try:
         await client.send_json({"type": "waiting"})
@@ -964,8 +964,8 @@ async def watch_stream(client: WebSocket):
     if (hello := await socket_hello(client, fail)) is None:
         return
     pairing = find_pairing(hello.get("code"))
-    if not pairing:
-        return await fail("Unknown or expired pairing code. Create a new one on the website.")
+    if problem := watch_claim.watch_gate(pairing, hello.get("watch_key")):
+        return await fail(problem[1])
     source = hello.get("format", "pcm16")
     if source not in {"pcm16", "sensors"}:
         return await fail('Use format "sensors" or "pcm16" (16 kHz mono linear16 PCM).')
@@ -1011,11 +1011,10 @@ async def watch_stream(client: WebSocket):
 
 
 @app.post("/api/watch/sensors")
-async def watch_sensors(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+async def watch_sensors(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default=""),
+                       x_watch_key: str = Header(default="")):
     """HTTP form of a sensors frame for real watches (no WebSocket). A watch that stops posting is reported gone."""
-    pairing = find_pairing(x_watch_code)
-    if not pairing:
-        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
     body = await request.body()
     if len(body) > 4096:
         raise HTTPException(413, "Sensor frame too large.")
@@ -1051,11 +1050,10 @@ async def watch_sensors(request: Request, x_watch_code: str = Header(default="")
 
 
 @app.post("/api/watch/mood")
-async def watch_mood(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+async def watch_mood(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default=""),
+                    x_watch_key: str = Header(default="")):
     """HTTPS form of the watch's answer to log_mood: {"type": "mood_logged" | "mood_declined" | "mood_failed"}."""
-    pairing = find_pairing(x_watch_code)
-    if not pairing:
-        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
     body = await request.body()
     try:
         frame = json.loads(body) if len(body) <= 1024 else None
@@ -1067,11 +1065,10 @@ async def watch_mood(request: Request, x_watch_code: str = Header(default=""), x
 
 
 @app.post("/api/watch/cycle")
-async def watch_cycle(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+async def watch_cycle(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default=""),
+                     x_watch_key: str = Header(default="")):
     """HTTPS form of the cycle frame: logged period start dates, forwarded to feeds and not stored."""
-    pairing = find_pairing(x_watch_code)
-    if not pairing:
-        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
     body = await request.body()
     if len(body) > 4096:
         raise HTTPException(413, "Cycle frame too large.")
@@ -1128,10 +1125,9 @@ def drain(session: dict) -> list[dict]:
 
 
 @app.post("/api/watch/audio")
-async def watch_audio(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
-    pairing = find_pairing(x_watch_code)
-    if not pairing:
-        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+async def watch_audio(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default=""),
+                     x_watch_key: str = Header(default="")):
+    pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
     audio = bytearray()
     async for chunk in request.stream():
         audio.extend(chunk)
@@ -1144,10 +1140,8 @@ async def watch_audio(request: Request, x_watch_code: str = Header(default=""), 
 
 
 @app.post("/api/watch/audio/stop")
-async def watch_audio_stop(x_watch_code: str = Header(default="")):
-    pairing = find_pairing(x_watch_code)
-    if not pairing:
-        raise HTTPException(401, "Unknown or expired pairing code.")
+async def watch_audio_stop(x_watch_code: str = Header(default=""), x_watch_key: str = Header(default="")):
+    pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
     session = pairing.http
     if not session:
         return {"messages": []}
@@ -1167,4 +1161,7 @@ async def index():
     return FileResponse(ROOT / "static" / "index.html")
 
 
+from app import watch_claim  # noqa: E402  (device-code pairing; imports this module)
+
+app.include_router(watch_claim.router)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")

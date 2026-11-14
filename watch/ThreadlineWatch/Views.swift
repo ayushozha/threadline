@@ -1,6 +1,71 @@
 import SwiftUI
 
-/// Screen 1: server address and the 6-digit code shown on the Threadline website.
+/// Start screen: the watch gets its own code and shows it; you enter it on the Threadline website.
+struct DeviceCodeView: View {
+    @EnvironmentObject var session: StreamSession
+    @StateObject private var pairing = DevicePairing()
+    @AppStorage("server") private var server = "https://threadline.ayushojha.com"
+    @State private var openStream = false
+    @State private var startedFor = ""
+
+    private var host: String { URL(string: server)?.host ?? server }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                if pairing.claimed {
+                    Text("Paired ✓").font(.title2.bold()).foregroundStyle(.green)
+                    Button("Open sensors") { openStream = true }.tint(.green)
+                    Button("Pair again") { pairing.begin(server: server); startedFor = server }
+                } else {
+                    Text("Pair on the website").font(.headline)
+                    if pairing.code.isEmpty {
+                        ProgressView()
+                    } else {
+                        Text(pairing.spacedCode)
+                            .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                            .minimumScaleFactor(0.6).lineLimit(1)
+                        Text("Enter \(pairing.spacedCode) at \(host)")
+                            .font(.footnote).multilineTextAlignment(.center)
+                    }
+                    Text(pairing.note ?? "Waiting…").font(.caption2).foregroundStyle(.secondary)
+                }
+                NavigationLink("Enter a code from the website instead") { PairView() }
+                    .font(.footnote)
+                NavigationLink("Server") { ServerView() }.font(.footnote)
+            }
+        }
+        .navigationTitle("Threadline")
+        .navigationDestination(isPresented: $openStream) {
+            StreamView(autoStart: true)
+                .onAppear { session.configure(server: pairing.server, code: pairing.code, watchKey: pairing.watchKey) }
+        }
+        .onAppear {
+            // First launch, or the server setting changed: get a fresh code.
+            if startedFor != server { startedFor = server; pairing.begin(server: server) }
+        }
+        .onChange(of: pairing.claimed) { _, claimed in
+            guard claimed else { return }
+            Task { try? await Task.sleep(for: .seconds(1)); if pairing.claimed { openStream = true } }
+        }
+    }
+}
+
+/// The server the watch talks to.
+struct ServerView: View {
+    @AppStorage("server") private var server = "https://threadline.ayushojha.com"
+
+    var body: some View {
+        Form {
+            Section("Server") {
+                TextField("https://…", text: $server).textContentType(.URL)
+            }
+        }
+        .navigationTitle("Server")
+    }
+}
+
+/// Fallback: server address and a 6-digit code created on the Threadline website.
 struct PairView: View {
     @EnvironmentObject var session: StreamSession
     @AppStorage("server") private var server = "https://threadline.ayushojha.com"
@@ -55,10 +120,15 @@ struct MoodConfirmView: View {
 struct StreamView: View {
     @EnvironmentObject var session: StreamSession
     @Environment(\.isLuminanceReduced) private var screenDimmed
+    var autoStart = false
 
     var body: some View {
         StreamContent(session: session, sensors: session.sensors)
             .onChange(of: screenDimmed, initial: true) { _, dimmed in session.wristRaised = !dimmed }
+            .task {
+                // After a device-code pairing, start right away (permission prompts still appear as usual).
+                if autoStart, !session.isStreaming { session.toggle() }
+            }
             .onDisappear { if session.isStreaming { session.toggle() } }
             .sheet(item: $session.moodRequest, onDismiss: { session.answerMood(save: false) }) { request in
                 MoodConfirmView(request: request) { session.answerMood(save: $0) }

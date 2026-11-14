@@ -30,6 +30,7 @@ final class StreamSession: ObservableObject {
     let sensors = Sensors()
     @Published private(set) var server = URL(string: "https://threadline.ayushojha.com")!
     private var code = ""
+    private var watchKey = ""  // only for codes the watch started itself; kept in memory only
     private let device = WKInterfaceDevice.current().name
 
     private let engine = AVAudioEngine()
@@ -50,9 +51,10 @@ final class StreamSession: ObservableObject {
 
     var host: String { server.host ?? server.absoluteString }
 
-    func configure(server: String, code: String) {
+    func configure(server: String, code: String, watchKey: String = "") {
         if let url = URL(string: server.trimmingCharacters(in: .whitespaces)) { self.server = url }
         self.code = code
+        self.watchKey = watchKey
     }
 
     func toggle() {
@@ -289,7 +291,8 @@ final class StreamSession: ObservableObject {
         let task = URLSession.shared.webSocketTask(with: url)
         socket = task
         task.resume()
-        let hello = ["code": code, "device": device, "format": recordAudio ? "pcm16" : "sensors"]
+        var hello = ["code": code, "device": device, "format": recordAudio ? "pcm16" : "sensors"]
+        if !watchKey.isEmpty { hello["watch_key"] = watchKey }
         if let data = try? JSONSerialization.data(withJSONObject: hello), let text = String(data: data, encoding: .utf8) {
             task.send(.string(text)) { _ in }
         }
@@ -364,12 +367,15 @@ final class StreamSession: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(code, forHTTPHeaderField: "X-Watch-Code")
+        if !watchKey.isEmpty { request.setValue(watchKey, forHTTPHeaderField: "X-Watch-Key") }
         request.setValue(device, forHTTPHeaderField: "X-Watch-Device")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if (response as? HTTPURLResponse)?.statusCode == 401 { status = "Code expired. Pair again."; return }
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            if statusCode == 401 { status = "Code expired. Pair again."; return }
+            if statusCode == 403 { status = "Not claimed yet. Enter the code on the website."; return }
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             for message in json?["messages"] as? [[String: Any]] ?? [] { handle(message) }
             for haptic in json?["haptics"] as? [[String: Any]] ?? [] { playHaptic(haptic) }
@@ -413,6 +419,107 @@ final class StreamSession: ObservableObject {
             if !isStreaming { status = "Stopped"; closeSocket() }
         default:
             break
+        }
+    }
+}
+
+
+/// Device-code pairing: the watch asks the server for a code (`POST /api/watch/start`), shows it, and polls
+/// `GET /api/watch/status` every 2 s until the code is entered on the website. The code and watch key live in
+/// memory only, so relaunching the app shows a fresh code.
+@MainActor
+final class DevicePairing: ObservableObject {
+    @Published private(set) var code = ""
+    @Published private(set) var claimed = false
+    @Published private(set) var note: String?
+    private(set) var watchKey = ""
+    private(set) var server = ""
+    private var task: Task<Void, Never>?
+    private let device = WKInterfaceDevice.current().name
+
+    /// "482913" -> "482 913"
+    var spacedCode: String { code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code }
+
+    func begin(server: String) {
+        task?.cancel()
+        self.server = server.trimmingCharacters(in: .whitespaces)
+        code = ""; watchKey = ""; claimed = false; note = nil
+        task = Task { await run() }
+    }
+
+    func cancel() {
+        task?.cancel(); task = nil
+    }
+
+    private func url(_ path: String) -> URL? {
+        guard let base = URL(string: server), base.host != nil,
+              var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        parts.path = path
+        return parts.url
+    }
+
+    private func run() async {
+        while !Task.isCancelled {
+            guard let started = await start() else {
+                try? await Task.sleep(for: .seconds(5)); continue
+            }
+            code = started.code; watchKey = started.key; note = nil
+            let expiry = Date().addingTimeInterval(TimeInterval(started.expiresIn))
+            while !Task.isCancelled, Date() < expiry {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                switch await poll() {
+                case .claimed:
+                    claimed = true
+                    WKInterfaceDevice.current().play(.success)
+                    return
+                case .gone:
+                    break
+                case .waiting, .offline:
+                    continue
+                }
+                break  // .gone: get a new code
+            }
+        }
+    }
+
+    private func start() async -> (code: String, key: String, expiresIn: Int)? {
+        guard let url = url("/api/watch/start") else { note = "Check the server address"; return nil }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["device": String(device.prefix(60))])
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let code = json?["code"] as? String, let key = json?["watch_key"] as? String else {
+                note = json?["detail"] as? String ?? "Server error. Retrying…"
+                return nil
+            }
+            return (code, key, json?["expires_in"] as? Int ?? 600)
+        } catch {
+            note = "Cannot reach \(URL(string: server)?.host ?? server). Retrying…"
+            return nil
+        }
+    }
+
+    private enum Poll { case waiting, claimed, gone, offline }
+
+    private func poll() async -> Poll {
+        guard let url = url("/api/watch/status") else { return .gone }
+        var request = URLRequest(url: url)
+        request.setValue(code, forHTTPHeaderField: "X-Watch-Code")
+        request.setValue(watchKey, forHTTPHeaderField: "X-Watch-Key")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if (response as? HTTPURLResponse)?.statusCode == 404 { return .gone }
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            note = nil
+            return json?["claimed"] as? Bool == true ? .claimed : .waiting
+        } catch {
+            note = "Offline. Still trying…"
+            return .offline
         }
     }
 }

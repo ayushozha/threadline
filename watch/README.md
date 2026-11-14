@@ -12,15 +12,31 @@ Apple Watch app ──(code)──> Threadline server ──> paired web page(s)
 ```
 
 - A web page cannot connect to an Apple Watch. The watch runs this app and talks to the Threadline server. The page subscribes to the server.
-- The 6-digit pairing code is the only credential on the watch. No API keys or access tokens go on the watch. Deepgram's key stays on the server.
+- The 6-digit pairing code (plus, for codes the watch started, a random watch key) is the only credential on the watch. No API keys or access tokens go on the watch. Deepgram's key stays on the server.
 - The watch stores no audio and no readings. HealthKit runs a workout session only to read live heart rate, and the app discards that workout when you stop, so nothing is saved to Health. The server stores nothing either: it forwards readings as they arrive, and the pairing registry lives in memory only.
 
-## Pair
+## Pair (from the watch)
 
-1. On the Threadline website, create a watch pairing (`POST /api/watch/pair`, which needs the access token). The page shows a 6-digit code. An unused code expires after 10 minutes. After a watch attaches, the code keeps working for reconnects for 2 hours.
-2. On the watch, check the server (the default is `https://threadline.ayushojha.com`), enter the code and tap **Continue**.
-3. Tap **Start streaming**. The first time, watchOS asks for Health access (heart rate and active energy, plus workout write access, which a workout session needs), Motion access, and Microphone access if audio is on.
-4. The screen lists exactly what is being shared and with which host.
+1. Open Threadline on the watch. It asks the server (default `https://threadline.ayushojha.com`, change it under **Server**) for a code and shows it large: **Enter 482 913 at threadline.ayushojha.com**.
+2. On the Threadline website, enter that code. The watch checks every 2 seconds; when the code is claimed it taps your wrist, shows **Paired ✓** and starts streaming sensors on its own. The first time, watchOS asks for Health access (heart rate and active energy, plus workout write access, which a workout session needs), Motion access, and Microphone access if audio is on.
+3. An unclaimed code expires after 10 minutes and the watch fetches a new one by itself. A claimed code works for reconnects for 2 hours. The code and its watch key are kept in memory only, so relaunching the app shows a new code.
+4. The streaming screen lists exactly what is being shared and with which host.
+
+Under the hood (device-code pattern): `POST /api/watch/start` `{"device"}` (no token; 30 per 10 min per IP) returns `{"code","watch_key","expires_in":600}`; the watch polls `GET /api/watch/status` with `X-Watch-Code` + `X-Watch-Key`; the website calls `POST /api/watch/claim` `{"code"}` (signed in) and then opens the usual `WS /api/watch/feed`. For watch-started codes every watch endpoint also needs the key (`X-Watch-Key` header, or `"watch_key"` in the stream socket's first message) and answers 403 until the code is claimed.
+
+**Fallback:** tap **Enter a code from the website instead** to use the older flow, where the website creates the code (`POST /api/watch/pair`) and you type it on the watch.
+
+## Install on your own Apple Watch
+
+You need a Mac with Xcode, the iPhone your Apple Watch is paired with, and an Apple Account (a free one works).
+
+1. **Turn on Developer Mode on the watch.** Connect the iPhone to the Mac once so Xcode sees the watch, then on the watch open **Settings > Privacy & Security > Developer Mode**, turn it on, tap **Restart**, and after the restart tap **Turn On** (and **Trust** with your passcode if asked). Apple: [Enabling Developer Mode on a device](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device).
+2. **Sign in and pick your team.** In Xcode, **Settings > Apple Accounts**, add your Apple Account. Open `watch/ThreadlineWatch.xcodeproj`, select the **ThreadlineWatch** target, **Signing & Capabilities**, keep **Automatically manage signing**, and choose your team (with a free account it is "Your Name (Personal Team)"). If `com.threadline.watch` is already taken, change the bundle id to something unique like `com.yourname.threadline.watch`. Keep the **HealthKit** capability.
+3. **Run it.** With the iPhone unlocked, nearby and on the same network as the Mac, choose your Apple Watch as the run destination and press **Run** (⌘R). The first install over the iPhone can take several minutes. Apple: [Running your app on simulated or physical devices](https://developer.apple.com/documentation/xcode/running-your-app-on-simulated-or-physical-devices).
+4. **Trust prompts.** If the watch or Xcode asks you to trust the Mac or the developer, accept it on the device (the Developer Mode page above covers the **Trust** dialog).
+5. Open Threadline on the watch, then pair as described above.
+
+**Free personal team limits** (Apple: [Developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account/)): provisioning profiles for apps installed on a device expire 7 days after issue, so after a week you rebuild and reinstall from Xcode. A personal team can also register at most 3 devices and 10 App IDs (each expiring after 7 days) and install at most 3 apps per device.
 
 ## Cycle dates (opt-in) and haptics
 
@@ -47,12 +63,9 @@ Alternatively, open `ThreadlineWatch.xcodeproj`, pick a watch simulator and pres
 
 To test against a server on your Mac, run it with `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000` and set the watch's server to `http://127.0.0.1:8000`. The simulator shares the Mac's network. A workout session in the simulator produces simulated heart rate. Steps and activity stay at "–" in the simulator because it has no motion hardware.
 
-## Run on a real Apple Watch (manual steps)
+## Real watch network notes
 
-1. Open `ThreadlineWatch.xcodeproj` in Xcode. Under **Signing & Capabilities**, choose your team (a free Apple ID works for personal devices). If the bundle id `com.threadline.watch` is taken, change it.
-2. Keep the **HealthKit** capability (`ThreadlineWatch.entitlements`).
-3. Turn on Developer Mode on the watch, select it as the run destination, and press Run. The watch must be paired with an iPhone that is signed in to the same Apple ID.
-4. Use `https://threadline.ayushojha.com` or another HTTPS server. On a real watch, a LAN `http://192.168.x.x:8000` address works only when the watch and the Mac are on the same Wi-Fi network.
+Use `https://threadline.ayushojha.com` or another HTTPS server. On a real watch, a LAN `http://192.168.x.x:8000` address works only when the watch and the Mac are on the same Wi-Fi network.
 
 ## Honest limits
 
@@ -64,6 +77,6 @@ To test against a server on your Mac, run it with `uv run uvicorn app.main:app -
 
 ## Wire protocol (for reference)
 
-Watch → `WS /api/watch/stream`. The first text frame is `{"code","device","format":"sensors"|"pcm16"}`, and the server replies `{"type":"ready","source":…}`. In `sensors` mode, the watch sends text frames like `{"type":"sensors","t","heart_rate","steps","active_kcal","activity","wrist_raised"}`. In `pcm16` mode, the watch sends binary frames of 16 kHz mono little-endian Int16 PCM (100 ms each), and can interleave sensor text frames on the same socket. Sending `{"type":"stop"}` ends the session.
+Watch → `WS /api/watch/stream`. The first text frame is `{"code","device","format":"sensors"|"pcm16"}` (plus `"watch_key"` for watch-started codes), and the server replies `{"type":"ready","source":…}`. In `sensors` mode, the watch sends text frames like `{"type":"sensors","t","heart_rate","steps","active_kcal","activity","wrist_raised"}`. In `pcm16` mode, the watch sends binary frames of 16 kHz mono little-endian Int16 PCM (100 ms each), and can interleave sensor text frames on the same socket. Sending `{"type":"stop"}` ends the session.
 
-HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post. Cycle dates go as the same `cycle` text frame on the socket, or to `POST /api/watch/cycle`. Haptics reach the watch as a `{"type":"haptic","kind","reason"}` text frame, or in the next `POST /api/watch/sensors` response as `{"forwarded":…,"haptics":[…]}` (up to 3 queued). The feed replies `{"type":"haptic_sent"}` or `{"type":"error","message":…}`.
+HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header (plus `X-Watch-Key` for watch-started codes) and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post. Cycle dates go as the same `cycle` text frame on the socket, or to `POST /api/watch/cycle`. Haptics reach the watch as a `{"type":"haptic","kind","reason"}` text frame, or in the next `POST /api/watch/sensors` response as `{"forwarded":…,"haptics":[…]}` (up to 3 queued). The feed replies `{"type":"haptic_sent"}` or `{"type":"error","message":…}`.

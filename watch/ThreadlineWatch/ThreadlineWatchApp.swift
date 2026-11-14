@@ -7,7 +7,7 @@ struct ThreadlineWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                PairView()
+                DeviceCodeView()
             }
             .environmentObject(session)
         }
