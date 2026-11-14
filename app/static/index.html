@@ -221,7 +221,13 @@
               <label for="pref-triggers">Words that should match (comma-separated)</label>
               <input id="pref-triggers" type="text" maxlength="200" placeholder="overloaded, exhausted, drained">
               <label for="pref-action">Then</label>
-              <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="remind">Only show what I said before</option></select>
+              <select id="pref-action"><option value="schedule">Offer to make space in my schedule</option><option value="update">Offer to send my pre-approved update to close friends</option><option value="remind">Only show what I said before</option></select>
+              <div id="pref-update-fields" hidden>
+                <label for="pref-update-text">My pre-approved update</label>
+                <textarea id="pref-update-text" rows="2" maxlength="400" placeholder="Low-energy week — I'm staying in, not ignoring you. Talk soon."></textarea>
+                <label for="pref-update-to">Who it's for</label>
+                <input id="pref-update-to" type="text" maxlength="200" placeholder="Close friends">
+              </div>
               <button type="button" id="pref-save" class="secondary">Save preference</button>
             </details>
           </section>
@@ -244,6 +250,31 @@
         </form>
         <p id="status" class="status" role="status">Keyword search · no AI request</p>
         <div id="answer" class="answer" aria-live="polite"><p>Your notes are the starting point. Ask a question to see a source-linked response.</p></div>
+
+        <section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
+          <div class="section-top"><h2 id="days-heading">Your days</h2><button type="button" id="day-summary" class="secondary">Summarize today</button></div>
+          <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>
+          <div class="table-wrap"><table class="days-table">
+            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy words</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Cycle day</th></tr></thead>
+            <tbody id="days-body"></tbody>
+          </table></div>
+          <div id="day-summary-out" class="answer" hidden></div>
+          <details class="add-pref">
+            <summary>Words that mean low energy for me</summary>
+            <input id="energy-words" type="text" maxlength="300" aria-label="Low-energy words, comma-separated">
+            <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
+          </details>
+
+          <div class="cycle" aria-labelledby="cycle-heading">
+            <h3 id="cycle-heading">Cycle</h3>
+            <p id="cycle-estimate" class="cycle-estimate">Add the first day of your last periods, or share them from Apple Health on the watch.</p>
+            <div class="row tight"><label for="cycle-date" class="visually-hidden">Period start date</label><input id="cycle-date" type="date"><button type="button" id="cycle-add" class="secondary">Add start date</button></div>
+            <ul id="cycle-dates" class="cycle-dates"></ul>
+            <label class="check"><input id="cycle-notify" type="checkbox"><span>Notify me 2 days before the estimate (this browser)</span></label>
+            <label class="check"><input id="cycle-haptic" type="checkbox"><span>Also tap my Apple Watch when that notification comes</span></label>
+            <p class="caption">An estimate from your own dates, not a prediction of symptoms or a medical result.</p>
+          </div>
+        </section>
 
         <section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
           <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>

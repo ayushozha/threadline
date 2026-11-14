@@ -27,6 +27,11 @@ let sessions = emptyThread();
 const agent = { offer: null, events: [], proposal: null, skip: [], log: [], created: null, duration: 30, window: "afternoon" };
 // Stored in this browser per band (localStorage); nothing is stored on the server.
 let threadKey = "", threadLoaded = false;
+// Per-day record built only from real inputs: saved statements, reviewed conversations, band and watch readings.
+const DEFAULT_ENERGY_WORDS = "tired, exhausted, drained, wiped, overloaded, no energy, low energy, worn out";
+const life = { days: {}, cycle: { starts: [], notify: false, haptic: false, notifiedFor: "" }, energyWords: DEFAULT_ENERGY_WORDS };
+const todayKey = (d = new Date()) => localDate(d);
+function dayRec(key = todayKey()) { return (life.days[key] ||= { energy: [], others: 0, mine: 0, hrSum: 0, hrN: 0, hrMin: null, hrMax: null, watchSteps: null, bandSteps: 0 }); }
 function loadThread(key) {
   threadKey = key; threadLoaded = false;
   let saved = null;
@@ -34,6 +39,8 @@ function loadThread(key) {
   sessions = emptyThread();
   if (saved) for (const m of ["reflection", "routine"]) Object.assign(sessions[m], { notes: saved[m]?.notes || [], prefs: saved[m]?.prefs || [] });
   Object.assign(agent, { offer: null, events: saved?.events || [], proposal: null, skip: [], log: [], created: null });
+  life.days = saved?.days || {}; life.cycle = { starts: [], notify: false, haptic: false, notifiedFor: "", ...(saved?.cycle || {}) };
+  life.energyWords = saved?.energyWords || DEFAULT_ENERGY_WORDS;
   threadLoaded = true;
 }
 function saveThread() {
@@ -42,6 +49,7 @@ function saveThread() {
     localStorage.setItem(`threadline.thread.v1.${threadKey}`, JSON.stringify({
       reflection: { notes: sessions.reflection.notes, prefs: sessions.reflection.prefs },
       routine: { notes: sessions.routine.notes }, events: agent.events,
+      days: life.days, cycle: life.cycle, energyWords: life.energyWords,
     }));
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
@@ -83,7 +91,13 @@ function editNote(li, note) {
 function addNotes(items) {
   const session = sessions[mode];
   const added = items.map((item) => ({ id: newId("n"), context: "", ...item }));
-  session.notes.push(...added); renderTimeline();
+  session.notes.push(...added);
+  const words = life.energyWords.split(",").map((w) => w.trim().toLowerCase()).filter(Boolean);
+  for (const n of added) {
+    const hit = words.find((w) => n.text.toLowerCase().includes(w));
+    if (hit) dayRec(todayKey(new Date(n.at))).energy.push({ word: hit, id: n.id });
+  }
+  renderTimeline(); renderDays();
   for (const note of added) checkPreferences(note);
   return added;
 }
@@ -98,16 +112,19 @@ function renderPrefs() {
     remove.addEventListener("click", () => { sessions[mode].prefs = sessions[mode].prefs.filter((p) => p !== pref); renderPrefs(); });
     list.append(el("li", {},
       el("p", { textContent: `“${pref.text}”` }),
-      el("p", { className: "caption", textContent: `Matches: ${pref.triggers.join(", ")} · ${pref.action === "schedule" ? "offers schedule help" : "shows earlier notes only"} · saved ${fmtDate(pref.at)}` }),
+      el("p", { className: "caption", textContent: `Matches: ${pref.triggers.join(", ")} · ${pref.action === "schedule" ? "offers schedule help" : pref.action === "update" ? `offers your update${pref.updateTo ? ` to ${pref.updateTo}` : ""}` : "shows earlier notes only"} · saved ${fmtDate(pref.at)}` }),
       remove));
   }
   if (!sessions[mode].prefs.length) list.append(el("li", { className: "empty", textContent: "No preferences saved. Threadline will not offer help on its own." }));
 }
+$("pref-action").addEventListener("change", () => { $("pref-update-fields").hidden = $("pref-action").value !== "update"; });
 $("pref-save").addEventListener("click", () => {
   const text = $("pref-text").value.trim(), triggers = $("pref-triggers").value.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
   if (!text || !triggers.length) return message("Write the preference and at least one matching word.", true);
-  sessions[mode].prefs.push({ id: newId("pref"), text, triggers, action: $("pref-action").value, at: new Date().toISOString(), source: "typed" });
-  $("pref-text").value = ""; $("pref-triggers").value = ""; renderPrefs(); message("Preference saved for this session.");
+  const action = $("pref-action").value, update = $("pref-update-text").value.trim();
+  if (action === "update" && !update) return message("Write the update you pre-approve sending.", true);
+  sessions[mode].prefs.push({ id: newId("pref"), text, triggers, action, update, updateTo: $("pref-update-to").value.trim(), at: new Date().toISOString(), source: "typed" });
+  $("pref-text").value = ""; $("pref-triggers").value = ""; $("pref-update-text").value = ""; renderPrefs(); message("Preference saved.");
 });
 
 function checkPreferences(note) {
@@ -139,7 +156,7 @@ function renderSupport() {
     ...offer.evidence.map((n) => el("li", {}, el("strong", { textContent: "Earlier you said: " }), `“${n.text}” `, el("span", { className: "caption", textContent: `${fmtDate(n.at)} · ${SOURCE_LABELS[n.source]} ` }), sourceLink(n.id))));
   const children = [
     el("p", { className: "eyebrow", textContent: "Support you asked for" }),
-    el("h3", { textContent: offer.pref.action === "schedule" ? "Want to look at tomorrow and make some space?" : "Here's what you said before." }),
+    el("h3", { textContent: offer.pref.action === "schedule" ? "Want to look at tomorrow and make some space?" : offer.pref.action === "update" ? `Send your update${offer.pref.updateTo ? ` to ${offer.pref.updateTo}` : ""}?` : "Here's what you said before." }),
     el("p", { className: "caption", textContent: "Why this is showing:" }), why,
     el("p", { className: "caption", textContent: `Matched by your own word “${offer.hit}” using a local rule — no AI, and no inference about your mood, cycle, or judgment.` }),
   ];
@@ -149,6 +166,19 @@ function renderSupport() {
     yes.addEventListener("click", () => { offer.status = "accepted"; renderSupport(); renderCalendar(); $("calendar").scrollIntoView({ behavior: "smooth", block: "start" }); });
     no.addEventListener("click", () => { offer.status = "declined"; renderSupport(); message("Okay. Your note is saved and nothing else will happen."); });
     children.push(yes, no);
+  } else if (offer.status === "offered" && offer.pref.action === "update") {
+    // Pre-approved by you; Threadline still never sends anything itself — your own messaging app does.
+    const msg = el("blockquote", { className: "update-msg", textContent: offer.pref.update });
+    const share = el("button", { type: "button", className: "primary", innerHTML: "Share… <span aria-hidden=\"true\">↗</span>" });
+    const sms = el("a", { className: "secondary ics", href: `sms:?&body=${encodeURIComponent(offer.pref.update)}`, textContent: "Open Messages" });
+    const copy = el("button", { type: "button", className: "secondary", textContent: "Copy" });
+    const no = el("button", { type: "button", className: "text-button", textContent: "Not now" });
+    share.addEventListener("click", async () => { try { await navigator.share({ text: offer.pref.update }); offer.status = "shared"; renderSupport(); } catch { message("Sharing was cancelled or isn't available here — use Copy or Open Messages."); } });
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(offer.pref.update); message("Copied. Paste it to your close friends."); } catch { message("Copy failed; select the text instead.", true); } });
+    no.addEventListener("click", () => { offer.status = "declined"; renderSupport(); });
+    children.push(msg, el("div", { className: "row" }, share, sms, copy), no);
+  } else if (offer.status === "shared") {
+    children.push(el("p", { className: "done", textContent: "Handed to your share sheet. Threadline did not send anything itself." }));
   } else if (offer.status === "declined") {
     children.push(el("p", { className: "done", textContent: "Declined. Your note stays in your thread; no action taken." }));
   }
@@ -270,6 +300,10 @@ const pair = { state: "idle", attempt: 0, busy: false, slow: 0 };
 
 fetch("/api/device").then((r) => r.json()).then((d) => {
   configuredBand = d.vexo_band_number; tokenRequired = d.token_required !== false;
+  if (tokenRequired) {
+    try { const saved = localStorage.getItem("threadline.token"); if (saved) $("token").value = saved; } catch { /* storage off */ }
+    if (!$("token").value) { $("token").closest("details").open = true; $("provider-summary").textContent = "· enter the access token to record"; }
+  }
   if (!tokenRequired) { $("token").placeholder = "Not needed on this local server"; $("token").disabled = true; $("provider-summary").textContent = "· local server — no token needed"; }
   const fromUrl = new URLSearchParams(location.search).get("band");
   const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : recentBands()[0] || configuredBand;
@@ -597,6 +631,7 @@ $("review-save").addEventListener("click", () => {
   const r = capture.review, mine = r.segments.filter((s) => s.who === "me" && s.text.trim());
   if (!mine.length) return message("Mark at least one segment as “Me”, or discard.", true);
   const dropped = r.segments.length - mine.length;
+  const rec = dayRec(todayKey(r.startedAt)); rec.others += r.segments.filter((x) => x.who === "other").length; rec.mine += mine.length;
   addNotes(mine.map((s) => ({ text: s.text.trim(), at: new Date(r.startedAt.getTime() + s.offset * 1000).toISOString(), source: r.source })));
   capture.review = null; $("review").hidden = true;
   message(`Saved ${mine.length} statement${mine.length > 1 ? "s" : ""} as yours.${dropped ? ` ${dropped} other segment${dropped > 1 ? "s were" : " was"} dropped, not stored.` : ""}`);
@@ -683,7 +718,7 @@ function render() {
   $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays();
 }
 
 /* ---------- Band signals ---------- */
@@ -714,6 +749,7 @@ async function startSignals() {
   try { await capture.band.configure({ micLevel: 0.1, activity: true, battery: true }); } catch (e) { $("sig-activity").textContent = `unavailable (${e.code || e.message})`; }
 }
 async function stopSignals() {
+  if (signals.steps > 0) { dayRec().bandSteps += signals.steps; signals.steps = 0; renderDays(); }
   if (capture.band && !capture.band.reconnecting) { try { await capture.band.configure({ micLevel: false, activity: false }); } catch { /* gone */ } }
   $("sig-loud").style.width = "0%";
 }
@@ -852,9 +888,19 @@ function openWatchFeed(token) {
       $("watch-code-box").hidden = true; watch.owningLive = false;
     } else if (msg.type === "sensors") {
       watch.sensors = msg; watch.sensorsAt = Date.now(); $("watch-sensors").hidden = false;
+      const rec = dayRec();
+      if (msg.heart_rate != null) { const h = Math.round(msg.heart_rate); rec.hrSum += h; rec.hrN += 1; rec.hrMin = rec.hrMin == null ? h : Math.min(rec.hrMin, h); rec.hrMax = rec.hrMax == null ? h : Math.max(rec.hrMax, h); }
+      if (msg.steps != null) rec.watchSteps = Math.max(rec.watchSteps ?? 0, msg.steps);
+      if (!watch.lastDaysRender || Date.now() - watch.lastDaysRender > 5000) { watch.lastDaysRender = Date.now(); renderDays(); }
       if (msg.heart_rate != null) $("ws-hr").textContent = `${Math.round(msg.heart_rate)} bpm`;
       if (msg.steps != null) $("ws-steps").textContent = String(msg.steps);
       if (msg.activity) $("ws-activity").textContent = msg.activity;
+    } else if (msg.type === "cycle") {
+      let added = 0;
+      for (const d of msg.period_starts || []) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !life.cycle.starts.some((x) => x.date === d)) { life.cycle.starts.push({ date: d, source: "health" }); added += 1; }
+      renderDays(); watchMsg(added ? `Added ${added} period start date${added > 1 ? "s" : ""} from Apple Health.` : "Cycle dates from Apple Health are already here.");
+    } else if (msg.type === "haptic_sent") {
+      watchMsg("Tapped your watch.");
     } else if (msg.type === "result") {
       if (capture.active) return;  // the band is recording; the watch only adds readings
       if (!watch.owningLive) { watch.owningLive = true; watch.startedAt = watch.startedAt || new Date(); $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = `${watch.device} · microphone`; $("signals").hidden = true; }
@@ -909,5 +955,96 @@ $("cam-connect").addEventListener("click", async () => {
   } catch (e) { chip("cam", false, "not allowed"); recState(`Camera unavailable: ${e.message}`, true); }
 });
 navigator.mediaDevices?.addEventListener?.("devicechange", () => { if ($("cam-on").checked) listCameras(); });
+
+
+/* ---------- Your days + cycle (only real inputs; stored in this browser per band) ---------- */
+const DAY_MS = 86400000;
+const parseDay = (s) => new Date(`${s}T12:00:00`);
+function cycleInfo() {
+  const starts = [...new Set(life.cycle.starts.map((x) => x.date))].sort();
+  if (!starts.length) return { starts };
+  const last = starts[starts.length - 1];
+  const dayOf = (key) => { const d = Math.floor((parseDay(key) - parseDay(last)) / DAY_MS) + 1; return d >= 1 ? d : null; };
+  const gaps = starts.slice(1).map((d, i) => Math.round((parseDay(d) - parseDay(starts[i])) / DAY_MS)).filter((g) => g >= 15 && g <= 60).slice(-6);
+  if (!gaps.length) return { starts, last, dayOf };
+  const avg = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+  const spread = Math.max(...gaps) - Math.min(...gaps);
+  const next = new Date(parseDay(last).getTime() + avg * DAY_MS);
+  return { starts, last, dayOf, avg, spread, next, cycles: gaps.length };
+}
+function renderDays() {
+  if (!$("days-body")) return;
+  $("days-panel").hidden = mode !== "reflection";
+  $("energy-words").value = life.energyWords;
+  const info = cycleInfo(), rows = [];
+  for (let i = 0; i < 7; i++) {
+    const key = todayKey(new Date(Date.now() - i * DAY_MS)), r = life.days[key];
+    const label = i === 0 ? "Today" : i === 1 ? "Yesterday" : parseDay(key).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    const steps = r ? [r.watchSteps != null ? `${r.watchSteps} watch` : "", r.bandSteps ? `${r.bandSteps} band` : ""].filter(Boolean).join(" · ") : "";
+    const hr = r?.hrN ? `${Math.round(r.hrSum / r.hrN)} avg · ${r.hrMin}–${r.hrMax}` : "";
+    const cd = info.dayOf ? info.dayOf(key) : null;
+    rows.push(el("tr", {}, el("th", { scope: "row", textContent: label }),
+      el("td", { textContent: r?.energy.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
+      el("td", { textContent: r && (r.others || r.mine) ? `${r.others}` : "—" }),
+      el("td", { textContent: steps || "—" }), el("td", { textContent: hr || "—" }), el("td", { textContent: cd ? String(cd) : "—" })));
+  }
+  $("days-body").replaceChildren(...rows);
+  // cycle
+  $("cycle-dates").replaceChildren(...info.starts.slice(-8).reverse().map((d) => {
+    const src = life.cycle.starts.find((x) => x.date === d)?.source;
+    const rm = el("button", { type: "button", className: "text-button", textContent: "Remove", "aria-label": `Remove ${d}` });
+    rm.addEventListener("click", () => { life.cycle.starts = life.cycle.starts.filter((x) => x.date !== d); renderDays(); });
+    return el("li", {}, el("span", { textContent: parseDay(d).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) }), src === "health" ? el("span", { className: "badge vexo", textContent: "Apple Health" }) : null, rm);
+  }));
+  $("cycle-estimate").textContent = !info.starts.length ? "Add the first day of your last periods, or share them from Apple Health on the watch."
+    : !info.avg ? `Cycle day ${info.dayOf(todayKey()) ?? "—"} today. Add one more start date to estimate the next one.`
+    : `Cycle day ${info.dayOf(todayKey())} today. Next period estimated around ${info.next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} — from your last ${info.cycles} cycle${info.cycles > 1 ? "s" : ""} (average ${info.avg} days${info.spread ? `, they varied by ${info.spread} day${info.spread > 1 ? "s" : ""}` : ""}).`;
+  $("cycle-notify").checked = life.cycle.notify; $("cycle-haptic").checked = life.cycle.haptic;
+  saveThread();
+  maybeNotifyCycle(info);
+}
+function maybeNotifyCycle(info = cycleInfo()) {
+  if (!life.cycle.notify || !info.next) return;
+  const daysLeft = Math.ceil((info.next - new Date()) / DAY_MS), key = todayKey(info.next);
+  if (daysLeft > 2 || daysLeft < -3 || life.cycle.notifiedFor === key) return;
+  const text = `Your period is estimated around ${info.next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, from your own dates.`;
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline", { body: text }); } catch { /* not allowed */ }
+  if (life.cycle.haptic) sendHaptic("notification", "Cycle estimate reminder");
+  life.cycle.notifiedFor = key; saveThread();
+  message(text);
+}
+function sendHaptic(kind, reason) {
+  if (watch.ws?.readyState === 1) watch.ws.send(JSON.stringify({ type: "haptic", kind, reason }));
+}
+$("cycle-add").addEventListener("click", () => {
+  const d = $("cycle-date").value;
+  if (!d || parseDay(d) > new Date()) return message("Pick a start date that isn't in the future.", true);
+  if (!life.cycle.starts.some((x) => x.date === d)) life.cycle.starts.push({ date: d, source: "typed" });
+  $("cycle-date").value = ""; renderDays();
+});
+$("cycle-notify").addEventListener("change", async () => {
+  life.cycle.notify = $("cycle-notify").checked;
+  if (life.cycle.notify && "Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignored */ } }
+  if (life.cycle.notify && "Notification" in window && Notification.permission === "denied") message("This browser blocks notifications for the site; the reminder will show on the page instead.", true);
+  renderDays();
+});
+$("cycle-haptic").addEventListener("change", () => { life.cycle.haptic = $("cycle-haptic").checked; if (life.cycle.haptic && !watch.ws) message("Pair the Apple Watch (Devices) so it can tap your wrist.", true); renderDays(); });
+$("energy-words").addEventListener("change", () => { life.energyWords = $("energy-words").value; saveThread(); });
+$("day-summary").addEventListener("click", async () => {
+  const out = $("day-summary-out"), key = todayKey(), r = life.days[key];
+  const notes = sessions.reflection.notes.filter((n) => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context }));
+  if (!notes.length) { out.hidden = false; out.replaceChildren(el("p", { textContent: "Nothing saved today yet — capture or type a statement first." })); return; }
+  const info = cycleInfo();
+  const readings = [r?.energy.length ? `${r.energy.length} low-energy words` : "", r?.others ? `${r.others} lines from other people in reviewed conversations` : "",
+    r?.watchSteps != null ? `${r.watchSteps} steps on the watch` : "", r?.hrN ? `average heart rate ${Math.round(r.hrSum / r.hrN)}` : "", info.dayOf ? `self-reported cycle day ${info.dayOf(key)}` : ""].filter(Boolean).join("; ");
+  try {
+    const headers = liveHeaders(); setBusy(true);
+    const data = await request("/api/reflect", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ mode: "reflection", question: `Summarize my day in 3 short bullet points using my own statements. Device readings for context (numbers only, not feelings): ${readings || "none"}.`, notes }) });
+    out.hidden = false; out.replaceChildren(el("p", { className: "provenance", textContent: "Gemini summary · check the sources" }), el("p", { textContent: data.answer }));
+  } catch (e) { out.hidden = false; out.replaceChildren(el("p", { className: "error", textContent: e.message })); }
+  finally { setBusy(false); }
+});
+// Access token: on the deployed site it is required; remember it in this browser so the session just works.
+$("token").addEventListener("change", () => { try { localStorage.setItem("threadline.token", $("token").value.trim()); } catch { /* storage off */ } });
 
 render();

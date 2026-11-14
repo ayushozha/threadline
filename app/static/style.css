@@ -182,3 +182,7 @@ footer{border-top:1px solid var(--line);margin-top:36px}
 .stage .live-transcript .interim{color:#A9AD9D}
 @media(max-width:900px){.stage-grid{grid-template-columns:1fr}.stage{padding:18px}}
 [hidden]{display:none!important}
+.days .section-top{gap:10px;flex-wrap:wrap}.table-wrap{overflow-x:auto;margin:10px 0}.days-table{width:100%;border-collapse:collapse;font-size:13px}.days-table th,.days-table td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}.days-table thead th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}.days-table tbody th{font-weight:600}
+.cycle{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}.cycle h3{margin:0 0 6px;font-size:18px}.cycle-estimate{font-size:14px;margin:0 0 10px}.cycle input[type=date]{font:inherit;border:1px solid var(--line);border-radius:10px;padding:8px}.cycle-dates{list-style:none;padding:0;margin:8px 0;font-size:13px}.cycle-dates li{display:flex;gap:8px;align-items:center;padding:4px 0}
+.update-msg{margin:6px 0 10px;padding:12px 14px;border-left:3px solid var(--indigo);background:var(--soft);border-radius:8px;font-size:15px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
