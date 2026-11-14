@@ -339,6 +339,8 @@ def test_watch_stream_fans_results_to_watch_and_feeds(client, monkeypatch):
                 result = watch.receive_json()
                 assert result["type"] == "result" and result["transcript"] == "hello watch"
                 assert feed.receive_json() == result
+                watch.send_json({"type": "sensors", "heart_rate": 64})  # interleaved with audio
+                assert feed.receive_json() == {"type": "sensors", "heart_rate": 64.0, "device": "Ayush's Watch"}
             assert feed.receive_json() == {"type": "watch_disconnected"}
         assert "encoding=linear16" in urls[0] and "sample_rate=16000" in urls[0] and "model=test-model" in urls[0]
         assert closed and wait_for_slots()

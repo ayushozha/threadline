@@ -20,7 +20,7 @@ final class StreamSession: ObservableObject {
     var wristRaised: Bool?
 
     let sensors = Sensors()
-    private(set) var server = URL(string: "https://threadline.ayushojha.com")!
+    @Published private(set) var server = URL(string: "https://threadline.ayushojha.com")!
     private var code = ""
     private let device = WKInterfaceDevice.current().name
 
@@ -57,7 +57,7 @@ final class StreamSession: ObservableObject {
         lines = []; interim = ""; pending = Data()
         everReady = false; rejected = false; useHTTP = false; reconnectAttempts = 0
         isStreaming = true
-        startedAt = Date()
+        status = "Starting…"
         Task {
             await sensors.start()
             if recordAudio {
@@ -67,6 +67,7 @@ final class StreamSession: ObservableObject {
                 do { try startAudio() } catch { status = "Audio failed: \(error.localizedDescription)"; stop(); return }
             }
             guard isStreaming else { return }
+            startedAt = Date()  // after permission prompts
             connect()
             ticker = Task {
                 while !Task.isCancelled {
