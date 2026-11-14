@@ -27,6 +27,30 @@ struct PairView: View {
     }
 }
 
+/// Asked when the paired page requests a mood log. Nothing is written to Health unless the user taps Save.
+struct MoodConfirmView: View {
+    let request: StreamSession.MoodRequest
+    let answer: (Bool) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 8) {
+                Text("Save this mood to Apple Health?").font(.headline).multilineTextAlignment(.center)
+                Text(String(format: "Valence %+.2f", request.valence)).font(.footnote.monospacedDigit())
+                Text(feeling).font(.footnote).foregroundStyle(.secondary)
+                if !request.labels.isEmpty { Text(request.labels.joined(separator: ", ")).font(.footnote) }
+                if !request.reason.isEmpty { Text(request.reason).font(.caption2).foregroundStyle(.secondary) }
+                Button("Save") { answer(true) }.tint(.green)
+                Button("Not now", role: .cancel) { answer(false) }
+            }
+        }
+    }
+
+    private var feeling: String {
+        request.valence <= -0.33 ? "Unpleasant" : request.valence >= 0.33 ? "Pleasant" : "Neutral"
+    }
+}
+
 /// Screen 2: live sensor readings, what is being shared, and an optional audio recording.
 struct StreamView: View {
     @EnvironmentObject var session: StreamSession
@@ -36,6 +60,9 @@ struct StreamView: View {
         StreamContent(session: session, sensors: session.sensors)
             .onChange(of: screenDimmed, initial: true) { _, dimmed in session.wristRaised = !dimmed }
             .onDisappear { if session.isStreaming { session.toggle() } }
+            .sheet(item: $session.moodRequest, onDismiss: { session.answerMood(save: false) }) { request in
+                MoodConfirmView(request: request) { session.answerMood(save: $0) }
+            }
     }
 }
 
@@ -70,6 +97,7 @@ private struct StreamContent: View {
                     row("Activity", sensors.activity)
                 }
                 .font(.footnote)
+                if let note = session.moodNote { Text(note).font(.caption2).foregroundStyle(.secondary) }
                 if let note = sensors.note { Text(note).font(.caption2).foregroundStyle(.orange) }
 
                 Toggle("Record audio too", isOn: $session.recordAudio)
@@ -102,7 +130,7 @@ private struct StreamContent: View {
         let audio = session.recordAudio
             ? "Microphone audio is sent too and transcribed by Deepgram."
             : "No audio is sent."
-        return "While streaming, heart rate, steps, active energy, activity and whether the screen is awake go to \(session.host) about once a second and on to your paired page. \(audio) Nothing is saved on the watch or in Health. Your page can tap your wrist with a haptic."
+        return "While streaming, heart rate, steps, active energy, activity and whether the screen is awake go to \(session.host) about once a second and on to your paired page. About once a minute it adds your latest HRV, resting heart rate, respiratory rate, blood oxygen, wrist temperature change, sleep, noise, exercise and mindful minutes, and today's logged state of mind, when Health has them. \(audio) Nothing is saved on the watch. Your page can tap your wrist with a haptic or suggest a mood, which is saved to Health only if you tap Save."
     }
 
     @ViewBuilder private func row(_ label: String, _ value: String?) -> some View {

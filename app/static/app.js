@@ -41,6 +41,7 @@ function loadThread(key) {
   Object.assign(agent, { offer: null, events: saved?.events || [], proposal: null, skip: [], log: [], created: null });
   life.days = saved?.days || {}; life.cycle = { starts: [], notify: false, haptic: false, notifiedFor: "", ...(saved?.cycle || {}) };
   life.energyWords = saved?.energyWords || DEFAULT_ENERGY_WORDS;
+  Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
   threadLoaded = true;
 }
 function saveThread() {
@@ -50,6 +51,7 @@ function saveThread() {
       reflection: { notes: sessions.reflection.notes, prefs: sessions.reflection.prefs },
       routine: { notes: sessions.routine.notes }, events: agent.events,
       days: life.days, cycle: life.cycle, energyWords: life.energyWords,
+      positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, checkins: life.checkins, voice: life.voice,
     }));
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
@@ -98,6 +100,7 @@ function addNotes(items) {
     if (hit) dayRec(todayKey(new Date(n.at))).energy.push({ word: hit, id: n.id });
   }
   renderTimeline(); renderDays();
+  for (const note of added) noteEnergy(note);
   for (const note of added) agentDecide({ id: note.id, text: note.text, at: note.at, source: note.source, speaker_confirmed: true });
   return added;
 }
@@ -547,7 +550,7 @@ function finishLive() {
   if (!capture.active) return;
   clearInterval(capture.timer); $("live-timer").textContent = `stopped · ${$("live-timer").textContent.replace("● live · ", "")}`;
   const { finals, source, startedAt } = capture;
-  if (finals.length) archiveSession(finals, { startedAt, source, marks: capture.marks || [] });
+  if (finals.length) { archiveSession(finals, { startedAt, source, marks: capture.marks || [] }); const vm = voiceMetrics(finals); if (vm) { life.voice = vm; saveThread(); renderEnergy(); } }
   if (capture.band && !capture.stopping && !capture.band.reconnecting) capture.band.configure({ audio: false }).catch(() => {});
   if (capture.recorder && capture.recorder.state !== "inactive") capture.recorder.stop();
   stopVideo();
@@ -727,7 +730,7 @@ function render() {
   if ($("mode-description")) $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations();
 }
 
 /* ---------- Band signals ---------- */
@@ -900,7 +903,7 @@ function openWatchFeed(token) {
       const rec = dayRec();
       if (msg.heart_rate != null) { const h = Math.round(msg.heart_rate); rec.hrSum += h; rec.hrN += 1; rec.hrMin = rec.hrMin == null ? h : Math.min(rec.hrMin, h); rec.hrMax = rec.hrMax == null ? h : Math.max(rec.hrMax, h); }
       if (msg.steps != null) rec.watchSteps = Math.max(rec.watchSteps ?? 0, msg.steps);
-      if (!watch.lastDaysRender || Date.now() - watch.lastDaysRender > 5000) { watch.lastDaysRender = Date.now(); renderDays(); }
+      if (!watch.lastDaysRender || Date.now() - watch.lastDaysRender > 5000) { watch.lastDaysRender = Date.now(); renderDays(); renderEnergy(); }
       if (msg.heart_rate != null) $("ws-hr").textContent = `${Math.round(msg.heart_rate)} bpm`;
       if (msg.steps != null) $("ws-steps").textContent = String(msg.steps);
       if (msg.activity) $("ws-activity").textContent = msg.activity;
@@ -908,6 +911,10 @@ function openWatchFeed(token) {
       let added = 0;
       for (const d of msg.period_starts || []) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !life.cycle.starts.some((x) => x.date === d)) { life.cycle.starts.push({ date: d, source: "health" }); added += 1; }
       renderDays(); watchMsg(added ? `Added ${added} period start date${added > 1 ? "s" : ""} from Apple Health.` : "Cycle dates from Apple Health are already here.");
+    } else if (msg.type === "log_mood_sent") { $("mood-msg").textContent = "On your watch now — confirm there to save it in Apple Health.";
+    } else if (msg.type === "mood_failed") { $("mood-msg").textContent = "The watch couldn't save it (needs watchOS 11 and Health permission).";
+    } else if (msg.type === "mood_logged") { $("mood-msg").textContent = "Saved to Apple Health (State of Mind) after your confirmation.";
+    } else if (msg.type === "mood_declined") { $("mood-msg").textContent = "Not saved — you declined on the watch.";
     } else if (msg.type === "haptic_sent") {
       watchMsg("Tapped your watch.");
     } else if (msg.type === "result") {
@@ -1058,18 +1065,19 @@ $("token").addEventListener("change", () => { try { localStorage.setItem("thread
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { live: "Live session", thread: "Thread", days: "Your days", graph: "Graph", devices: "Devices" };
+const VIEW_TITLES = { live: "Live session", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Your days", graph: "Graph", devices: "Devices", integrations: "Integrations" };
 function showView(name) {
   if (!VIEW_TITLES[name]) name = "live";
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
   document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
   $("view-title").textContent = VIEW_TITLES[name];
   if (name === "graph" && typeof drawGraph === "function") drawGraph();
+  if (name === "energy") renderEnergy(); if (name === "integrations") renderIntegrations(); if (name === "tasks") renderTasks();
 }
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
 // chips and inner links (#pair, #watch-pair) lead to Devices
 document.addEventListener("click", (e) => { const a = e.target.closest("a[href='#pair'], a[href='#watch-pair']"); if (a) { e.preventDefault(); location.hash = "devices"; } });
-showView(location.hash.slice(1) || "live");
+// first view is shown at the end of the script, after every view's code has loaded
 
 /* Recorder waveform from the band's loudness */
 const WAVE_BARS = 48, waveLevels = new Array(WAVE_BARS).fill(0);
@@ -1090,7 +1098,10 @@ function agentPayload(statement) {
     recent: sessions.reflection.notes.filter((n) => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
     preferences: sessions.reflection.prefs.slice(-20).map(({ id, text, triggers, action }) => ({ id, text, triggers, action })),
     today: { low_energy_words: r?.energy.length || 0, lines_from_others: r?.others || 0, steps: r?.watchSteps ?? (r?.bandSteps || null), heart_rate_avg: r?.hrN ? Math.round(r.hrSum / r.hrN) : null,
-      cycle_day: info.dayOf ? info.dayOf(todayKey()) : null, next_period_estimate: info.next ? todayKey(info.next) : null },
+      cycle_day: info.dayOf ? info.dayOf(todayKey()) : null, next_period_estimate: info.next ? todayKey(info.next) : null,
+      hrv_sdnn_ms: watch.sensors?.hrv_sdnn_ms ?? null, resting_hr: watch.sensors?.resting_hr ?? null, sleep_hours: watch.sensors?.sleep_hours_last_night ?? null },
+    tasks: (life.tasks || []).slice(-40).map((t) => ({ id: t.id, title: t.title, due: t.due, big_decision: Boolean(t.big), done: Boolean(t.done) })),
+    voice: life.voice ? { words_per_min: life.voice.words_per_min, avg_pause_s: life.voice.avg_pause_s, loudness: life.voice.loudness, talk_share: life.voice.talk_share } : {},
     devices: { band: Boolean(capture.band), watch: Boolean(watch.ws && $("watch-pair").dataset.state === "connected") },
     engine: agentEngine(),
   };
@@ -1115,12 +1126,19 @@ async function agentDecide(statement) {
 function actOnDecision(d, statement) {
   const feed = $("agent-feed"); feed.querySelector(".agent-empty")?.remove();
   const engine = d.engine === "gemini" ? `Gemini${d.confidence != null ? ` · ${Math.round(d.confidence * 100)}%` : ""}` : `local rules${d.fallback_reason ? " (Gemini unavailable)" : ""}`;
-  const label = { none: "Just listening", offer_schedule: "Offer: make space in your schedule", offer_update: "Offer: send your pre-approved update", show_evidence: "Showing what you said before", watch_tap: "Tapped your watch", ask_checkin: "Asking how you'd like support" }[d.action] || d.action;
+  const label = { none: "Just listening", offer_schedule: "Offer: make space in your schedule", offer_update: "Offer: send your pre-approved update", show_evidence: "Showing what you said before", watch_tap: "Tapped your watch", ask_checkin: "Asking how you'd like support", hold_decision: "Suggest: hold a big decision", move_to_today: "Suggest: move a task to today", calendar_note: "Suggest: add a calendar note", music: "Suggest: music for your energy" }[d.action] || d.action;
   if (d.action === "none" && feed.children.length > 6) return;  // keep the feed about decisions that matter
   feed.prepend(el("li", { className: d.action === "none" ? "" : d.auto ? "auto" : "act" },
     el("div", {}, el("b", { textContent: label }), el("div", { textContent: d.message || "" }),
       el("div", { className: "why-line", textContent: `${d.reason || ""}${d.reason ? " · " : ""}${engine}${statement.speaker_confirmed ? "" : " · speaker not yet confirmed"}` }))));
   while (feed.children.length > 12) feed.lastChild.remove();
+  const task = (life.tasks || []).find((t) => t.id === d.task_id);
+  const li = feed.firstChild;
+  const btn = (label, fn) => { const b = el("button", { type: "button", className: "secondary", textContent: label }); b.addEventListener("click", () => { fn(); b.closest(".row")?.replaceChildren(el("span", { className: "done", textContent: "Done ✓" })); }); return b; };
+  if (d.action === "hold_decision" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Hold “${task.title}”`, () => holdTask(task, d.note || `Held — you said “${statement.text.slice(0, 60)}”`)), el("a", { className: "secondary ics", href: gcalLink(`Decide: ${task.title}`, `Held by Threadline on a low-energy day. ${d.reason || ""}`, todayKey(new Date(Date.now() + 3 * DAY_MS))), target: "_blank", rel: "noopener", textContent: "Calendar note" })));
+  if (d.action === "move_to_today" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Move “${task.title}” to today`, () => { task.due = todayKey(); task.heldUntil = null; renderTasks(); })));
+  if (d.action === "calendar_note") li.firstChild.append(el("div", { className: "row tight" }, el("a", { className: "secondary ics", href: gcalLink(task ? task.title : "Note from Threadline", d.note || statement.text, task?.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" })));
+  if (d.action === "music" && d.music) { const m = d.music.mood || "calm"; li.firstChild.append(el("div", { className: "row tight" }, el("a", { className: "secondary ics", href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: `Apple Music · ${m}` }), el("a", { className: "secondary ics", href: `https://open.spotify.com/search/${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: `Spotify · ${m}` }))); }
   // Act: low-risk actions happen now; anything outward waits for one tap.
   if (d.action === "watch_tap") sendHaptic("notification", (d.message || "Threadline").slice(0, 80));
   const pref = sessions.reflection.prefs.find((p) => p.id === d.preference_id);
@@ -1132,4 +1150,157 @@ function actOnDecision(d, statement) {
   }
 }
 
+
+/* ---------- Energy (from your words, with voice / band / watch as context) ---------- */
+const DEFAULT_POSITIVE_WORDS = "energised, energized, motivated, productive, great day, good energy, excited, clicked";
+const TENSE_WORDS = ["irritated", "annoyed", "frustrated", "angry", "snapped", "on edge", "tense"];
+const ENERGY_COLORS = { low: "#8E8CD8", steady: "#5E9C7A", positive: "#E9A23B", unknown: "#B9B9B2" };
+function wordsList(text) { return text.split(",").map((w) => w.trim().toLowerCase()).filter(Boolean); }
+function classifyEnergy(text) {
+  const t = text.toLowerCase();
+  const tense = TENSE_WORDS.find((w) => t.includes(w));
+  const low = wordsList(life.energyWords).find((w) => t.includes(w));
+  const pos = wordsList(life.positiveWords || DEFAULT_POSITIVE_WORDS).find((w) => t.includes(w));
+  if (tense) return { state: "low", word: tense, tense: true };
+  if (low) return { state: "low", word: low };
+  if (pos) return { state: "positive", word: pos };
+  return null;
+}
+function noteEnergy(note) {
+  const c = classifyEnergy(note.text); if (!c) return;
+  life.energy = { state: c.state, word: c.word, text: note.text, at: note.at, tense: Boolean(c.tense) };
+  saveThread(); renderEnergy();
+  if (c.state === "low") gentleCheckin(c);
+}
+/* Check-ins: ask once; if opted in, a gentle watch tap next time (at most every 10 minutes). */
+function gentleCheckin(c) {
+  const ck = (life.checkins ||= { asked: false, optedIn: false, lastTap: 0 });
+  if (!ck.asked) {
+    ck.asked = true; saveThread();
+    const text = `I noticed you seemed ${c.tense ? "tense" : "low on energy"} (“${c.word}”). Would you like gentle check-ins if this happens again?`;
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline", { body: text }); } catch { /* blocked */ }
+    showCheckinPrompt(text);
+    return;
+  }
+  if (ck.optedIn && Date.now() - ck.lastTap > 10 * 60000) {
+    ck.lastTap = Date.now(); saveThread();
+    sendHaptic("directionUp", "Gentle check-in");
+    feedNote("Gentle check-in", `A soft tap on your watch — you said “${c.word}”. You opted in to these.`, "auto");
+  }
+}
+function showCheckinPrompt(text) {
+  const yes = el("button", { type: "button", className: "primary-sm", textContent: "Yes, gentle check-ins" });
+  const no = el("button", { type: "button", className: "text-button", textContent: "No thanks" });
+  const box = el("div", { className: "checkin-prompt" }, el("p", { textContent: text }), el("p", { className: "caption", textContent: "A check-in is a soft tap on your Apple Watch — no message, nothing sent to anyone." }), el("div", { className: "row tight" }, yes, no));
+  yes.addEventListener("click", async () => { life.checkins.optedIn = true; saveThread(); box.replaceChildren(el("p", { className: "done", textContent: "Check-ins on. You can turn them off in Energy." })); if ("Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignore */ } } renderEnergy(); });
+  no.addEventListener("click", () => { life.checkins.optedIn = false; saveThread(); box.replaceChildren(el("p", { className: "caption", textContent: "Okay — no check-ins. Threadline won't ask again." })); renderEnergy(); });
+  $("agent-feed").querySelector(".agent-empty")?.remove();
+  $("agent-feed").prepend(el("li", { className: "act" }, box));
+}
+function feedNote(title, text, kind = "") { $("agent-feed").querySelector(".agent-empty")?.remove(); $("agent-feed").prepend(el("li", { className: kind }, el("div", {}, el("b", { textContent: title }), el("div", { textContent: text })))); }
+
+/* Voice measurements from the live transcript (timings only; the most-heard speaker stands in until you confirm who you are) */
+function voiceMetrics(finals) {
+  const words = finals.flatMap((f) => f.words).filter((w) => w.start != null && w.end != null);
+  if (words.length < 6) return null;
+  const by = {}; for (const w of words) (by[w.speaker ?? "x"] ||= []).push(w);
+  const [mainKey, main] = Object.entries(by).sort((a, b) => b[1].length - a[1].length)[0];
+  let speaking = 0, pauses = [];
+  for (let i = 1; i < main.length; i++) { const gap = main[i].start - main[i - 1].end; if (gap > 0.25 && gap < 3) pauses.push(gap); else if (gap >= 0 && gap <= 0.25) speaking += main[i].end - main[i].start; }
+  const span = main[main.length - 1].end - main[0].start - pauses.filter((g) => g >= 3).reduce((a, b) => a + b, 0);
+  return { words_per_min: span > 5 ? Math.round(main.length / (span / 60)) : null, avg_pause_s: pauses.length ? Math.round((pauses.reduce((a, b) => a + b, 0) / pauses.length) * 10) / 10 : null,
+    loudness: signals.level ? Math.round(signals.level * 100) / 100 : null, talk_share: Math.round((main.length / words.length) * 100) / 100, speaker: mainKey };
+}
+function renderEnergy() {
+  if (!$("energy-now")) return;
+  const e = life.energy, state = e?.state || "unknown";
+  $("energy-now").dataset.energy = state;
+  $("energy-label").textContent = { low: "Low", positive: "Positive", steady: "Steady", unknown: "Unknown" }[state];
+  $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "no signal yet";
+  $("energy-why").textContent = e ? `From your words: “${e.word}” in “${e.text.slice(0, 90)}${e.text.length > 90 ? "…" : ""}”.` : "Set by your own saved words. Voice, movement and watch readings are shown as context.";
+  $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
+  const v = life.voice, w = watch.sensors || {}, r = life.days[todayKey()] || {}, info = cycleInfo();
+  const rows = (pairs) => pairs.filter(([, val]) => val != null && val !== "").flatMap(([k, val]) => [el("dt", { textContent: k }), el("dd", { textContent: String(val) })]);
+  const fill = (id, pairs, empty) => { const items = rows(pairs); $(id).replaceChildren(...(items.length ? items : [el("dt", { className: "empty", textContent: empty })])); };
+  fill("sig-voice", [["Speaking pace", v?.words_per_min ? `${v.words_per_min} wpm` : null], ["Pauses", v?.avg_pause_s ? `${v.avg_pause_s} s avg` : null], ["Loudness", v?.loudness != null ? `${Math.round(v.loudness * 100)}%` : null], ["Most-heard speaker's share", v?.talk_share != null ? `${Math.round(v.talk_share * 100)}%` : null]], "Record a session to measure");
+  fill("sig-body", [["Heart rate", w.heart_rate != null ? `${Math.round(w.heart_rate)} bpm` : null], ["HRV (SDNN)", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Breathing", w.respiratory_rate != null ? `${Math.round(w.respiratory_rate)} /min` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Sleep last night", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Noise", w.env_noise_db != null ? `${Math.round(w.env_noise_db)} dB` : null], ["Logged mood", w.state_of_mind ? `${w.state_of_mind.valence > 0.2 ? "pleasant" : w.state_of_mind.valence < -0.2 ? "unpleasant" : "neutral"}${w.state_of_mind.labels?.length ? ` · ${w.state_of_mind.labels.join(", ")}` : ""}` : null]], "Pair the Apple Watch in Devices");
+  fill("sig-move", [["Steps today", r.watchSteps ?? (r.bandSteps || null)], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${w.exercise_min_today} min` : null], ["Mindful", w.mindful_min_today != null ? `${w.mindful_min_today} min` : null]], "Connect the band or watch");
+  fill("sig-cycle", [["Cycle day", info.dayOf ? info.dayOf(todayKey()) : null], ["Next, estimated", info.next ? info.next.toLocaleDateString([], { month: "short", day: "numeric" }) : null], ["Wrist temp", w.wrist_temp_delta_c != null ? `${w.wrist_temp_delta_c > 0 ? "+" : ""}${w.wrist_temp_delta_c.toFixed(1)} °C` : null]], "Add dates in Your days");
+  const mood = state === "low" ? "calm" : state === "positive" ? "uplifting" : "steady";
+  $("music-links").replaceChildren(...["calm", "steady", "uplifting"].map((m) => el("div", { className: `music-chip m-${m}${m === mood ? " current" : ""}` }, el("b", { textContent: m }),
+    el("a", { href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Apple Music" }),
+    el("a", { href: `https://open.spotify.com/search/${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Spotify" }))));
+  const ck = life.checkins || {};
+  $("mood-msg").textContent = ck.asked ? (ck.optedIn ? "Gentle check-ins: on (soft watch tap)." : "Gentle check-ins: off.") : "";
+}
+$("positive-words").addEventListener("change", () => { life.positiveWords = $("positive-words").value; saveThread(); });
+$("mood-to-health").addEventListener("click", () => {
+  const e = life.energy;
+  if (!e) return ($("mood-msg").textContent = "Save a statement first so there's a mood to log.");
+  if (!(watch.ws?.readyState === 1)) return ($("mood-msg").textContent = "Pair the Apple Watch (Devices) — it asks you to confirm before saving to Health.");
+  watch.ws.send(JSON.stringify({ type: "log_mood", valence: e.state === "low" ? -0.5 : e.state === "positive" ? 0.6 : 0, labels: e.state === "low" ? [e.tense ? "irritated" : "drained"] : e.state === "positive" ? ["happy"] : [], reason: `You said “${e.word}”`.slice(0, 80) }));
+  $("mood-msg").textContent = "Sent to your watch — confirm there to save it in Apple Health.";
+});
+
+/* ---------- Tasks ---------- */
+const gcalLink = (title, details, date) => { const d = (date || todayKey()).replaceAll("-", ""), next = todayKey(new Date(parseDay(date || todayKey()).getTime() + DAY_MS)).replaceAll("-", "");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&dates=${d}/${next}`; };
+function renderTasks() {
+  if (!$("tasks-today")) return;
+  const tasks = life.tasks || [], today = todayKey();
+  const lists = { today: [], later: [], held: [] };
+  for (const t of tasks.filter((x) => !x.done)) (t.heldUntil && t.heldUntil > today ? lists.held : t.due && t.due <= today ? lists.today : lists.later).push(t);
+  const item = (t) => {
+    const btns = [];
+    const mk = (label, fn, cls = "text-button") => { const b = el("button", { type: "button", className: cls, textContent: label }); b.addEventListener("click", fn); btns.push(b); };
+    if (!(t.due && t.due <= today)) mk("Move to today", () => { t.due = today; t.heldUntil = null; renderTasks(); });
+    if (t.big && !(t.heldUntil > today)) mk("Hold 3 days", () => holdTask(t));
+    mk("Done", () => { t.done = true; renderTasks(); });
+    btns.push(el("a", { className: "text-button", href: gcalLink(t.title, t.note || "From Threadline", t.heldUntil || t.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" }));
+    return el("li", { className: t.big ? "big" : "" }, el("div", {}, el("b", { textContent: t.title }), el("div", { className: "caption", textContent: [t.big ? "big decision" : "", t.heldUntil > today ? `held until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : t.due ? `due ${parseDay(t.due).toLocaleDateString([], { month: "short", day: "numeric" })}` : "", t.note || ""].filter(Boolean).join(" · ") })), el("div", { className: "row tight" }, ...btns));
+  };
+  for (const k of ["today", "later", "held"]) $(`tasks-${k}`).replaceChildren(...(lists[k].length ? lists[k].map(item) : [el("li", { className: "empty", textContent: k === "held" ? "Nothing held." : "Nothing here." })]));
+  saveThread();
+}
+function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy" : ""} day`; renderTasks(); }
+$("task-form").addEventListener("submit", (e) => {
+  e.preventDefault(); const title = $("task-title").value.trim(); if (!title) return;
+  (life.tasks ||= []).push({ id: newId("t"), title, due: $("task-due").value || null, big: $("task-big").checked, done: false });
+  $("task-title").value = ""; $("task-due").value = ""; $("task-big").checked = false; renderTasks();
+});
+
+/* ---------- Integrations (status from what is actually connected) ---------- */
+function renderIntegrations() {
+  if (!$("int-grid")) return;
+  const card = (name, on, what, how) => el("article", { className: `int-card${on ? " on" : ""}` }, el("header", {}, el("b", { textContent: name }), el("span", { className: "int-state", textContent: on ? "● connected" : "not connected" })), el("p", { textContent: what }), el("p", { className: "caption", textContent: how }));
+  $("int-grid").replaceChildren(
+    card("Vexo band", Boolean(capture.band), "Microphone (voice pace, pauses, loudness), movement, steps, taps to mark moments, battery.", "Bluetooth or USB · official Vexo Open kit · Devices"),
+    card("Apple Watch · Health", $("watch-pair").dataset.state === "connected", "Heart rate, HRV, resting HR, breathing, blood oxygen, sleep, wrist temperature, noise, exercise, mindful minutes, State of Mind, period days you logged. Taps for check-ins.", "Threadline watch app · pairing code · Devices"),
+    card("Camera · GoPro", Boolean(capture.camStream), "Video via the GoPro Webcam app; stays in this browser.", "Live session → Add video"),
+    card("Calendar", (life.tasks || []).length > 0 || agent.events.length > 0, "Quiet-time blocks and notes around tasks and decisions.", "Add to Google Calendar links or .ics files — each needs your tap"),
+    card("Cycle · Apple Health", life.cycle.starts.some((x) => x.source === "health"), "Reads the period days you logged; saves a mood to State of Mind only after you confirm on the watch.", "Watch → Share cycle dates"),
+    card("Music", true, "Calm, steady or uplifting search to match your energy.", "Opens Apple Music or Spotify — nothing is played or tracked"),
+    card("Messages", sessions.reflection.prefs.some((p) => p.action === "update"), "Your pre-approved update to close friends.", "Your share sheet or Messages — Threadline never sends"),
+    card("Deepgram", !tokenRequired || Boolean($("token").value), "Speech to text while you record.", "Server-side key · not kept for training"),
+    card("Gemini Decisions API", true, "Chooses one action per new line, with a confidence.", "gemini-decision-1 · server-side key"));
+}
+
+
+/* MiniMax music generation: only the mood word leaves this page. */
+$("music-gen").addEventListener("click", async () => {
+  const state = life.energy?.state || "steady", mood = state === "low" ? "calm" : state === "positive" ? "uplifting" : "steady";
+  $("music-gen-msg").textContent = `Generating a ${mood} track with MiniMax… this can take a minute.`;
+  $("music-gen").disabled = true;
+  try {
+    const token = $("token").value.trim();
+    const data = await request("/api/music/generate", { method: "POST", headers: { "Content-Type": "application/json", ...(tokenRequired && token ? { "X-App-Token": token } : {}) }, body: JSON.stringify({ mood }) });
+    const bytes = Uint8Array.from(atob(data.audio_b64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: data.mime || "audio/mpeg" }));
+    $("music-player").src = url; $("music-player").hidden = false; $("music-player").play().catch(() => {});
+    $("music-gen-msg").textContent = `A ${mood} track from MiniMax (${data.model}). It stays in this page.`;
+  } catch (e) { $("music-gen-msg").textContent = /Not Found/.test(e.message) ? "MiniMax music isn't set up on this server yet." : e.message; }
+  finally { $("music-gen").disabled = false; }
+});
+
 render();
+showView(location.hash.slice(1) || "live");

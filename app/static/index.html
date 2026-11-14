@@ -18,6 +18,9 @@
       <div class="nav-list">
         <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Live session</span><span class="nav-live" id="nav-live" hidden></span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
+        <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Energy</span></a>
+        <a href="#tasks" class="nav-item" data-view-link="tasks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"></path></svg><span>Tasks</span></a>
+        <a href="#integrations" class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
         <a href="#days" class="nav-item" data-view-link="days"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Your days</span></a>
         <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Graph</span></a>
         <a href="#devices" class="nav-item" data-view-link="devices"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
@@ -162,6 +165,65 @@
         </div>
       </section>
 
+
+      <section class="view" data-view="energy" hidden>
+        <div class="energy-top">
+          <div class="energy-now" id="energy-now" data-energy="unknown">
+            <div class="dial"><div class="dial-halo"></div><div class="dial-core"><span id="energy-label">Unknown</span><small id="energy-since">no signal yet</small></div></div>
+            <h2>Your energy now</h2>
+            <p id="energy-why" class="caption">From your own words once you save a statement — plus voice, movement and watch readings as context.</p>
+            <div class="row tight center">
+              <button type="button" id="mood-to-health" class="secondary">Log this mood to Apple Health</button>
+            </div>
+            <p id="mood-msg" class="caption"></p>
+          </div>
+          <div class="signal-grid">
+            <article class="sig-card"><header><b>Voice</b><span>Vexo band mic</span></header><dl id="sig-voice"></dl></article>
+            <article class="sig-card"><header><b>Body</b><span>Apple Watch</span></header><dl id="sig-body"></dl></article>
+            <article class="sig-card"><header><b>Movement</b><span>Band + watch</span></header><dl id="sig-move"></dl></article>
+            <article class="sig-card"><header><b>Cycle</b><span>Your dates · Apple Health</span></header><dl id="sig-cycle"></dl><p class="caption">Context only — not a cause.</p></article>
+          </div>
+        </div>
+        <section class="card music-card" aria-labelledby="music-h">
+          <h2 id="music-h">Music for your energy</h2>
+          <p class="caption">Opens a search in your music app. Threadline doesn't play or track anything.</p>
+          <div class="row" id="music-links"></div>
+          <div class="gen-music">
+            <button type="button" id="music-gen" class="secondary">Generate a track for this energy · MiniMax</button>
+            <span id="music-gen-msg" class="caption">Only the mood word (calm, steady or uplifting) is sent — never your words.</span>
+            <audio id="music-player" controls hidden></audio>
+          </div>
+        </section>
+        <section class="card" aria-labelledby="energy-words-h">
+          <h2 id="energy-words-h">Words that set your energy</h2>
+          <label for="positive-words">Positive-energy words</label>
+          <input id="positive-words" type="text" maxlength="300">
+          <p class="caption">Low-energy words are set in Your days. Only your saved statements are read.</p>
+        </section>
+      </section>
+
+      <section class="view" data-view="tasks" hidden>
+        <div class="task-banner" id="task-banner" hidden></div>
+        <form id="task-form" class="card task-form">
+          <label for="task-title">Add a task</label>
+          <div class="row tight">
+            <input id="task-title" type="text" maxlength="140" placeholder="e.g. Decide on the lease" required>
+            <label class="visually-hidden" for="task-due">Due</label><input id="task-due" type="date">
+            <label class="check inline"><input id="task-big" type="checkbox"><span>Big decision</span></label>
+            <button type="submit" class="secondary">Add</button>
+          </div>
+        </form>
+        <div class="task-cols">
+          <section class="card"><h2>Today</h2><ul id="tasks-today" class="task-list"></ul></section>
+          <section class="card"><h2>Later</h2><ul id="tasks-later" class="task-list"></ul></section>
+          <section class="card held"><h2>Big decisions · held</h2><ul id="tasks-held" class="task-list"></ul></section>
+        </div>
+        <p class="caption">On low-energy days the agent suggests holding big decisions and adding a calendar note; on positive days it suggests moving a task to today. Nothing changes until you tap.</p>
+      </section>
+
+      <section class="view" data-view="integrations" hidden>
+        <div class="int-grid" id="int-grid"></div>
+      </section>
       <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
           <div class="section-top"><h2 id="days-heading">Your days</h2><button type="button" id="day-summary" class="secondary">Summarize today</button></div>
           <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>

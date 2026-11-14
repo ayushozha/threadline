@@ -20,6 +20,10 @@ final class StreamSession: ObservableObject {
     @Published var shareCycle = false  // explicit opt-in, off every launch
     @Published var cycleNote: String?
     @Published var hapticReason: String?
+    @Published var moodRequest: MoodRequest?  // shown as "Save this mood to Apple Health?"
+    @Published var moodNote: String?
+    private var health: [String: Any] = [:]  // slow-changing Health values, refreshed once a minute
+    private var healthTick = 0
     private var cycleSent = false
     var wristRaised: Bool?
 
@@ -58,7 +62,7 @@ final class StreamSession: ObservableObject {
     // MARK: Start / stop
 
     private func start() {
-        lines = []; interim = ""; pending = Data()
+        lines = []; interim = ""; pending = Data(); health = [:]; healthTick = 0
         everReady = false; rejected = false; useHTTP = false; reconnectAttempts = 0; cycleSent = false
         isStreaming = true
         status = "Starting…"
@@ -76,6 +80,8 @@ final class StreamSession: ObservableObject {
             ticker = Task {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
+                    if self.healthTick % 60 == 0 { Task { self.health = await self.sensors.healthSnapshot() } }
+                    self.healthTick += 1
                     self.sendSensors()
                 }
             }
@@ -107,7 +113,8 @@ final class StreamSession: ObservableObject {
     private static let iso = ISO8601DateFormatter()
 
     private func sensorFrame() -> [String: Any] {
-        var frame: [String: Any] = ["type": "sensors", "t": Self.iso.string(from: Date()), "activity": sensors.activity]
+        var frame: [String: Any] = health
+        frame.merge(["type": "sensors", "t": Self.iso.string(from: Date()), "activity": sensors.activity]) { $1 }
         if let value = sensors.heartRate { frame["heart_rate"] = (value * 10).rounded() / 10 }
         if let value = sensors.steps { frame["steps"] = value }
         if let value = sensors.activeKcal { frame["active_kcal"] = (value * 10).rounded() / 10 }
@@ -159,6 +166,48 @@ final class StreamSession: ObservableObject {
         hapticReason = reason.isEmpty ? "Tap from your Threadline page" : String(reason)
         let shown = hapticReason
         Task { try? await Task.sleep(for: .seconds(4)); if self.hapticReason == shown { self.hapticReason = nil } }
+    }
+
+    // MARK: Mood logging (only saved after the user taps Save on the watch)
+
+    struct MoodRequest: Identifiable {
+        let id = UUID()
+        let valence: Double
+        let labels: [String]
+        let reason: String
+    }
+
+    private func receivedMood(_ message: [String: Any]) {
+        guard let valence = (message["valence"] as? NSNumber)?.doubleValue else { return }
+        guard #available(watchOS 11.0, *) else { replyMood("mood_failed"); return }
+        let labels = (message["labels"] as? [String] ?? []).filter { Sensors.moodLabels[$0] != nil }.prefix(3)
+        moodRequest = MoodRequest(valence: max(-1, min(1, valence)), labels: Array(labels),
+                                  reason: String((message["reason"] as? String ?? "").prefix(80)))
+        WKInterfaceDevice.current().play(.notification)
+    }
+
+    func answerMood(save: Bool) {
+        guard let request = moodRequest else { return }
+        moodRequest = nil
+        guard save else { replyMood("mood_declined"); moodNote = "Mood not saved"; return }
+        Task {
+            do {
+                guard #available(watchOS 11.0, *) else { throw CancellationError() }
+                try await sensors.saveMood(valence: request.valence, labels: request.labels)
+                replyMood("mood_logged"); moodNote = "Mood saved to Health"
+            } catch {
+                replyMood("mood_failed"); moodNote = "Could not save mood: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func replyMood(_ type: String) {
+        guard let body = try? JSONSerialization.data(withJSONObject: ["type": type]) else { return }
+        if useHTTP {
+            Task { await post("/api/watch/mood", body: body, contentType: "application/json") }
+        } else if let socket, socketReady, let text = String(data: body, encoding: .utf8) {
+            socket.send(.string(text)) { _ in }
+        }
     }
 
     // MARK: Audio
@@ -324,6 +373,7 @@ final class StreamSession: ObservableObject {
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             for message in json?["messages"] as? [[String: Any]] ?? [] { handle(message) }
             for haptic in json?["haptics"] as? [[String: Any]] ?? [] { playHaptic(haptic) }
+            for command in json?["commands"] as? [[String: Any]] ?? [] { handle(command) }
         } catch {
             if isStreaming { status = "Network error, retrying…" }  // the next post retries
         }
@@ -346,6 +396,8 @@ final class StreamSession: ObservableObject {
             sendCycleIfShared()
         case "haptic":
             playHaptic(message)
+        case "log_mood":
+            receivedMood(message)
         case "result":
             let transcript = message["transcript"] as? String ?? ""
             if message["is_final"] as? Bool == true {

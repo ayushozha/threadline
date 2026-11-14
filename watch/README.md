@@ -27,6 +27,12 @@ Apple Watch app ──(code)──> Threadline server ──> paired web page(s)
 - **Share cycle dates** is off by default. When you turn it on, the watch asks Health for read access to menstrual flow, reads the flow days you logged in the last 12 months, groups consecutive days into periods and sends only each period's first day, once per streaming session: `{"type":"cycle","period_starts":["YYYY-MM-DD",…]}` (ascending, at most 24, no flow levels, no predictions). The server checks the dates (valid ISO date, within 2 years, not after tomorrow UTC), forwards them to the paired page and stores nothing.
 - **Haptics:** the paired page can send `{"type":"haptic","kind":"notification"|"success"|"directionUp"|"click","reason":"…"}` on its feed socket (at most one every 3 seconds per code). The watch plays the haptic and shows the reason for a few seconds.
 
+## More Apple Health values and State of Mind
+
+- **Slow-changing values:** about once a minute while streaming, the watch reads the latest real Health sample (last 7 days) for each of these and adds it to every sensors frame until the next refresh. A value with no sample is left out; nothing is estimated. `hrv_sdnn_ms` (5–300), `resting_hr` (25–200), `respiratory_rate` (4–60), `spo2` (70–100, percent), `wrist_temp_delta_c` (-5–5, sleeping wrist temperature change from baseline), `env_noise_db` (20–140), plus `exercise_min_today` and `mindful_min_today` (0–1440, summed since midnight) and `sleep_hours_last_night` (0–24, asleep stages since 6 pm yesterday, overlaps merged). The server drops unknown or out-of-range values and stores nothing.
+- **State of Mind (watchOS 11+):** the latest one you logged today is sent as `state_of_mind: {"valence": -1…1, "labels": [≤3 HKStateOfMind.Label names like "calm"], "at": ISO}`.
+- **Mood logging (opt-in per request):** the paired page can send `{"type":"log_mood","valence":-1…1,"labels":[≤3 label names],"reason":"≤80 chars"}` on its feed. The server validates it (bad input gets `{"type":"error",…}`), answers `{"type":"log_mood_sent"}` and delivers it like a haptic: a WebSocket text frame, or in the next `POST /api/watch/sensors` response under `"commands"` (up to 3 queued). The watch asks **Save this mood to Apple Health?** Only on **Save** does it write an `HKStateOfMind` (`.momentaryEmotion`). It answers `{"type":"mood_logged"}`, `{"type":"mood_declined"}` or `{"type":"mood_failed"}` (socket frame, or `POST /api/watch/mood`), and feeds receive it with `"device"` added.
+
 ## Run in the watchOS Simulator
 
 You need Xcode with a watchOS simulator runtime. XcodeGen is optional: the generated `ThreadlineWatch.xcodeproj` is checked in. If you edit `project.yml`, run `xcodegen generate` in this folder.
@@ -34,7 +40,7 @@ You need Xcode with a watchOS simulator runtime. XcodeGen is optional: the gener
 ```bash
 cd watch
 xcodebuild -project ThreadlineWatch.xcodeproj -scheme ThreadlineWatch \
-  -destination 'platform=watchOS Simulator,name=Apple Watch Series 12 (46mm)' build
+  -destination 'generic/platform=watchOS Simulator' build
 ```
 
 Alternatively, open `ThreadlineWatch.xcodeproj`, pick a watch simulator and press Run.

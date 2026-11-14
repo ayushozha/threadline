@@ -28,9 +28,9 @@
 		<true/>
 	</dict>
 	<key>NSHealthShareUsageDescription</key>
-	<string>While you stream, Threadline reads your live heart rate and active energy and sends them to your paired Threadline page. Only if you turn on Share cycle dates, it also reads the period days you logged in Health, only to show your own dates in Threadline. Nothing is saved.</string>
+	<string>While you stream, Threadline reads your live heart rate and active energy, and about once a minute your latest HRV, resting heart rate, respiratory rate, blood oxygen, sleeping wrist temperature change, last night's sleep hours, environmental noise, today's exercise and mindful minutes, and the state of mind you logged today. It sends them to your paired Threadline page. Only if you turn on Share cycle dates, it also reads the period days you logged in Health. The server forwards these and stores nothing.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Threadline runs a workout session only to read live heart rate while streaming. The workout is discarded and not saved to Health.</string>
+	<string>Threadline runs a workout session only to read live heart rate while streaming; the workout is discarded and not saved to Health. When your paired page suggests a mood, Threadline saves it to Health as a State of Mind only after you tap Save on the watch.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Only when you turn on Record audio, Threadline streams what your microphone hears to your Threadline server for live transcription. Nothing is stored on the watch.</string>
 	<key>NSMotionUsageDescription</key>

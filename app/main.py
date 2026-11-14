@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent import DecideRequest, decide
+from app.music import MusicRequest, generate_music
 from app.graph import GraphRequest, gemini_graph, local_graph, validate_request
 from app.schedule import BookRequest, SlotRequest, book, find_slot
 
@@ -207,6 +208,12 @@ async def transcribe(request: Request):
         raise HTTPException(502, f"Deepgram request failed ({exc.response.status_code}). Check server configuration.") from None
     except (httpx.RequestError, KeyError, IndexError, ValueError, TypeError):
         raise HTTPException(502, "Transcription unavailable. Please retry.") from None
+
+
+@app.post("/api/music/generate", dependencies=[Depends(authorize)])
+async def music_generate(body: MusicRequest):
+    """Generate a short instrumental track with MiniMax. The prompt is built from the mood only."""
+    return await generate_music(body, provider_slots)
 
 
 @app.post("/api/schedule/find-slot")
@@ -420,6 +427,7 @@ class Pairing:
     sensors: dict | None = None  # HTTP sensors session: last frame time, watchdog task
     sockets: set = field(default_factory=set)  # watch-side WebSockets, for haptics
     haptics: list = field(default_factory=list)  # pending haptics for an HTTPS watch (max 3)
+    commands: list = field(default_factory=list)  # pending log_mood requests for an HTTPS watch (max 3)
     last_haptic: float = 0.0
 
 
@@ -513,6 +521,8 @@ async def watch_feed(client: WebSocket):
                 continue
             if isinstance(frame, dict) and frame.get("type") == "haptic":
                 await client.send_json(await send_haptic(pairing, frame))
+            elif isinstance(frame, dict) and frame.get("type") == "log_mood":
+                await client.send_json(await send_log_mood(pairing, frame))
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
@@ -521,7 +531,46 @@ async def watch_feed(client: WebSocket):
 
 # Sensor readings are forwarded to feeds as they arrive and never stored. They are plain readings:
 # nothing here infers stress, mood, health or cycle state from them.
-SENSOR_RANGES = {"heart_rate": (25, 250), "steps": (0, 200_000), "active_kcal": (0, 10_000)}
+SENSOR_RANGES = {
+    "heart_rate": (25, 250), "steps": (0, 200_000), "active_kcal": (0, 10_000),
+    # Slow-changing Apple Health values, latest sample (sent about once a minute when available).
+    "hrv_sdnn_ms": (5, 300), "resting_hr": (25, 200), "respiratory_rate": (4, 60), "spo2": (70, 100),
+    "wrist_temp_delta_c": (-5, 5), "sleep_hours_last_night": (0, 24), "env_noise_db": (20, 140),
+    "exercise_min_today": (0, 1440), "mindful_min_today": (0, 1440),
+}
+SENSOR_DECIMALS = {"steps": 0, "wrist_temp_delta_c": 2, "sleep_hours_last_night": 2}
+# HKStateOfMind.Label case names, as the watch sends them.
+MOOD_LABELS = {
+    "amazed", "amused", "angry", "annoyed", "anxious", "ashamed", "brave", "calm", "confident", "content",
+    "disappointed", "discouraged", "disgusted", "drained", "embarrassed", "excited", "frustrated", "grateful",
+    "guilty", "happy", "hopeful", "hopeless", "indifferent", "irritated", "jealous", "joyful", "lonely",
+    "overwhelmed", "passionate", "peaceful", "proud", "relieved", "sad", "satisfied", "scared", "stressed",
+    "surprised", "worried",
+}
+
+
+def finite_number(value: object, low: float, high: float) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high
+
+
+def clean_mood_labels(labels: object) -> list[str] | None:
+    """Up to 3 known HKStateOfMind label names, de-duplicated; None if anything is invalid."""
+    if not isinstance(labels, list) or len(labels) > 3 or not all(label in MOOD_LABELS for label in labels):
+        return None
+    return list(dict.fromkeys(labels))
+
+
+def clean_state_of_mind(value: object) -> dict | None:
+    """The latest state of mind the user logged in Health today: valence -1..1, up to 3 labels, ISO time."""
+    if not isinstance(value, dict) or not finite_number(value.get("valence"), -1, 1):
+        return None
+    labels = clean_mood_labels(value.get("labels", []))
+    if labels is None:
+        return None
+    out = {"valence": round(float(value["valence"]), 2), "labels": labels}
+    if isinstance(value.get("at"), str) and len(value["at"]) <= 40:
+        out["at"] = value["at"]
+    return out
 ACTIVITIES = {"still", "walk", "run", "unknown"}
 SENSOR_MIN_INTERVAL = 0.2  # at most ~5 frames/s per watch
 SENSOR_IDLE_SECONDS = 10  # HTTP sensors: report the watch gone after this long without a frame
@@ -534,12 +583,15 @@ def clean_sensors(frame: dict, device: str) -> dict:
         out["t"] = frame["t"]
     for key, (low, high) in SENSOR_RANGES.items():
         value = frame.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high:
-            out[key] = int(value) if key == "steps" else round(float(value), 1)
+        if finite_number(value, low, high):
+            decimals = SENSOR_DECIMALS.get(key, 1)
+            out[key] = int(value) if decimals == 0 else round(float(value), decimals)
     if frame.get("activity") in ACTIVITIES:
         out["activity"] = frame["activity"]
     if isinstance(frame.get("wrist_raised"), bool):
         out["wrist_raised"] = frame["wrist_raised"]
+    if (mood := clean_state_of_mind(frame.get("state_of_mind"))) is not None:
+        out["state_of_mind"] = mood
     out["device"] = device
     return out
 
@@ -623,6 +675,44 @@ async def send_haptic(pairing: Pairing, frame: dict) -> dict:
     return {"type": "haptic_sent"}
 
 
+# Mood logging: the paired page may ask the watch to save a state of mind to Apple Health. The watch
+# only saves it after the user confirms on the watch, then answers mood_logged / mood_declined / mood_failed.
+MOOD_REPLIES = {"mood_logged", "mood_declined", "mood_failed"}
+COMMAND_QUEUE_MAX = 3
+
+
+async def send_log_mood(pairing: Pairing, frame: dict) -> dict:
+    if not finite_number(frame.get("valence"), -1, 1):
+        return {"type": "error", "message": "valence must be a number from -1 to 1."}
+    labels = clean_mood_labels(frame.get("labels", []))
+    if labels is None:
+        return {"type": "error", "message": "labels must be up to 3 Apple Health state of mind labels."}
+    if not pairing.watches and not pairing.sockets:
+        return {"type": "error", "message": "No watch connected"}
+    reason = frame.get("reason")
+    command = {"type": "log_mood", "valence": round(float(frame["valence"]), 2), "labels": labels,
+               "reason": reason.strip()[:80] if isinstance(reason, str) else ""}
+    delivered = False
+    for socket in list(pairing.sockets):
+        try:
+            await socket.send_json(command)
+            delivered = True
+        except (WebSocketDisconnect, RuntimeError):
+            pairing.sockets.discard(socket)
+    if not delivered:
+        if not pairing.watches:
+            return {"type": "error", "message": "No watch connected"}
+        pairing.commands = (pairing.commands + [command])[-COMMAND_QUEUE_MAX:]
+    return {"type": "log_mood_sent"}
+
+
+async def forward_mood_reply(pairing: Pairing, frame: dict, device: str) -> bool:
+    if frame.get("type") not in MOOD_REPLIES:
+        return False
+    await fanout(pairing, {"type": frame["type"], "device": device})
+    return True
+
+
 def watch_receiver(client: WebSocket, forward: Callable[[dict], Awaitable[bool]]) -> Receive:
     """Like socket_receiver, but sensor text frames are forwarded instead of ending the stream."""
     async def receive() -> bytes | str | None:
@@ -636,7 +726,7 @@ def watch_receiver(client: WebSocket, forward: Callable[[dict], Awaitable[bool]]
                 frame = json.loads(message.get("text") or "")
             except ValueError:
                 frame = None
-            if isinstance(frame, dict) and frame.get("type") in {"sensors", "cycle"}:
+            if isinstance(frame, dict) and frame.get("type") in {"sensors", "cycle"} | MOOD_REPLIES:
                 await forward(frame)
                 continue
             return "stop"
@@ -664,6 +754,8 @@ async def watch_stream(client: WebSocket):
     async def forward(frame: dict) -> bool:
         if frame.get("type") == "cycle":
             return await forward_cycle(pairing, frame, device)
+        if frame.get("type") in MOOD_REPLIES:
+            return await forward_mood_reply(pairing, frame, device)
         return await sensors(frame)
 
     receive = watch_receiver(client, forward)
@@ -731,7 +823,25 @@ async def watch_sensors(request: Request, x_watch_code: str = Header(default="")
     response: dict = {"forwarded": await session["forward"](frame)}
     if pairing.haptics:
         response["haptics"], pairing.haptics = pairing.haptics, []
+    if pairing.commands:
+        response["commands"], pairing.commands = pairing.commands, []
     return response
+
+
+@app.post("/api/watch/mood")
+async def watch_mood(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default="")):
+    """HTTPS form of the watch's answer to log_mood: {"type": "mood_logged" | "mood_declined" | "mood_failed"}."""
+    pairing = find_pairing(x_watch_code)
+    if not pairing:
+        raise HTTPException(401, "Unknown or expired pairing code. Create a new one on the website.")
+    body = await request.body()
+    try:
+        frame = json.loads(body) if len(body) <= 1024 else None
+    except ValueError:
+        frame = None
+    if not isinstance(frame, dict) or not await forward_mood_reply(pairing, frame, watch_device(x_watch_device)):
+        raise HTTPException(422, 'Send {"type": "mood_logged" | "mood_declined" | "mood_failed"}.')
+    return {"forwarded": True}
 
 
 @app.post("/api/watch/cycle")
