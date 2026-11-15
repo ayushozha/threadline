@@ -8,7 +8,7 @@ import { bandStream, startRealtime } from './realtime.mjs';
 const ENGINE_KEY = "threadline.assistantEngine";
 const NO_BAND = "Connect the Vexo band (Your band → Connect) to talk.";
 const ENGINES = { gemini: "Gemini + ElevenLabs", realtime: "OpenAI Realtime" };
-const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "realtime" ? "realtime" : "gemini"; } catch { return "gemini"; } };
+const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "gemini" ? "gemini" : "realtime"; } catch { return "realtime"; } };
 const WAKE = /^\s*(hey\s+)?(thread\s*line|threadline)[,.!\s]*/i;
 
 export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm }) {

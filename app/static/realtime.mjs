@@ -83,9 +83,12 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
           done.add(c.call_id);
           let result = null;
           try { result = await runAction(c.action); } catch (err) { result = `Failed: ${err.message}`; }
-          if (result) onAction(String(result));
-          send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: c.call_id,
-            output: JSON.stringify({ ok: Boolean(result) && !String(result).startsWith("Failed"), result: result || "Not available" }) } });
+          const isObj = result && typeof result === "object";
+          const chip = isObj ? result.chip : result;
+          if (chip) onAction(String(chip));
+          const payload = isObj ? { ok: true, ...(result.data !== undefined ? { data: result.data } : {}), ...(result.chip ? { result: result.chip } : {}) }
+            : { ok: Boolean(result) && !String(result).startsWith("Failed"), result: result || "Not available" };
+          send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: c.call_id, output: JSON.stringify(payload).slice(0, 12000) } });
         }
         send({ type: "response.create" });
         break;

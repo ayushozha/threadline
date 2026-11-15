@@ -2839,11 +2839,54 @@ function assistantContext() {
 }
 async function assistantAction(a) {
   const result = await assistantActionRun(a);
-  if (result && !["add_task", "emergency"].includes(a.type)) { try { logAction(`Voice · ${result}`); } catch { /* */ } }
+  const chip = result && typeof result === "object" ? result.chip : result;
+  if (chip && !["add_task", "emergency", "add_note", "get_dashboard", "recall", "get_calendar"].includes(a.type)) { try { logAction(`Voice · ${chip}`); } catch { /* */ } }
   return result;
 }
 const MOOD_VALUE = { very_low: -0.8, low: -0.4, neutral: 0, content: 0.4, happy: 0.8 }, AGI_VALUE = { none: 0, mild: 1, moderate: 2, severe: 3 };
+function memorySearch(query) {
+  const q = String(query || "").toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+  const score = (text) => q.reduce((n, w) => n + (String(text).toLowerCase().includes(w) ? 1 : 0), 0);
+  const notes = [...sessions.reflection.notes, ...sessions.routine.notes].map((n) => ({ text: n.text, at: n.at, source: n.context || n.source || "note" }));
+  const lines = loadArchive().flatMap((t) => t.lines.map((l) => ({ text: l.text, at: l.at, source: "conversation" })));
+  return [...notes, ...lines].map((x) => ({ ...x, s: score(x.text) })).filter((x) => x.s > 0).sort((p, q2) => q2.s - p.s || String(q2.at).localeCompare(String(p.at))).slice(0, 8)
+    .map(({ text, at, source }) => ({ text: text.slice(0, 240), at, source }));
+}
 async function assistantActionRun(a) {
+  if (a.type === "get_dashboard") return { data: assistantContext() };
+  if (a.type === "remember") {
+    const fact = String(a.fact || "").trim(); if (!fact) return null;
+    const note = { id: newId("n"), text: fact, at: new Date().toISOString(), source: "voice", context: `Remembered by voice · ${a.kind || "other"}` };
+    sessions.reflection.notes.push(note); saveThread(); renderTimeline?.(); try { scheduleGraph(0); } catch { /* graph idle */ }
+    return { chip: `Remembered: ${fact.slice(0, 60)}`, data: { saved: true } };
+  }
+  if (a.type === "recall") { const found = memorySearch(a.query); return { chip: found.length ? `Found ${found.length} memories` : null, data: { query: a.query, results: found } }; }
+  if (a.type === "get_calendar") {
+    try { const d = await request(`/api/calendar/events?days=${Math.max(1, Math.min(30, a.days || 7))}${a.query ? `&q=${encodeURIComponent(a.query)}` : ""}`);
+      return { chip: `Checked calendar · ${d.events?.length || 0} events`, data: { events: (d.events || []).slice(0, 25), calendars: d.calendars } }; }
+    catch (e) { return { data: { error: /Not Found|404/.test(e.message) ? "No calendar connected yet. Connect one on the Dashboard (Your calendar)." : e.message } }; }
+  }
+  if (a.type === "add_calendar_event") {
+    const start = new Date(a.start); if (Number.isNaN(start.getTime())) return { data: { error: "I need a valid date and time." } };
+    const end = new Date(start.getTime() + (a.minutes || 60) * 60000), fmtG = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(a.title)}&dates=${fmtG(start)}/${fmtG(end)}${a.location ? `&location=${encodeURIComponent(a.location)}` : ""}&details=${encodeURIComponent("Added by voice with Threadline")}`;
+    (life.taskDrafts ||= []).unshift({ id: newId("draft"), title: `${a.title} · ${start.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`, due: todayKey(start), big: false,
+      suggested: { id: `cal-${Date.now()}`, source: "Voice · calendar", why: `Open Google Calendar to save it: ${url}` }, statement: { id: `cal:${Date.now()}`, text: a.title, speaker_confirmed: true } });
+    renderTasks(); saveThread();
+    return { chip: `Calendar event ready: ${a.title}`, data: { ready_to_confirm: true, google_calendar_link: url } };
+  }
+  if (a.type === "add_routine_step") {
+    const step = String(a.step || "").trim(); if (!step) return null;
+    try { const r = careRoutine(); if (!r.includes(step)) { r.push(step); localStorage.setItem(careRoutineKey(), JSON.stringify(r.slice(0, 12))); renderCareRoutine(); } } catch { /* */ }
+    return `Routine step added: ${step}`;
+  }
+  if (a.type === "set_emergency_contact") {
+    const name = String(a.name || "").trim(), phone = String(a.phone || "").replace(/[^\d+ ]/g, "").trim();
+    if (!name || phone.replace(/\D/g, "").length < 6) return { data: { error: "I need a name and a full phone number." } };
+    saveContacts({ ...loadContacts(), name, phone }); renderContacts();
+    return `Emergency contact: ${name} (${phone})`;
+  }
+  if (a.type === "add_note") { const text = String(a.text || "").trim(); if (!text) return null; logAction(`Note · ${text.slice(0, 200)}`); return `Note saved for the caregiver`; }
   if (a.type === "log_checkin") {
     const log = loadMoodLog(), day = todayKey(), cur = log[day] || {}, period = a.period || (new Date().getHours() < 14 ? "morning" : "evening");
     if (a.mood) cur[period] = MOOD_VALUE[a.mood];
