@@ -3,6 +3,7 @@ import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
 import { sampleSeed, moodSeries } from './sample-data.mjs';
+import { renderDashboard } from './dashboard.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -90,6 +91,13 @@ const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
 let ownerMood = moodSeries({}, 30);
 const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
+function drawDashboard() {
+  try {
+    renderDashboard($("dashboard"), { health: healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
+      transcripts: loadArchive(), tasks: life.tasks || [], who: "Dad" });
+  } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
+}
+window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); });
 function renderMood() {
   if (!$("mood-chart")) return;
   const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
@@ -125,6 +133,7 @@ async function loadOwnerHealth() {
     ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
     ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
     ownerMood = moodSeries(ownerHealth.byDay, 30);
+    drawDashboard();
     renderEnergy(); renderToday(); renderDays(); renderIntegrations();
   } catch { /* offline: screens keep live readings only */ }
 }
@@ -1428,7 +1437,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations", care: "Care" };
+const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
@@ -2490,7 +2499,7 @@ window.addEventListener("pagehide", () => { careStop(); careStopCamera(); careRe
 careSetSource("file");
 
 render();
-showView(location.hash.slice(1) || "care");
+showView(location.hash.slice(1) || "dashboard");
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
 loadOwnerHealth(); renderSampleBanner();
