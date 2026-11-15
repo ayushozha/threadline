@@ -1,0 +1,9 @@
+{
+  "source": "https://threadline.ayushojha.com/",
+  "captured_at": "2026-11-15T01:55:16.391Z",
+  "seconds": 45,
+  "resolution": "1280x720",
+  "fps": 24,
+  "description": "Actual deployed Threadline app captured in a fresh browser. Private owner transcript/Health endpoints were blocked; the app showed its built-in example fallback. Library uses existing synthetic scene and saved provider response; no new live inference is claimed.",
+  "browser_errors": []
+}

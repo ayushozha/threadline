@@ -19,9 +19,15 @@ def main():
             raise SystemExit(f"Required source missing: {source.relative_to(ROOT)}")
         shutil.copyfile(source, MEDIA / name)
     files = [MEDIA / name for name in (
-        "README.md", "threadline-thumbnail.png", "final-video-script.md",
-        "earlier-four-mode-concept.mp4", "earlier-four-mode-concept.vtt",
+        "README.md", "threadline-thumbnail.png", "final-video-script.md", "index.html", "media.css",
+        "threadline-two-minute-demo.mp4", "final-video-poster.jpg", "final-render-receipt.json",
+        "final-narration.mp3", "final-narration.srt", "final-narration.vtt", "final-narration.chapters.json", "narration.txt",
+        "earlier-four-mode-concept.mp4", "earlier-four-mode-concept.vtt", "earlier-concept-poster.jpg",
     )] + sorted((MEDIA / "screenshots").glob("*.png")) + [MEDIA / "screenshots/manifest.json"]
+    files.extend(sorted((MEDIA / "live-capture").glob("*")))
+    for optional in ("threadline-two-minute-demo.srt", "threadline-two-minute-demo.vtt"):
+        if (MEDIA / optional).is_file():
+            files.append(MEDIA / optional)
     if len(list((MEDIA / "screenshots").glob("*.png"))) != 6:
         raise SystemExit("Expected the six reviewed screenshots.")
     for source in files:

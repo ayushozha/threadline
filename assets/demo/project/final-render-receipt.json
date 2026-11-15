@@ -1,0 +1,97 @@
+{
+  "duration_seconds": 120,
+  "resolution": "1280x720",
+  "fps": 24,
+  "narration": "ElevenLabs Jessica; final-narration.mp3",
+  "app_capture": "live-capture/live-ui.mp4",
+  "sources": [
+    {
+      "path": "assets/demo/project/threadline-thumbnail.png",
+      "seconds": 8,
+      "heading": "Everyday support for memory loss and disability",
+      "label": "Illustrative family portrait - not a recorded call"
+    },
+    {
+      "path": "assets/demo/dementia/images/tea-routine-pause-motion.mp4",
+      "seconds": 10.9,
+      "heading": "One person. One interrupted afternoon.",
+      "label": "Synthetic illustration - fictional Evelyn scenario"
+    },
+    {
+      "path": "assets/demo/project/live-capture/01-dashboard.jpg",
+      "seconds": 8,
+      "heading": "Threadline - context when it matters",
+      "label": "Actual deployed interface - example history clearly labeled"
+    },
+    {
+      "path": "assets/demo/project/live-capture/02-transcripts.jpg",
+      "seconds": 9.6,
+      "heading": "The conversation becomes a memory",
+      "label": "Actual deployed interface - saved example words"
+    },
+    {
+      "path": "assets/demo/project/live-capture/live-ui.mp4",
+      "seconds": 8,
+      "heading": "Her own words preserve the plan",
+      "label": "Recorded deployed website - fictional saved conversation"
+    },
+    {
+      "path": "assets/demo/project/live-capture/live-ui.mp4",
+      "seconds": 9,
+      "heading": "Connect the words to what is visible",
+      "label": "Recorded deployed website - captured model response"
+    },
+    {
+      "path": "assets/demo/project/live-capture/fresh-ui.mp4",
+      "seconds": 6,
+      "heading": "A fresh model response on the deployed website",
+      "label": "Actual Gemini request - fictional scene, new response"
+    },
+    {
+      "path": "assets/demo/project/live-capture/01-dashboard.jpg",
+      "seconds": 8,
+      "heading": "Choose the support you need",
+      "label": "Actual deployed interface - four assistance modes"
+    },
+    {
+      "path": "assets/demo/project/live-capture/07-hearing.jpg",
+      "seconds": 8.5,
+      "heading": "Speech stays visible",
+      "label": "Actual interface - labeled example captions"
+    },
+    {
+      "path": "assets/demo/project/live-capture/03-memory.jpg",
+      "seconds": 12.1,
+      "heading": "Follow the source, not a guess",
+      "label": "Actual deployed Memory graph - example conversations"
+    },
+    {
+      "path": "assets/demo/project/live-capture/05-report.jpg",
+      "seconds": 12.8,
+      "heading": "Review before sharing",
+      "label": "Actual report preview - no message or call sent"
+    },
+    {
+      "path": "assets/demo/project/live-capture/06-library-fresh.jpg",
+      "seconds": 13.7,
+      "heading": "An early prototype, with visible evidence",
+      "label": "Actual interface - example footage and captured reasoning"
+    },
+    {
+      "path": "assets/demo/project/threadline-thumbnail.png",
+      "seconds": 5.4,
+      "heading": "Threadline - A little closer. Every day.",
+      "label": "Prototype - physical hardware requires separate testing"
+    }
+  ],
+  "synthetic_inputs": true,
+  "external_messages_sent": false,
+  "note": "Contains actual website recording plus labeled synthetic illustrations. Not a physical hardware validation.",
+  "full_decode": "Complete ffmpeg audio/video decode passed",
+  "voice_timing": "Natural Jessica narration split at paragraph boundaries with distributed pauses; no speed change",
+  "captions": "Burned captions and separate retimed SRT/VTT",
+  "audio_peak_dbfs": -3.1,
+  "visual_review": "Reviewed actual source screenshots and final frames for legibility and provenance; illustrative clips labeled; new Gemini response recorded on the deployed website.",
+  "live_capture_manifest": "live-capture/manifest.json",
+  "fresh_response": "live-capture/fresh-library-result.json"
+}

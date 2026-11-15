@@ -1,0 +1,62 @@
+[
+  {
+    "section": 1,
+    "start": 0.1,
+    "end": 14.08,
+    "text": "My mum, Evelyn, has always been the one who remembers everyone's birthday. Now, small things can interrupt her day. She loses her place making tea. Small print is harder to read. And sometimes, she asks where she left her glasses again."
+  },
+  {
+    "section": 2,
+    "start": 14.66,
+    "end": 19.52,
+    "text": "She doesn't need another complicated app. She needs a little context, right when it matters."
+  },
+  {
+    "section": 3,
+    "start": 19.94,
+    "end": 21.24,
+    "text": "That's why we built Threadline."
+  },
+  {
+    "section": 4,
+    "start": 21.68,
+    "end": 28.8,
+    "text": "Her Vexo band captures the conversation. A camera adds what's in front of her. And her saved words help the assistant pick up the thread."
+  },
+  {
+    "section": 5,
+    "start": 29.22,
+    "end": 42.7,
+    "text": "Here, Evelyn said she wanted to make tea, then water her plant. The phone interrupted her. When she asks what she was doing, Threadline can return to that plan, show its source, and offer one next step. It doesn't pretend the task is finished."
+  },
+  {
+    "section": 6,
+    "start": 43.06,
+    "end": 55.34,
+    "text": "The same assistant adapts to different needs. Memory helps recover a plan. Sight describes what's visible. Hearing brings speech into large captions. Mobility keeps the person's request for help at the center."
+  },
+  {
+    "section": 7,
+    "start": 55.72,
+    "end": 63.44,
+    "text": "The dashboard and memory graph connect those moments. A daughter like me can review the context, instead of starting every conversation from scratch."
+  },
+  {
+    "section": 8,
+    "start": 63.86,
+    "end": 72.16,
+    "text": "If Mum wants help, Threadline prepares a message. She reviews it. She decides what to share. A draft is never passed off as a message already sent."
+  },
+  {
+    "section": 9,
+    "start": 72.6,
+    "end": 82.92,
+    "text": "This is an early prototype. The examples are illustrative; the interface and connected reasoning are real. Our aim is simple: less effort between needing support and getting it."
+  },
+  {
+    "section": 10,
+    "start": 83.3,
+    "end": 86.16,
+    "text": "Threadline. A little closer. Every day."
+  }
+]

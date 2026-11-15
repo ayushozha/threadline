@@ -1,0 +1,19 @@
+[warm, conversational] My mum, Evelyn, has always been the one who remembers everyone's birthday. Now, small things can interrupt her day. She loses her place making tea. Small print is harder to read. And sometimes, she asks where she left her glasses again.
+
+She doesn't need another complicated app. She needs a little context, right when it matters.
+
+[gently] That's why we built Threadline.
+
+Her Vexo band captures the conversation. A camera adds what's in front of her. And her saved words help the assistant pick up the thread.
+
+Here, Evelyn said she wanted to make tea, then water her plant. The phone interrupted her. When she asks what she was doing, Threadline can return to that plan, show its source, and offer one next step. It doesn't pretend the task is finished.
+
+The same assistant adapts to different needs. Memory helps recover a plan. Sight describes what's visible. Hearing brings speech into large captions. Mobility keeps the person's request for help at the center.
+
+The dashboard and memory graph connect those moments. A daughter like me can review the context, instead of starting every conversation from scratch.
+
+If Mum wants help, Threadline prepares a message. She reviews it. She decides what to share. A draft is never passed off as a message already sent.
+
+This is an early prototype. The examples are illustrative; the interface and connected reasoning are real. [reassuring] Our aim is simple: less effort between needing support and getting it.
+
+Threadline. A little closer. Every day.

@@ -1,25 +1,29 @@
 # Threadline project media
 
-Open `index.html` for the gallery, or download `threadline-media-kit.zip`.
+Open `index.html` to watch the completed two-minute film and view the gallery,
+or download `threadline-media-kit.zip` for the portable assets.
 
-The six 1920 × 1080 screenshots show the actual local app: Dashboard, Memory,
-Transcripts, Hearing, Scenario Library and report previews. They use the
-built-in example conversations and an empty local database, with no private
-recordings or patient Health data. The Library capture uses synthetic scenes.
-No connected hardware or completed message delivery is implied.
+`threadline-two-minute-demo.mp4` combines Jessica narration, actual app captures,
+and clearly identified illustrative scenes. `final-render-receipt.json` records
+the edit. The exact spoken script is `narration.txt`; the raw voice track is
+`final-narration.mp3`, with aligned `.srt`, `.vtt` and chapter timings. Raw-track
+caption timings do not include additional visual holds in the completed film.
 
-`screenshots/manifest.json` records capture provenance. Reproduce the screenshots
-with `tools/capture_project_media.mjs` against an isolated local server.
+The six 1920 × 1080 screenshots show Dashboard, Memory, Transcripts, Hearing,
+Scenario Library and report previews. `screenshots/manifest.json` records their
+local capture provenance. `live-capture/manifest.json`, when present, records the
+additional deployed-app capture. Example inputs and a saved model response are
+not presented as a physical band session. No completed message delivery or
+clinical performance is demonstrated.
 
-`final-video-script.md` is the current two-minute Evelyn, Emma and Lily story.
-Its dialogue is rehearsal copy. A matching two-minute film has not been made
-as part of this media package.
+`final-video-script.md` is the earlier sunflower-story production concept. It
+is included for reference and is not the narration of the completed film.
+`earlier-four-mode-concept.mp4` is the separate 59-second concept film, with its
+own `.vtt`; it uses illustrative scenes and response text.
 
-`earlier-four-mode-concept.mp4` is the earlier 58.8-second concept film with
-Jessica narration and English captions. Its scenes and response text are
-illustrative; it is not the new two-minute film or a recording of live inference.
-
-The ZIP includes the screenshots, manifest, project thumbnail, this README,
-current script, and the clearly labeled earlier concept film and captions.
+The media kit includes the completed film, poster, raw narration and captions,
+actual spoken script, capture/render manifests, six screenshots, thumbnail,
+this README, gallery, and separately named earlier concept materials. It does
+not include credentials, raw private health data, or large alignment metadata.
 `tools/package_project_media.py` builds and verifies the ZIP using Python's
 standard library.

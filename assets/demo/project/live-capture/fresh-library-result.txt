@@ -1,0 +1,4 @@
+{
+  "text": "🧠 Memory · Generated with MiniMax Hailuo-02Where are my glasses?Grandpa can't find his glasses for the third time today.CloseAsk Gemini again (live)Run live guidance on this videoText familyFresh answer from Gemini.🔊Gemini Decisions API · live runSpeak guidanceUrgency: routine · 75%Gemini says out loud“Your glasses are on the table right next to the blue mug. They are just to the right of your hand.”🔊 PlayWhat Gemini seesA person's hands rest on a sunlit wooden kitchen table beside a pair of eyeglasses and a blue mug.SummaryEyeglasses are visible on the wooden kitchen table beside a blue mug near the person's hand.For the familyPerson was reaching across the kitchen table while their glasses were resting beside the blue mug.gemini-4-hydrogen on 4 frames → gemini-decision-1 · Nov 14, 5:55 PMTalk to Gemini about this videoWhat should I do now?Should I call someone?Send🔇 Off",
+  "ready": 4
+}

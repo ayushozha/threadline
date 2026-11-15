@@ -1,0 +1,150 @@
+1
+00:00:01,600 --> 00:00:06,020
+My mum, Evelyn, has always been the one who
+remembers everyone's birthday.
+
+2
+00:00:06,540 --> 00:00:08,560
+Now, small things can interrupt her day.
+
+3
+00:00:08,980 --> 00:00:10,540
+She loses her place making tea.
+
+4
+00:00:11,040 --> 00:00:12,500
+Small print is harder to read.
+
+5
+00:00:12,860 --> 00:00:15,580
+And sometimes, she asks where she left her
+glasses again.
+
+6
+00:00:19,160 --> 00:00:21,260
+She doesn't need another complicated app.
+
+7
+00:00:21,600 --> 00:00:24,020
+She needs a little context, right when it
+matters.
+
+8
+00:00:24,440 --> 00:00:25,740
+That's why we built Threadline.
+
+9
+00:00:26,180 --> 00:00:28,380
+Her Vexo band captures the conversation.
+
+10
+00:00:28,760 --> 00:00:30,320
+A camera adds what's in front of her.
+
+11
+00:00:30,620 --> 00:00:33,300
+And her saved words help the assistant pick
+up the thread.
+
+12
+00:00:36,720 --> 00:00:40,200
+Here, Evelyn said she wanted to make tea,
+then water her plant.
+
+13
+00:00:40,520 --> 00:00:41,640
+The phone interrupted her.
+
+14
+00:00:42,000 --> 00:00:44,800
+When she asks what she was doing, Threadline
+can return to
+
+15
+00:00:44,840 --> 00:00:48,020
+that plan, show its source, and offer one
+next step.
+
+16
+00:00:48,360 --> 00:00:50,200
+It doesn't pretend the task is finished.
+
+17
+00:00:59,560 --> 00:01:01,880
+The same assistant adapts to different
+needs.
+
+18
+00:01:02,300 --> 00:01:03,840
+Memory helps recover a plan.
+
+19
+00:01:04,280 --> 00:01:05,680
+Sight describes what's visible.
+
+20
+00:01:06,060 --> 00:01:08,460
+Hearing brings speech into large captions.
+
+21
+00:01:08,840 --> 00:01:11,840
+Mobility keeps the person's request for help
+at the center.
+
+22
+00:01:16,220 --> 00:01:18,720
+The dashboard and memory graph connect those
+moments.
+
+23
+00:01:19,100 --> 00:01:21,280
+A daughter like me can review the context,
+
+24
+00:01:21,420 --> 00:01:23,940
+instead of starting every conversation from
+scratch.
+
+25
+00:01:28,360 --> 00:01:30,900
+If Mum wants help, Threadline prepares a
+message.
+
+26
+00:01:31,280 --> 00:01:31,960
+She reviews it.
+
+27
+00:01:32,220 --> 00:01:33,340
+She decides what to share.
+
+28
+00:01:33,720 --> 00:01:36,660
+A draft is never passed off as a message
+already sent.
+
+29
+00:01:41,100 --> 00:01:42,480
+This is an early prototype.
+
+30
+00:01:42,760 --> 00:01:46,960
+The examples are illustrative; the interface
+and connected reasoning are real.
+
+31
+00:01:47,380 --> 00:01:51,420
+Our aim is simple: less effort between
+needing support and getting it.
+
+32
+00:01:54,800 --> 00:01:55,320
+Threadline.
+
+33
+00:01:55,760 --> 00:01:56,620
+A little closer.
+
+34
+00:01:57,120 --> 00:01:57,660
+Every day.
