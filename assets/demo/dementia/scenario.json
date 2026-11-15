@@ -8,5 +8,5 @@
     {"id":"interruption-04","at":"2026-11-14T09:03:00","source":"fictional","text":"Meera: The phone is ringing. I'll answer it and come back to my tea."},
     {"id":"question-05","at":"2026-11-14T09:06:00","source":"fictional","text":"Meera: I am back in the kitchen. What was I doing?"}
   ],
-  "frame": {"id":"kitchen-06","at":"2026-11-14T09:06:01","path":"images/tea-routine-evidence.png","label":"AI-generated scene, not a live camera frame"}
+  "frame": {"id":"kitchen-06","at":"2026-11-14T09:06:01","path":"images/tea-routine-evidence.png","label":"Synthetic scene, not a live camera frame"}
 }

@@ -58,6 +58,6 @@ try {
   }
   encode.stdin.end(); await encoded;
   if(errors.length)throw Error(`Browser errors: ${errors.join(', ')}`);
-  writeFileSync(path.join(out,'render-receipt.json'),JSON.stringify({generated_at:new Date().toISOString(),resolution:'1280x720',capture_fps:fps,output_fps:24,duration_seconds:duration,narration:'Jessica; ElevenLabs; existing approved v2 narration',visuals:'AI-generated fictional stills, deterministic browser typography and motion',inference:'Captured actual Gemini response; fictional inputs',provider_capture:'provider-response.json',browser_errors:errors,review_frames:path.relative(root,scratch).replaceAll('\\','/')},null,2)+'\n');
+  writeFileSync(path.join(out,'render-receipt.json'),JSON.stringify({generated_at:new Date().toISOString(),resolution:'1280x720',capture_fps:fps,output_fps:24,duration_seconds:duration,narration:'Jessica; ElevenLabs; existing approved v2 narration',visuals:'Synthetic fictional stills, deterministic browser typography and motion',inference:'Captured actual Gemini response; fictional inputs',provider_capture:'provider-response.json',browser_errors:errors,review_frames:path.relative(root,scratch).replaceAll('\\','/')},null,2)+'\n');
   console.log(`Saved film and review frames: ${scratch}`);
 } finally { socket?.close(); child.kill(); if(encode&&!encode.killed)encode.kill(); await sleep(500); try{rmSync(profile,{recursive:true,force:true});}catch{} }

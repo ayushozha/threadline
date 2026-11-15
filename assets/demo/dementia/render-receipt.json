@@ -5,7 +5,7 @@
   "output_fps": 24,
   "duration_seconds": 55.12,
   "narration": "Jessica; ElevenLabs; existing approved v2 narration",
-  "visuals": "AI-generated fictional stills, deterministic browser typography and motion",
+  "visuals": "Synthetic fictional stills, deterministic browser typography and motion",
   "inference": "Captured actual Gemini response; fictional inputs",
   "provider_capture": "provider-response.json",
   "browser_errors": [],

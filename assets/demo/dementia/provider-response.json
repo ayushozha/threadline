@@ -39,7 +39,7 @@
   "engine": "gemini",
   "capture_metadata": {
     "synthetic_inputs": true,
-    "description": "Real Gemini API response to supplied fictional conversation and AI-generated test image. Not patient data.",
+    "description": "Real Gemini API response to supplied fictional conversation and Synthetic test image. Not patient data.",
     "captured_at": "2026-11-15T01:11:16Z",
     "elapsed_seconds": 9.65,
     "image_bytes": 66665
