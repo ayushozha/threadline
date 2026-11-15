@@ -1285,4 +1285,6 @@ from app import watch_claim  # noqa: E402  (device-code pairing; imports this mo
 app.include_router(watch_claim.router)
 from app import demo_feed  # noqa: E402  (public demo feed; imports this module)
 app.include_router(demo_feed.router)
+from app import live_gemini  # noqa: E402  (Gemini Live relay; imports this module)
+app.include_router(live_gemini.router)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")

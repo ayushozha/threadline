@@ -399,7 +399,7 @@ function bandStatus(text, error = false) { $("band-state").textContent = text ||
 const isVexo = () => $("source").value === "vexo";
 function setRecUI() {
   const live = capture.active, vexo = isVexo();
-  $("rec-start").disabled = busy || live || (vexo && (!capture.band || capture.band.reconnecting));
+  $("rec-start").disabled = busy || live || Boolean(vexo && capture.band?.reconnecting);  // no band → records from the computer mic
   $("rec-stop").disabled = !live;
   $("source").disabled = live; $("cam-on").disabled = live; $("capture-identity").disabled = live;
   $("cam-device").disabled = live; $("cam-connect").disabled = live;
@@ -441,6 +441,7 @@ async function connectBand(kind) {
   if (!connected) return renderPair();
   rememberBand(bandNumber);
   attachBand(connected);
+  if (!capture.active) $("source").value = "vexo";  // the band is the microphone again
   setTimeout(maybeAutoStart, 1200);
   bandStatus(`Connected to ${connected.name}. It flashes white.`);
   $("info-link").textContent = { serial: "USB cable", ble: "Bluetooth", sim: "Pretend (simulator)" }[connected.transportKind] || connected.transportKind;
@@ -526,8 +527,9 @@ $("rec-start").addEventListener("click", async () => {
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
   try { await ensureService(); } catch (e) { return recState(e.message, true); }
   if (!service.transcription) return recState("Transcription is temporarily unavailable. Please try again later.", true);
+  // The Vexo band is the recorder. No band → say exactly what to do; never fall back to another microphone.
+  if ($("source").value === "vexo" && !capture.band) { $("pair").scrollIntoView({ behavior: "smooth", block: "start" }); return recState("The Vexo band isn't connected yet. Close the Vexo dashboard tab, then press Connect (or Connect by USB cable) above and pick Vexo-HACK-73. Recording starts by itself once it connects.", true); }
   const source = $("source").value, vexo = source === "vexo", camera = $("cam-on").checked;
-  if (vexo && !capture.band) return recState("Connect the band first.", true);
   let stream = null;
   if (!vexo || camera) {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") return recState("This browser cannot record from the microphone or camera.", true);
@@ -1735,6 +1737,114 @@ function maybeAutoRestart() {
   $("rec-start").click();
 }
 $("rec-start").addEventListener("click", () => { autoRec.userStopped = false; }, true);
+
+
+/* ---------- Gemini Live memory help: camera frames + band/mic audio in, spoken answers out ---------- */
+const lh = { ws: null, stream: null, frameTimer: 0, mic: null, micNode: null, out: null, playAt: 0, sources: [], offBand: null, bandAudio: null };
+async function lhListCameras() {
+  try {
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+    const cur = $("lh-camera").value;
+    $("lh-camera").replaceChildren(el("option", { value: "", textContent: "Default camera" }), ...cams.map((c, i) => el("option", { value: c.deviceId, textContent: c.label || `Camera ${i + 1}`, selected: c.deviceId === cur })));
+    const gopro = cams.find((c) => /gopro/i.test(c.label)); if (gopro && !cur) $("lh-camera").value = gopro.deviceId;
+  } catch { /* no list */ }
+}
+function lhLog(kind, text) {
+  if (!text) return;
+  const last = $("lh-log").lastElementChild;
+  if (last && last.dataset.kind === kind && !last.dataset.done) { last.querySelector("p").textContent += text; }
+  else $("lh-log").append(el("li", { className: `lh-${kind}`, "data-kind": kind }, el("b", { textContent: kind === "said" ? "Threadline" : "Heard" }), el("p", { textContent: text })));
+  $("lh-log").lastElementChild.scrollIntoView({ block: "nearest" });
+  while ($("lh-log").children.length > 40) $("lh-log").firstChild.remove();
+}
+function lhSetState(state, text) { $("live-help").dataset.state = state; $("lh-status").textContent = text; $("lh-start").hidden = state !== "idle"; $("lh-stop").hidden = state === "idle"; $("lh-ask").hidden = state !== "live"; }
+function lhPlay(buf) {  // PCM16 24 kHz from Gemini → speakers, queued in order
+  if (!lh.out) return;
+  const pcm = new Int16Array(buf), f = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+  const ab = lh.out.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
+  const src = lh.out.createBufferSource(); src.buffer = ab; src.connect(lh.out.destination);
+  lh.playAt = Math.max(lh.playAt, lh.out.currentTime + 0.05); src.start(lh.playAt); lh.playAt += ab.duration;
+  lh.sources.push(src); src.onended = () => { lh.sources = lh.sources.filter((x) => x !== src); };
+}
+function lhInterrupt() { lh.sources.forEach((s) => { try { s.stop(); } catch { /* done */ } }); lh.sources = []; lh.playAt = 0; }
+function lhSendPcm16(int16) { if (lh.ws?.readyState === 1) lh.ws.send(int16.buffer); }
+async function lhStartAudio() {
+  if (capture.band) {  // the band's own microphone, decoded to 16 kHz samples by the Vexo kit
+    try {
+      kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
+      lh.bandAudio = new kit.BandAudio((samples) => lhSendPcm16(kit.toInt16(samples)), { rate: 16000 });
+      lh.offBand = capture.band.on("audio", (a) => lh.bandAudio?.push(a));
+      if (!capture.active) await capture.band.configure({ audio: true });
+      return "the Vexo band's microphone";
+    } catch (e) { lh.bandAudio = null; lh.offBand?.(); lh.offBand = null; }
+  }
+  lh.mic = new AudioContext({ sampleRate: 16000 });
+  const media = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  lh.micStream = media;
+  const srcNode = lh.mic.createMediaStreamSource(media);
+  lh.micNode = lh.mic.createScriptProcessor(2048, 1, 1);
+  lh.micNode.onaudioprocess = (ev) => { const f = ev.inputBuffer.getChannelData(0), out = new Int16Array(f.length); for (let i = 0; i < f.length; i++) out[i] = Math.max(-1, Math.min(1, f[i])) * 0x7fff; lhSendPcm16(out); };
+  srcNode.connect(lh.micNode); lh.micNode.connect(lh.mic.destination);
+  return "this computer's microphone";
+}
+function lhStartFrames() {
+  const v = $("lh-video"), c = $("lh-canvas"), ctx = c.getContext("2d");
+  lh.frameTimer = setInterval(() => {
+    if (lh.ws?.readyState !== 1 || !v.videoWidth) return;
+    c.width = 640; c.height = Math.round(640 * v.videoHeight / v.videoWidth);
+    ctx.drawImage(v, 0, 0, c.width, c.height);
+    const data = c.toDataURL("image/jpeg", 0.6).split(",")[1];
+    if (data.length < 290000) lh.ws.send(JSON.stringify({ type: "frame", jpeg: data }));
+  }, 1000);  // about one frame a second
+}
+$("lh-start").addEventListener("click", async () => {
+  if (lh.ws) return;
+  lhSetState("busy", "Starting the camera…");
+  try {
+    if (typeof ensureService === "function") { try { await ensureService(); } catch { /* local */ } }
+    const id = $("lh-camera").value;
+    lh.stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id }, width: { ideal: 1280 } } : { width: { ideal: 1280 } } });
+    await lhListCameras();
+    $("lh-video").srcObject = lh.stream; $("lh-video").hidden = false; await $("lh-video").play().catch(() => {});
+    lh.out = new AudioContext({ sampleRate: 24000 }); lh.playAt = 0;
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
+    ws.binaryType = "arraybuffer"; lh.ws = ws;
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory" }));
+    ws.onmessage = async (event) => {
+      if (event.data instanceof ArrayBuffer) return lhPlay(event.data);
+      let msg; try { msg = JSON.parse(event.data); } catch { return; }
+      if (msg.type === "ready") {
+        const notes = (sessions.reflection?.notes || []).slice(-20).map((n) => `${new Date(n.at).toLocaleString()}: ${n.text}`);
+        if (notes.length) ws.send(JSON.stringify({ type: "context", notes }));
+        const where = await lhStartAudio().catch((e) => { lhLog("said", `(No microphone: ${e.message})`); return "no microphone"; });
+        lhStartFrames();
+        lhSetState("live", `Live with ${msg.model || "Gemini"} · camera ${lh.stream.getVideoTracks()[0]?.label || "on"} · listening through ${where}. Ask “What was I doing?”`);
+        if (typeof logAction === "function") logAction("Started Gemini Live memory help");
+      } else if (msg.type === "heard") lhLog("heard", msg.text);
+      else if (msg.type === "said") lhLog("said", msg.text);
+      else if (msg.type === "turn_complete") { const l = $("lh-log").lastElementChild; if (l) l.dataset.done = "1"; }
+      else if (msg.type === "interrupted") lhInterrupt();
+      else if (msg.type === "error") { lhSetState("live", msg.message); }
+    };
+    ws.onclose = () => { if (lh.ws === ws) lhStop(lh.ws ? "Live help ended." : undefined); };
+  } catch (e) { lhStop(`Couldn't start: ${e.message}`); }
+});
+function lhStop(text = "Stopped.") {
+  const ws = lh.ws; lh.ws = null;
+  try { ws?.readyState === 1 && ws.send(JSON.stringify({ type: "stop" })); ws?.close(); } catch { /* closed */ }
+  clearInterval(lh.frameTimer); lhInterrupt();
+  lh.offBand?.(); lh.offBand = null; try { lh.bandAudio?.close(); } catch { /* */ } lh.bandAudio = null;
+  if (capture.band && !capture.active) capture.band.configure({ audio: false }).catch(() => {});
+  try { lh.micNode?.disconnect(); lh.mic?.close(); } catch { /* */ } lh.micNode = null; lh.mic = null; lh.micStream?.getTracks().forEach((t) => t.stop());
+  lh.stream?.getTracks().forEach((t) => t.stop()); lh.stream = null; $("lh-video").srcObject = null; $("lh-video").hidden = true;
+  try { lh.out?.close(); } catch { /* */ } lh.out = null;
+  lhSetState("idle", text);
+}
+$("lh-stop").addEventListener("click", () => lhStop());
+$("lh-ask").addEventListener("submit", (e) => { e.preventDefault(); const t = $("lh-text").value.trim(); if (!t || lh.ws?.readyState !== 1) return; lh.ws.send(JSON.stringify({ type: "text", text: t })); lhLog("heard", t); $("lh-log").lastElementChild.dataset.done = "1"; $("lh-text").value = ""; });
+lhListCameras();
+navigator.mediaDevices?.addEventListener?.("devicechange", lhListCameras);
 
 render();
 showView(location.hash.slice(1) || "live");

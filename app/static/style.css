@@ -353,3 +353,13 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .profile-bar .text-button{font-size:12px;padding:6px 8px}
 .own-devices{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:14px}.own-devices summary{font-weight:600;cursor:pointer}.own-devices code{font:12px var(--mono)}
 .vision-panel{margin:20px 0}.vision-panel input{flex:1;min-width:160px}.vision-evidence{display:flex;gap:12px;overflow-x:auto}.vision-evidence figure{margin:0;min-width:180px;flex:1}.vision-evidence img{display:block;width:100%;max-height:180px;object-fit:contain;border-radius:8px;background:#eee}.vision-evidence figcaption{font-size:13px;margin-top:5px}
+/* ---------- Gemini Live memory help ---------- */
+.live-help{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px 20px}
+.live-help h2{font-size:22px;margin:4px 0 6px;letter-spacing:-.5px}
+.live-help[data-state=live]{border-color:var(--e-steady);box-shadow:0 0 0 4px var(--e-steady-bg)}
+.live-help select{flex:1 1 160px;min-width:0}
+.lh-video{width:100%;border-radius:12px;margin:10px 0 4px;background:#000;max-height:220px;object-fit:cover}
+.lh-log{list-style:none;margin:8px 0 0;padding:0;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.lh-log li{padding:8px 10px;border-radius:10px;font-size:14px}.lh-log li b{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}.lh-log li p{margin:2px 0 0}
+.lh-heard{background:var(--soft)}.lh-said{background:var(--e-steady-bg)}
+#lh-ask input{flex:1 1 200px;min-width:0;margin:0}

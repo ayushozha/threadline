@@ -167,6 +167,23 @@
           </details>
           </div>
           <aside class="agent-col" aria-labelledby="agent-h">
+            <section class="live-help" id="live-help" aria-labelledby="live-help-h" data-state="idle">
+              <p class="agent-eyebrow">Gemini Live · memory help</p>
+              <h2 id="live-help-h">Ask what you were doing</h2>
+              <p class="caption">Sees through the camera (GoPro or any camera), hears through the Vexo band or this computer's mic, and answers out loud. It only uses what it sees and hears — it can't confirm medication or recognise faces.</p>
+              <div class="row tight">
+                <label class="visually-hidden" for="lh-camera">Camera</label>
+                <select id="lh-camera"><option value="">Default camera</option></select>
+                <button type="button" id="lh-start" class="primary-sm">Start live help</button>
+                <button type="button" id="lh-stop" class="secondary" hidden>Stop</button>
+              </div>
+              <video id="lh-video" class="lh-video" muted playsinline hidden></video>
+              <canvas id="lh-canvas" width="640" height="360" hidden></canvas>
+              <p id="lh-status" class="caption" role="status">Not running.</p>
+              <ol id="lh-log" class="lh-log" aria-live="polite"></ol>
+              <form id="lh-ask" class="row tight" hidden><label class="visually-hidden" for="lh-text">Type a question</label><input id="lh-text" type="text" maxlength="300" placeholder="Or type: “Where are my keys?”"><button type="submit" class="secondary">Ask</button></form>
+            </section>
+
             <div class="agent-card">
               <p class="agent-eyebrow">Agent</p>
               <h2 id="agent-h">What Threadline noticed</h2>
