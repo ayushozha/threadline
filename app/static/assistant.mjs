@@ -109,7 +109,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
       const bs = bandStream(); st.rtBand = bs; await bs.resume();
       st.rtDetach = bandPcm.attach((samples) => bs.push(samples));
       st.rt = await startRealtime({
-        getContext, runAction, inputStream: bs.stream,
+        getContext, runAction: (a) => runAction(a.type === "buy" ? { type: "checkout" } : a), inputStream: bs.stream,
         muteWhileSpeaking: (v) => { bs.muted = v; },  // the band mic would otherwise hear the speakers
         onAction: (r) => st.rtActs.push(r),
         onTranscript: ({ role, text }) => {

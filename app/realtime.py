@@ -44,8 +44,7 @@ TOOLS = [
     _fn("add_task", "Add a short task for today.", {"title": {"type": "string", "maxLength": 120}}, ["title"]),
     _fn("care_check", "Run the caregiver agent's care check now."),
     _fn("set_mode", "Switch the access mode.", {"mode": {"type": "string", "enum": sorted(MODES)}}, ["mode"]),
-    _fn("buy", "Pay for the current cart on the caregiver's saved card. First say the items and total and ask 'Shall I buy it?'. "
-        "Call this ONLY after they clearly say yes, with confirmed=true. If no card is saved, call checkout instead.",
+    _fn("buy", "Open the current cart for caregiver approval in Checkout. This Realtime path does not charge a saved card. Never claim payment completed.",
         {"confirmed": {"type": "boolean"}}, ["confirmed"]),
     _fn("log_checkin", "Record how they feel today: mood, evening agitation (NPI-Q), repeated questions. Include only what they said.",
         {"period": {"type": "string", "enum": ["morning", "evening"]}, "mood": {"type": "string", "enum": ["very_low", "low", "neutral", "content", "happy"]},
@@ -59,12 +58,16 @@ TOOLS = [
 
 
 def session_config() -> dict:
+    model = os.environ.get("OPENAI_REALTIME_MODEL")
+    transcription = os.environ.get("OPENAI_TRANSCRIBE_MODEL")
+    if not model or not transcription:
+        raise HTTPException(503, "Configure the Realtime and transcription models first.")
     return {
         "type": "realtime",
-        "model": os.environ.get("OPENAI_REALTIME_MODEL") or "gpt-realtime",
+        "model": model,
         "instructions": INSTRUCTIONS,
         "audio": {
-            "input": {"transcription": {"model": os.environ.get("OPENAI_TRANSCRIBE_MODEL") or "gpt-4o-mini-transcribe"},
+            "input": {"transcription": {"model": transcription},
                       "turn_detection": {"type": "server_vad"}},
             "output": {"voice": os.environ.get("OPENAI_REALTIME_VOICE") or "marin"},
         },

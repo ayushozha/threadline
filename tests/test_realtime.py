@@ -17,7 +17,8 @@ def client(monkeypatch):
     monkeypatch.setenv("APP_ACCESS_TOKEN", "test-operator-token")
     monkeypatch.delenv("APP_TRUST_LOOPBACK", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.delenv("OPENAI_REALTIME_MODEL", raising=False)
+    monkeypatch.setenv("OPENAI_REALTIME_MODEL", "configured-realtime")
+    monkeypatch.setenv("OPENAI_TRANSCRIBE_MODEL", "configured-transcription")
     with TestClient(main.app) as c:
         yield c
 
@@ -72,7 +73,8 @@ def test_forwards_offer_and_returns_answer(client, openai):
     fields = multipart_fields(req)
     assert fields["sdp"].startswith("v=0") and "m=audio" in fields["sdp"]
     session = json.loads(fields["session"])
-    assert session["type"] == "realtime" and session["model"] == "gpt-realtime"
+    assert session["type"] == "realtime" and session["model"] == "configured-realtime"
+    assert session["audio"]["input"]["transcription"]["model"] == "configured-transcription"
     assert session["audio"]["input"]["turn_detection"]["type"] == "server_vad"
     assert session["audio"]["output"]["voice"]
     assert "JSON object" not in session["instructions"] and "never diagnose" in session["instructions"]
@@ -83,9 +85,15 @@ def test_forwards_offer_and_returns_answer(client, openai):
 
 
 def test_model_from_env(client, openai, monkeypatch):
-    monkeypatch.setenv("OPENAI_REALTIME_MODEL", "gpt-realtime-2.1")
+    monkeypatch.setenv("OPENAI_REALTIME_MODEL", "alternate-realtime")
     assert post(client).status_code == 200
-    assert json.loads(multipart_fields(openai[0])["session"])["model"] == "gpt-realtime-2.1"
+    assert json.loads(multipart_fields(openai[0])["session"])["model"] == "alternate-realtime"
+
+
+def test_503_without_model_configuration(client, openai, monkeypatch):
+    monkeypatch.delenv("OPENAI_REALTIME_MODEL")
+    assert post(client).status_code == 503
+    assert not openai
 
 
 def test_size_limit(client, openai):
