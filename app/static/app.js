@@ -357,7 +357,7 @@ function chooseBand(number, remember = true) {
   $("pick-number").value = String(number).padStart(2, "0");
   if (remember) rememberBand(number);
   const url = new URL(location.href); url.searchParams.set("band", String(number).padStart(2, "0")); history.replaceState(null, "", url);
-  loadThread(`band-${number}`); render();
+  loadThread(`band-${number}`); render(); renderProfile(); setTimeout(resumeWatch, 0);
   renderPair(); renderArchive(); bandStatus("");
 }
 $("pick-form").addEventListener("submit", (e) => {
@@ -828,9 +828,15 @@ function liveHeaders() {
   if (!service.ready) throw new Error("Threadline is still connecting. Try again in a moment.");
   return {};
 }
-async function request(url, options) {
+async function renewSession() {
+  // Visitor sessions expire; renew silently instead of showing "Demo session missing or expired".
+  const r = await fetch("/api/session", { method: "POST" });
+  return r.ok;
+}
+async function request(url, options, retried = false) {
   const response = await fetch(url, options), data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "The request could not be completed.");
+  if (response.status === 401 && !retried && url !== "/api/session" && /Demo session/i.test(String(data.detail || "")) && await renewSession()) return request(url, options, true);
+  if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : `The request could not be completed (${response.status}).`);
   return data;
 }
 
@@ -1046,7 +1052,8 @@ $("watch-pair-btn").addEventListener("click", async () => {
     openWatchFeed(token);
   } catch (e) { watchMsg(e.message.includes("Not Found") ? "Apple Watch pairing is not available on this server yet." : e.message, true); }
 });
-function openWatchFeed(token) {
+async function openWatchFeed(token) {
+  await renewSession().catch(() => false);  // the feed socket uses the visitor session cookie
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/watch/feed`);
   watch.ws = ws;
   ws.onopen = () => ws.send(JSON.stringify({ token, code: watch.code }));
@@ -1088,7 +1095,7 @@ function openWatchFeed(token) {
     } else if (msg.type === "watch_disconnected") {
       watchState("busy", "Watch stopped · waiting for it again");
       finishWatchSession();
-    } else if (msg.type === "error") { watchMsg(msg.message, true); }
+    } else if (msg.type === "error") { if (/Unknown or expired/i.test(msg.message)) { rememberWatch(null); watchMsg("Your watch needs to pair again: open Threadline on it for a new code.", true); } else watchMsg(msg.message, true); }
   };
   ws.onclose = () => { if (watch.ws === ws) { watch.ws = null; finishWatchSession(); watchState("idle", "Not paired"); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; } };
 }
@@ -1099,7 +1106,7 @@ function finishWatchSession() {
   openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), "watch", watch.startedAt || new Date(), `${watch.device} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
   recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
 }
-$("watch-unpair").addEventListener("click", () => { const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
+$("watch-unpair").addEventListener("click", () => { rememberWatch(null); const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
 
 
 /* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. Video only. */
@@ -1573,6 +1580,7 @@ $("watch-claim-form").addEventListener("submit", async (e) => {
   try {
     const data = await request("/api/watch/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     watch.code = code; watch.device = data.device || "Apple Watch";
+    rememberWatch({ code, device: watch.device, at: new Date().toISOString() });
     $("watch-claim-form").hidden = true; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false;
     watchState("busy", `${watch.device} · paired, waiting for readings`); watchMsg("Paired. Your watch shows Paired ✓ and starts sending readings.");
     if (typeof logAction === "function") logAction(`Paired ${watch.device}`);
@@ -1581,5 +1589,39 @@ $("watch-claim-form").addEventListener("submit", async (e) => {
 });
 $("watch-claim-code").addEventListener("input", () => { const d = $("watch-claim-code").value.replace(/\D/g, "").slice(0, 6); $("watch-claim-code").value = d.length > 3 ? `${d.slice(0, 3)} ${d.slice(3)}` : d; });
 
+
+/* ---------- Profiles: the default profile (this server's band + its paired watch) or your own devices ---------- */
+const WATCH_KEY = () => `threadline.watch.v1.${bandNumber ? `band-${bandNumber}` : "browser"}`;
+function savedWatch() { try { return JSON.parse(localStorage.getItem(WATCH_KEY()) || "null"); } catch { return null; } }
+function rememberWatch(v) { try { v ? localStorage.setItem(WATCH_KEY(), JSON.stringify(v)) : localStorage.removeItem(WATCH_KEY()); } catch { /* storage off */ } renderProfile(); }
+function isDefaultProfile() { return Boolean(configuredBand) && bandNumber === configuredBand; }
+function renderProfile() {
+  if (!$("profile-bar")) return;
+  const w = savedWatch();
+  $("profile-name").textContent = isDefaultProfile() ? "Default profile" : "Your devices";
+  $("profile-devices").textContent = `· ${bandNumber ? bandLabel() : "no band"}${w ? ` + ${w.device}` : ""}`;
+  $("profile-switch").textContent = isDefaultProfile() ? "Use my own devices" : (configuredBand ? "Back to default profile" : "Change devices");
+}
+$("profile-switch").addEventListener("click", () => {
+  if (capture.active) return message("Stop the session first.", true);
+  if (isDefaultProfile() || !configuredBand) {
+    // Your own devices: choose your band number and pair your own watch; data stays separate per band.
+    location.hash = "live";
+    $("pick-form").hidden = false; $("pick-number").value = ""; $("pick-number").focus();
+    message("Type your band's number, then pair your own watch in /#watch. Each band keeps its own data.");
+  } else { chooseBand(configuredBand); }
+  renderProfile();
+});
+/* Reconnect a remembered watch for this profile without a new code. */
+function resumeWatch() {
+  const w = savedWatch();
+  if (!w || watch.ws) return;
+  watch.code = w.code; watch.device = w.device || "Apple Watch";
+  $("watch-claim-form").hidden = true; $("watch-unpair").hidden = false;
+  watchState("busy", `${watch.device} · reconnecting`);
+  openWatchFeed("");
+}
+
 render();
 showView(location.hash.slice(1) || "live");
+renderProfile();

@@ -36,7 +36,12 @@
     <main class="content">
       <header class="topbar">
         <div><div class="crumb" id="crumb">Threadline</div><h1 id="view-title">Your band</h1></div>
-        <div class="topbar-right"><div class="device-chips" aria-label="Devices in this session">
+        <div class="topbar-right">
+          <div class="profile-bar" id="profile-bar" aria-live="polite">
+            <span class="profile-dot" aria-hidden="true"></span>
+            <span><span class="profile-k" id="profile-name">Default profile</span> <span class="profile-v" id="profile-devices"></span></span>
+            <button type="button" id="profile-switch" class="text-button">Use my own devices</button>
+          </div><div class="device-chips" aria-label="Devices in this session">
           <a href="#live" class="dchip" id="chip-band" data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Vexo band</span><span class="dchip-v" id="chip-band-v">not connected</span></a>
           <a href="#watch-pair" class="dchip" id="chip-watch" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Apple Watch</span><span class="dchip-v" id="chip-watch-v">not paired</span></a>
           <span class="dchip" id="chip-cam" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
@@ -356,6 +361,16 @@
             <output id="watch-code" class="watch-code">——————</output>
             <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch.</li><li>Type the code above.</li><li>Tap <b>Stream</b>. Heart rate, steps and activity appear here; turn on audio only if the band isn't recording.</li></ol>
           </div>
+          <details class="own-devices" id="own-devices">
+            <summary>Connect your own devices</summary>
+            <ol class="steps">
+              <li><b>Install the Threadline watch app.</b> For now it installs from Xcode on a Mac: open <code>watch/ThreadlineWatch.xcodeproj</code> from the <a href="https://github.com/ayushozha/threadline" target="_blank" rel="noopener">project</a>, pick your Apple ID under Signing, turn on Developer Mode on your iPhone and watch, choose your watch and press Run. (<a href="https://developer.apple.com/documentation/xcode/running-your-app-on-simulated-or-physical-devices" target="_blank" rel="noopener">Apple's guide</a>)</li>
+              <li><b>Allow Health and Motion</b> when the watch asks. You choose what is shared; change it later in iPhone Settings → Health → Data Access &amp; Devices → Threadline.</li>
+              <li><b>Pair:</b> the watch shows a 6-digit code — type it below. Your browser remembers the pairing, so it reconnects by itself.</li>
+              <li><b>Your Vexo band:</b> press “Use my own devices” at the top and type the number on your band's bag. Each band keeps its own data in your browser.</li>
+            </ol>
+            <p class="caption">Your readings go only to the browser you paired from. The default profile shows the demo owner's data, shared on purpose.</p>
+          </details>
           <form id="watch-claim-form" class="watch-claim">
             <ol class="steps"><li>Open <b>Threadline</b> on your Apple Watch — it shows a 6-digit code.</li><li>Type that code here and press <b>Pair</b>.</li><li>The watch taps your wrist and shows <b>Paired ✓</b>.</li></ol>
             <label for="watch-claim-code">Code shown on your watch</label>

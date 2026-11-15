@@ -347,3 +347,8 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .watch-claim{margin:4px 0 10px}.watch-claim label{font-size:13px;font-weight:600}
 .code6{width:150px;letter-spacing:.14em}
 .task-draft{padding:12px 0;border-top:1px solid var(--line,#e5e5df)}.task-draft:first-child{border-top:0}.task-draft input{width:100%;margin-bottom:8px}.task-banner{margin-bottom:16px}
+.profile-bar{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 6px 0 14px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:13px;margin-right:6px}
+.profile-dot{width:8px;height:8px;border-radius:50%;background:var(--indigo)}
+.profile-k{font-weight:600}.profile-v{color:var(--muted)}
+.profile-bar .text-button{font-size:12px;padding:6px 8px}
+.own-devices{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:14px}.own-devices summary{font-weight:600;cursor:pointer}.own-devices code{font:12px var(--mono)}
