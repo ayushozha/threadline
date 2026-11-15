@@ -17,6 +17,8 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   const orb = el("div", { className: "as-orb", "aria-hidden": "true" });
   const status = el("p", { className: "as-status", textContent: "Listens through the Vexo band. Tap Talk or double-tap the band, then speak." });
   const live = el("p", { className: "as-live" });
+  const meter = el("i", { className: "as-meter-fill" });
+  const meterBox = el("div", { className: "as-meter", title: "Band microphone level" }, meter);
   const log = el("ol", { className: "as-log", "aria-live": "polite" });
   const sos = el("button", { type: "button", className: "as-sos", textContent: "🚨 Emergency", title: "Start the emergency countdown now" });
   sos.addEventListener("click", () => { runAction({ type: "emergency", reason: "Emergency button pressed" }); });
@@ -39,7 +41,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   root.replaceChildren(el("section", { className: "as-card" },
     el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", {}, "Talk to Threadline", el("span", { className: "as-comfort", textContent: "💛 Comfort mode" })), status), el("div", { className: "as-head-actions" }, talk, sos)),
     el("label", { className: "as-engine-row" }, el("span", { textContent: "Voice engine" }), engine),
-    live, log, chips, form));
+    meterBox, live, log, chips, form));
   form.addEventListener("submit", (e) => {
     e.preventDefault(); const t = input.value.trim(); input.value = ""; if (!t) return;
     if (st.rt) { add("me", t); st.rt.sendText(t); } else turn(t);
@@ -101,11 +103,23 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   }
   const bandPcmOn = () => Boolean(bandPcm?.on?.());
   async function startRt() {
-    if (!bandPcmOn()) { status.textContent = NO_BAND; setState("idle"); return; }
+    if (!bandPcmOn()) {  // start the band's recording first: the Realtime voice hears only the band
+      status.textContent = "Starting the band's microphone…";
+      const ok = await ensureBand?.();
+      for (let i = 0; i < 20 && !bandPcmOn(); i++) await new Promise((r) => setTimeout(r, 250));
+      if (!ok && !bandPcmOn()) { status.textContent = "Connect the Vexo band and allow recording on Your band, then tap Talk."; setState("idle"); return; }
+      if (!bandPcmOn()) { status.textContent = "The band is connected but its audio isn't arriving yet. Try Talk again in a moment."; setState("idle"); return; }
+    }
     st.listening = true; talk.textContent = "■ Stop"; setState("thinking"); status.textContent = "Connecting to OpenAI Realtime…";
     try {
       const bs = bandStream(); st.rtBand = bs; await bs.resume();
-      st.rtDetach = bandPcm.attach((samples) => bs.push(samples));
+      let lastLevel = 0;
+      st.rtDetach = bandPcm.attach((samples) => {
+        bs.push(samples);
+        const now = performance.now(); if (now - lastLevel < 120) return; lastLevel = now;
+        let sum = 0; for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+        const db = 20 * Math.log10(Math.sqrt(sum / samples.length) || 1e-5); meter.style.width = `${Math.max(2, Math.min(100, (db + 60) * 2.2))}%`;
+      });
       st.rt = await startRealtime({
         getContext, runAction: (a) => runAction(a.type === "buy" ? { type: "checkout" } : a), inputStream: bs.stream,
         muteWhileSpeaking: (v) => { bs.muted = v; },  // the band mic would otherwise hear the speakers
