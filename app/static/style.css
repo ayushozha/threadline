@@ -795,3 +795,6 @@ input[type=file]::file-selector-button:hover{border-color:var(--ink)}
   .as-me,.as-ai{max-width:90%}
   .ess-cart{position:static}
 }
+
+/* the topbar already names the view */
+.view[data-view=library] .lib-intro h2,.view[data-view=essentials] .lib-intro h2{display:none}
