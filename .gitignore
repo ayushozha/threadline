@@ -16,3 +16,6 @@ assets/demo/motion/.current-capture-*/
 .playwright-mcp/
 output/
 *.log
+
+# Uploaded recordings (local fallback storage)
+data/

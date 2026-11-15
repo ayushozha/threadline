@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS health_daily (
     date TEXT NOT NULL, metric TEXT NOT NULL, value REAL, count INTEGER NOT NULL DEFAULT 0, min REAL, max REAL,
     PRIMARY KEY (date, metric));
 CREATE TABLE IF NOT EXISTS health_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS videos (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL, mode TEXT NOT NULL, created_at TEXT NOT NULL, mime TEXT NOT NULL,
+    size INTEGER NOT NULL, analysis TEXT NULL, owner TEXT NOT NULL DEFAULT '');
 """
 
 
@@ -42,6 +45,7 @@ class Store:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.executescript(SCHEMA)
+        self.path = path
 
     def _prune(self, table: str, cap: int) -> None:
         self.db.execute(f"DELETE FROM {table} WHERE id <= (SELECT id FROM {table} ORDER BY id DESC LIMIT 1 OFFSET ?)",
@@ -109,6 +113,32 @@ class Store:
             n = self.db.execute("DELETE FROM health_daily").rowcount
             self.db.execute("DELETE FROM health_meta WHERE key = 'imported_at'")
         return n
+
+    def add_video(self, vid: str, title: str, mode: str, mime: str, size: int, owner: str = "") -> dict:
+        row = {"id": vid, "title": title, "mode": mode, "created_at": now_iso(), "mime": mime, "size": size, "analysis": None}
+        with self.lock:
+            self.db.execute("INSERT INTO videos (id, title, mode, created_at, mime, size, owner) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (vid, title, mode, row["created_at"], mime, size, owner))
+        return row
+
+    def videos(self, limit: int = 50, owner: str = "") -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT id, title, mode, created_at, mime, size, analysis FROM videos WHERE owner = ? "
+                                   "ORDER BY created_at DESC, rowid DESC LIMIT ?", (owner, limit)).fetchall()
+        return [{"id": i, "title": t, "mode": m, "created_at": c, "mime": mi, "size": sz, "analysis": json.loads(a) if a else None}
+                for i, t, m, c, mi, sz, a in rows]
+
+    def video(self, vid: str, owner: str = "") -> dict | None:
+        with self.lock:
+            r = self.db.execute("SELECT id, title, mode, created_at, mime, size, analysis FROM videos WHERE id = ? AND owner = ?", (vid, owner)).fetchone()
+        return None if not r else {"id": r[0], "title": r[1], "mode": r[2], "created_at": r[3], "mime": r[4], "size": r[5],
+                                   "analysis": json.loads(r[6]) if r[6] else None}
+
+    def set_video_analysis(self, vid: str, analysis: dict, owner: str = "") -> bool:
+        with self.lock:
+            n = self.db.execute("UPDATE videos SET analysis = ? WHERE id = ? AND owner = ?",
+                                (json.dumps(analysis, separators=(",", ":")), vid, owner)).rowcount
+        return n > 0
 
     def close(self) -> None:
         with self.lock:
