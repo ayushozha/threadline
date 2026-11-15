@@ -1,0 +1,26 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "cgSgspJ2msm6clMCkdW9",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\narration\\dementia-evidence-directed.txt",
+  "text_sha256": "96945c8853a3635bdf19069e23f4d241b836c0e7dcb1feba8867f05bc6148ad9",
+  "characters": 944,
+  "audio_bytes": 883190,
+  "request_id": "jzf91lck5Yn9zkgZfRG1",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.3,
+    "similarity_boost": 0.65
+  },
+  "assembled_video": false,
+  "quality_review": "Technical decode, peak, and forced-alignment checks passed. Subjective listening not performed.",
+  "duration_seconds": 55.12,
+  "voice_name": "Jessica - Playful, Bright, Warm",
+  "clean_text_file": "assets/demo/narration/dementia-evidence-script.txt",
+  "alignment_words": 153,
+  "subtitle_timing": "ElevenLabs forced alignment",
+  "peak_dbfs": -4.3,
+  "mean_dbfs": -24.4,
+  "decode_check": "Full ffmpeg decode passed"
+}

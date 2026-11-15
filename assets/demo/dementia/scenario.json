@@ -1,0 +1,12 @@
+{
+  "label": "Fictional demonstration — Meera is not a real patient",
+  "question": "Meera asks: What was I doing? Use the saved conversation and current view to suggest just one next step. Do not assume any physical task is completed.",
+  "transcript": [
+    {"id":"plan-01","at":"2026-11-14T09:00:00","source":"fictional","text":"Meera: I want to make my morning tea in the blue mug, then water the plant by the window."},
+    {"id":"location-02","at":"2026-11-14T09:01:00","source":"fictional","text":"Meera: I put my glasses beside the tea tin on the kitchen counter. Please remember that."},
+    {"id":"preference-03","at":"2026-11-13T17:30:00","source":"fictional","text":"Meera: When I lose my place, give me one step at a time. Ask me before sharing a note with Priya."},
+    {"id":"interruption-04","at":"2026-11-14T09:03:00","source":"fictional","text":"Meera: The phone is ringing. I'll answer it and come back to my tea."},
+    {"id":"question-05","at":"2026-11-14T09:06:00","source":"fictional","text":"Meera: I am back in the kitchen. What was I doing?"}
+  ],
+  "frame": {"id":"kitchen-06","at":"2026-11-14T09:06:01","path":"images/tea-routine-evidence.png","label":"AI-generated scene, not a live camera frame"}
+}

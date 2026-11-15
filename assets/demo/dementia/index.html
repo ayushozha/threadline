@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Threadline · Find the next step</title><link rel="stylesheet" href="demo.css"><script type="module" src="demo.js"></script></head>
+<body>
+<header><a href="/">threadline<span class="brand-dot">●</span></a><span>MEMORY SUPPORT / PROTOTYPE</span></header>
+<main>
+  <section class="intro"><p class="eyebrow">A LITTLE CONTEXT. A CLEAR NEXT STEP.</p><h1>Pick up where<br>you left off.</h1><p class="lede">A conversation remembers the plan.<br>A camera adds the present. Threadline connects them.</p><p class="label">Fictional demonstration · no patient data</p></section>
+  <section class="film"><video controls preload="metadata" poster="poster.jpg" src="threadline-dementia-demo.mp4"><track kind="captions" label="English" srclang="en" src="captions.vtt" default></video><p>Jessica narration · generated scenes + recorded provider response · approximately one minute</p></section>
+  <section class="workspace"><div class="section-head"><div><p class="eyebrow">TRY THE SAME EVIDENCE</p><h2>What was I doing?</h2></div><span class="pill">Fictional Meera scenario</span></div>
+  <div class="columns"><article><h3>01 / Saved conversation</h3><ol id="timeline"></ol></article><article><h3>02 / Current view</h3><img class="scene" src="images/tea-routine-evidence.png" alt="Generated illustration of a blue mug and tea supplies on a kitchen counter"><p class="caption">Synthetic scene for testing — not a connected camera.</p><p class="frame-label">kitchen-06 · 9:06 AM</p></article></div>
+  <div class="run"><label><input id="consent" type="checkbox"> Send this fictional conversation and generated image to Gemini for a new response.</label><button id="analyze">Find the next step</button><p id="status" role="status">No request has been sent. Each run generates a fresh response.</p></div>
+  <article id="answer-panel" class="answer" hidden><p class="eyebrow" id="answer-source"></p><h2 id="next-step"></h2><p id="answer"></p><ul id="observations"></ul><p class="caption" id="source-ids"></p><p class="uncertainty" id="uncertainty"></p></article>
+  <details><summary>Show the response captured for the film</summary><p class="caption">A recorded response from the real API, using these fictional inputs. This is not a fresh inference.</p><pre id="recorded">Loading…</pre></details>
+  </section>
+  <footer>Designed for everyday memory support. No diagnosis, medication verification, emergency detection, or completed external action is demonstrated. <a href="/">Open the app</a></footer>
+</main>
+<!-- Deterministic film stage: uses the real saved provider response, always labeled. -->
+<div id="stage" hidden><div class="stage-brand">threadline<span>●</span></div><div class="stage-label">FICTIONAL SCENARIO · PROTOTYPE</div><div id="stage-copy"></div><div id="stage-visual"></div><div class="stage-footer"><span>CONVERSATION → CONTEXT → NEXT STEP</span><span id="stage-number"></span></div></div>
+</body></html>

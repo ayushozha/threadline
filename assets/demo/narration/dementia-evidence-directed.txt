@@ -1,0 +1,13 @@
+[warmly] Memory loss can interrupt an ordinary morning. The difficult moment is not always forgetting a name. Sometimes, it is forgetting what comes next.
+
+[storytelling] In this fictional example, Meera planned to make tea, then water her plant. A phone call interrupted her. Now she asks, “What was I doing?”
+
+Threadline connects her saved words with the current camera view. The blue mug is still empty. Her earlier conversation supplies the missing plan.
+
+The camera alone cannot know her intention. A transcript alone cannot show what is in front of her now.
+
+The agent can say, “You were making tea. Let’s finish that first,” and show the evidence behind it. It can also recall where she left her glasses, and draft a caregiver note for her approval.
+
+This is a prototype for everyday memory support. It does not diagnose dementia or confirm task completion.
+
+[reassuring] Less searching. One clear next step. More confidence to carry on.

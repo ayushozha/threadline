@@ -23,6 +23,8 @@ router = APIRouter()
 DEMO_KEY_MIN = 24
 DEMO_IDLE_SECONDS = 30  # report the demo watch quiet after this long without a frame
 MAX_SUBSCRIBERS = 200
+SUBSCRIBER_SEND_SECONDS = 0.5
+TRANSCRIPT_QUEUE_SIZE = 128
 
 subscribers: set = set()
 state: dict = {"publisher": None, "last": None, "at": 0.0, "live": False, "device": None, "task": None}
@@ -65,11 +67,12 @@ def status() -> dict:
 
 
 async def broadcast(message: dict) -> None:
-    for socket in list(subscribers):
+    async def deliver(socket):
         try:
-            await socket.send_json(message)
-        except (WebSocketDisconnect, RuntimeError):
+            await asyncio.wait_for(socket.send_json(message), SUBSCRIBER_SEND_SECONDS)
+        except (WebSocketDisconnect, RuntimeError, OSError, asyncio.TimeoutError):
             subscribers.discard(socket)
+    await asyncio.gather(*(deliver(socket) for socket in list(subscribers)))
 
 
 async def watchdog() -> None:
@@ -122,7 +125,7 @@ async def set_recording(session: str, live: bool) -> None:
         await broadcast({"type": "demo_recording", "live": bool(recording)})
 
 
-async def publish_line(session: str, source: str, result: dict) -> None:
+def transcript_message(session: str, source: str, result: dict) -> dict | None:
     """result is a simplify() output from the demo owner's live-transcribe session. Finals with text are
     stored and broadcast; interims are broadcast only."""
     if result.get("type") != "result" or not demo_key():
@@ -135,7 +138,46 @@ async def publish_line(session: str, source: str, result: dict) -> None:
     at = store.now_iso()
     if final:
         save(lambda db: db.add_line(session, speaker, text, source, at))
-    await broadcast({"type": "demo_line", "final": final, "at": at, "speaker": speaker, "text": text})
+    return {"type": "demo_line", "final": final, "at": at, "speaker": speaker, "text": text}
+
+
+class TranscriptPublisher:
+    """Bound viewer work without making the recording socket wait for any viewer.
+
+    Final lines are persisted before enqueueing, including during viewer overload.
+    The bounded queue may drop an old live update; the stored transcript remains
+    available for readers to reload. This worker belongs to one recording session.
+    """
+    def __init__(self, session: str, source: str):
+        self.session, self.source = session, source
+        self.queue = asyncio.Queue(maxsize=TRANSCRIPT_QUEUE_SIZE)
+        self.worker = asyncio.create_task(self._run())
+
+    def submit(self, result: dict) -> None:
+        message = transcript_message(self.session, self.source, result)
+        if message is None:
+            return
+        if self.queue.full():
+            self.queue.get_nowait()
+            self.queue.task_done()
+        self.queue.put_nowait(message)
+
+    async def _run(self) -> None:
+        while True:
+            message = await self.queue.get()
+            try:
+                await broadcast(message)
+            finally:
+                self.queue.task_done()
+
+    async def close(self) -> None:
+        try:
+            await asyncio.wait_for(self.queue.join(), SUBSCRIBER_SEND_SECONDS + 0.5)
+        except asyncio.TimeoutError:
+            pass
+        finally:
+            self.worker.cancel()
+            await asyncio.gather(self.worker, return_exceptions=True)
 
 
 @router.get("/api/demo/transcript")

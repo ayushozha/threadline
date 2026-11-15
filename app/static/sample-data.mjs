@@ -1,61 +1,83 @@
-// Sample data for the demo: fills screens that have no real captures yet.
-// Every item carries sample: true, the page labels it "Sample", and "Clear sample data" removes all of it.
-// Real Apple Health numbers are never generated here; they come from /api/health/summary.
+// Explicitly loaded fictional history, never a recording or clinical dataset.
+// Inputs only: suggestions and completed actions are not seeded.
+export const DEMO_QUESTION = 'What was Meera doing before the phone call, where were her glasses last mentioned, and what is one small next step? Say what you cannot confirm.';
 
-const at = (base, dayOffset, h, m) => { const d = new Date(base); d.setDate(d.getDate() - dayOffset); d.setHours(h, m, 0, 0); return d.toISOString(); };
-const key = (base, dayOffset) => { const d = new Date(base); d.setDate(d.getDate() - dayOffset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-
-const CONVERSATIONS = [
-  { day: 0, h: 8, m: 40, device: "Vexo-HACK-73 · USB", lines: [
-    [1, "Good morning, Dad. Did you sleep alright?"], [0, "I think so. Is it Saturday? I was going to the bank."],
-    [1, "It's Saturday. The bank is closed today, we can go on Monday together."], [0, "Monday. Okay. Where did I put my glasses?"],
-    [1, "They're on the kitchen table next to the blue mug."], [0, "Right, the blue mug. I'll have my tablets with breakfast."]] },
-  { day: 0, h: 13, m: 15, device: "Vexo-HACK-73 · USB", lines: [
-    [0, "Has Priya called today?"], [1, "She called this morning, she's coming over at four with the kids."],
-    [0, "Four o'clock. I should put the kettle on before then."], [0, "I'm feeling a bit tired, I might sit in the garden."]] },
-  { day: 1, h: 10, m: 5, device: "Vexo-HACK-73 · Bluetooth", lines: [
-    [0, "I went for a walk around the park, the long way past the pond."], [1, "That's lovely. Did you take your phone with you?"],
-    [0, "Yes, it's in my coat pocket."], [0, "I keep forgetting the name of the man at the corner shop."], [1, "That's Raj. He asked about you last week."]] },
-  { day: 2, h: 18, m: 30, device: "Vexo-HACK-73 · Bluetooth", lines: [
-    [0, "What did I have for lunch?"], [1, "You had the soup Meera brought, tomato and lentil."],
-    [0, "Oh yes. It was good. I feel quite steady today."]] },
-];
-
-const NOTES = [
-  [0, 8, 52, "I'll have my tablets with breakfast."], [0, 13, 18, "I'm feeling a bit tired, I might sit in the garden."],
-  [0, 13, 20, "Put the kettle on before Priya comes at four."], [1, 10, 8, "I went for a walk around the park, the long way past the pond."],
-  [1, 10, 12, "I keep forgetting the name of the man at the corner shop. It's Raj."], [2, 18, 33, "I feel quite steady today."],
-  [3, 9, 0, "The bank visit is Monday with my son."], [4, 16, 40, "Calling Priya on Sundays makes me happy."],
+const SCENES = [
+  { day: 6, time: '09:10', title: 'How Meera likes help', lines: [
+    ['Meera', 'Please give me one step at a time. Too many instructions are hard to follow.'],
+    ['Priya', 'Would you like me to call when you ask for company?'],
+    ['Meera', 'Yes. Ask me first before sending Priya any update.'],
+    ['Meera', 'I like tea in the blue mug, sitting by the window.'],
+    ['Priya', 'We can keep the tea tin beside the kettle.'],
+  ] },
+  { day: 5, time: '10:20', title: 'A useful place for glasses', lines: [
+    ['Meera', 'I was looking for my reading glasses this morning.'],
+    ['Priya', 'Would a small tray beside the blue mug be a good place?'],
+    ['Meera', 'Yes. I am putting my glasses in the tray by the blue mug now.'],
+    ['Meera', 'Remind me of the tray when I ask where I put them.'],
+    ['Priya', 'A note tells us the last mentioned place, not that they are still there.'],
+  ] },
+  { day: 4, time: '15:00', title: 'The afternoon plan', lines: [
+    ['Priya', 'I can visit on Saturday at four.'],
+    ['Meera', 'Saturday at four. I would like to make tea when you come.'],
+    ['Meera', 'After tea I want to water the plant by the window.'],
+    ['Priya', 'We can check the soil together first.'],
+    ['Meera', 'Let us do the tea first.'],
+  ] },
+  { day: 3, time: '11:05', title: 'Pause and resume', lines: [
+    ['Meera', 'I was folding the towels when the doorbell rang.'],
+    ['Priya', 'You said you wanted to put them on the shelf afterward.'],
+    ['Meera', 'That helps. I can return to one thing at a time.'],
+    ['Meera', 'Please ask me if I want help instead of taking over.'],
+    ['Priya', 'Of course. You choose what to do next.'],
+  ] },
+  { day: 2, time: '16:15', title: 'Preferred support', lines: [
+    ['Meera', 'A quiet seat by the window helps me take a break.'],
+    ['Priya', 'Do you want a long list for tomorrow?'],
+    ['Meera', 'No. Show me what I just said I wanted to do.'],
+    ['Meera', 'If we do not know whether I finished, ask me.'],
+    ['Priya', 'We will not mark it done from a plan alone.'],
+  ] },
+  { day: 1, time: '17:30', title: 'Preparing for a visit', lines: [
+    ['Meera', 'I am looking forward to Priya visiting tomorrow.'],
+    ['Meera', 'I want the blue mug for my tea.'],
+    ['Priya', 'We can talk about the plant when I arrive.'],
+    ['Meera', 'Please keep the glasses tray next to the mug.'],
+    ['Priya', 'All right. I will see you at four.'],
+  ] },
+  { day: 0, time: '15:45', title: 'The interrupted tea routine', lines: [
+    ['Meera', 'I am going to make tea in my blue mug, then water the plant.'],
+    ['Meera', 'I am putting my reading glasses in the tray beside the blue mug.'],
+    ['Meera', 'The phone is ringing. I will answer it before I start the tea.'],
+    ['Priya', 'Hi Mum, I am on my way. See you soon.'],
+    ['Meera', 'The call has ended. What was I doing before the phone rang?'],
+    ['Meera', 'I do not remember whether I already made the tea. Can you help me with one step?'],
+  ] },
 ];
 
 export function sampleSeed(now = new Date()) {
-  const archive = CONVERSATIONS.map((c, i) => {
-    const start = new Date(at(now, c.day, c.h, c.m));
-    const lines = c.lines.map(([speaker, text], j) => ({ at: new Date(start.getTime() + j * 9000).toISOString(), offset: j * 9, speakers: [speaker], text, provider: "deepgram", activity: j % 3 === 0 ? "still" : "", hr: null, marked: j === 3 }));
-    return { id: `sample-t${i}`, sample: true, startedAt: start.toISOString(), endedAt: new Date(start.getTime() + lines.length * 9000 + 4000).toISOString(), source: "vexo", device: c.device, marks: 1, lines };
+  const archive = SCENES.map((scene, index) => {
+    const start = new Date(now);
+    start.setDate(start.getDate() - scene.day);
+    const [h, m] = scene.time.split(':').map(Number);
+    start.setHours(h, m, 0, 0);
+    const lines = scene.lines.map(([speaker, text], n) => ({
+      id: `fictional-${index}-${n}`, sample: true, source: 'fictional',
+      at: new Date(start.getTime() + n * 12000).toISOString(), offset: n * 12,
+      speakers: [speaker === 'Meera' ? 0 : 1], speaker, text,
+      provider: 'fictional', activity: '', hr: null, marked: false,
+    }));
+    return { id: `fictional-session-${index}`, sample: true, title: scene.title,
+      startedAt: start.toISOString(), endedAt: new Date(start.getTime() + lines.length * 12000).toISOString(),
+      source: 'fictional', device: 'Fictional conversation · written demo', marks: 0, lines };
   });
-  const notes = NOTES.map(([d, h, m, text], i) => ({ id: `sample-n${i}`, sample: true, text, at: at(now, d, h, m), source: "vexo", context: "Sample" }));
-  const tasks = [
-    { id: "sample-k0", sample: true, title: "Bank visit with Dad", due: key(now, -2), big: false, done: false, note: "Sample · Monday morning" },
-    { id: "sample-k1", sample: true, title: "Refill blood pressure tablets", due: key(now, 0), big: false, done: false, note: "Sample" },
-    { id: "sample-k2", sample: true, title: "Decide on the day-centre place", due: key(now, -5), big: true, done: false, note: "Sample · talk it over first" },
-    { id: "sample-k3", sample: true, title: "Priya visiting at 4 pm", due: key(now, 0), big: false, done: false, note: "Sample" },
-  ];
-  const energyLog = [
-    { at: at(now, 0, 8, 52), state: "steady", word: "alright", sample: true },
-    { at: at(now, 0, 13, 18), state: "low", word: "tired", sample: true },
-    { at: at(now, 0, 16, 10), state: "positive", word: "happy", sample: true },
-  ];
-  const actions = [
-    { at: at(now, 0, 8, 55), text: "Sample · Reminded about tablets with breakfast", sample: true },
-    { at: at(now, 0, 13, 22), text: "Sample · Moved “Priya visiting at 4 pm” to today", sample: true },
-    { at: at(now, 0, 13, 25), text: "Sample · Soft watch tap check-in after “tired”", sample: true },
-  ];
-  const days = {};
-  for (const [d, words, others] of [[0, ["tired"], 6], [1, [], 2], [2, [], 3], [3, [], 0], [4, [], 1]]) {
-    days[key(now, d)] = { energy: words.map((w) => ({ word: w, at: at(now, d, 13, 18) })), others, mine: 4, hrSum: 0, hrN: 0, hrMin: null, hrMax: null, watchSteps: null, bandSteps: 0, sample: true };
-  }
-  return { archive, notes, tasks, energyLog, actions, days, energy: { state: "positive", at: at(now, 0, 16, 10), text: "Calling Priya on Sundays makes me happy.", word: "happy", sample: true } };
+  const notes = archive.flatMap(session => session.lines.filter(line => line.speaker === 'Meera').map(line => ({
+    id: line.id, sample: true, source: 'fictional', text: line.text, at: line.at,
+    speaker: line.speaker, context: `Fictional Meera demo · ${session.title}`,
+  })));
+  return { archive: archive.slice().reverse(), notes, tasks: [], actions: [], energyLog: [], energy: null, days: {},
+    question: DEMO_QUESTION,
+    routine: ['Fictional Meera preference: offer one step at a time.', 'Fictional Meera plan: make tea, then water the plant.', 'Fictional Meera preference: ask before contacting Priya.'] };
 }
 
 /* ---------- Mood tracking (demo profile) ----------

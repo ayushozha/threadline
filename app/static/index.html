@@ -53,7 +53,12 @@
           <span class="dchip" id="chip-cam" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
         </div></div>
       </header>
-      <p id="sample-banner" class="sample-banner" hidden><span><b>Sample</b> conversations, notes and tasks fill the screens until you record your own. Health numbers are real.</span> <button type="button" id="sample-clear" class="text-button">Clear sample data</button></p>
+      <div class="row tight demo-controls"><button type="button" id="sample-load" class="text-button">Load fictional dementia demo</button><button type="button" id="sample-exit" class="text-button" hidden>Back to my data</button><a class="text-button" href="/demo/">Watch dementia demo</a></div>
+      <section id="sample-banner" class="sample-banner" hidden aria-label="Fictional demo history">
+        <div><b>Fictional Meera demo</b><p>7 days of written dialogue. No patient recordings, device readings or precomputed AI decisions. Your own data stays separate.</p>
+        <label class="check"><input type="checkbox" id="sample-consent"><span>Allow these fictional notes to be sent to Google for a fresh response.</span></label>
+        <div class="row tight"><button type="button" id="sample-ask" class="secondary">Ask Gemini: what was I doing?</button><button type="button" id="sample-clear" class="text-button">Clear fictional history</button></div></div>
+      </section>
       <section class="view" data-view="live">
         <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Live from the Vexo band.</h2><p>What the band hears appears below as it is said, and is kept in Threadline's database.</p>
           <div class="row tight"><button type="button" id="connect-toggle" class="secondary">Connect a device</button><span id="demo-rec-badge" class="demo-rec" hidden>● Recording live</span></div></div>
@@ -158,8 +163,8 @@
             </div>
             <div id="live" class="transcript-card" aria-live="polite">
               <div class="tc-head"><h2>Live transcript</h2><span class="caption">Speaker labels separate voices, not identities</span></div>
-              <ol id="live-lines" class="script"></ol>
               <p id="live-interim" class="interim">Connect your band above, allow recording, and press the red button. Words appear here as they are spoken.</p>
+              <ol id="live-lines" class="script"></ol>
               <p id="speech-status" class="caption">Speech recognition detects supported languages automatically.</p>
               <button type="button" id="recover-speech" class="text-button">Check recent speech</button>
             </div>
@@ -250,6 +255,10 @@
                 <label class="check inline"><input type="checkbox" id="care-mute"> Mute speech</label>
               </div>
               <p id="care-live-status" class="caption" role="status">Not running.</p>
+              <section id="care-band-transcript" class="care-band-transcript" aria-label="Live band transcript" hidden>
+                <h3>Band transcript · live</h3><p id="care-band-interim" class="interim" aria-live="polite" aria-atomic="true"></p>
+                <ol id="care-band-lines" class="script"></ol>
+              </section>
               <ol id="care-log" class="lh-log care-log" aria-live="polite"></ol>
             </section>
           </div>

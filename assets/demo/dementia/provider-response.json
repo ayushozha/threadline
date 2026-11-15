@@ -1,0 +1,47 @@
+{
+  "answer": "According to the transcript, you planned to make your morning tea in the blue mug and then water the plant by the window, and you stepped away to answer a ringing phone intending to return to your tea. In the current view (kitchen-06), the blue mug is on the wooden counter with no liquid or tea bag visible inside, alongside a silver kettle, a closed square silver tin, a saucer with a spoon, and a folded cloth. It is unknown from this snapshot whether the kettle has water or has been heated, whether tea preparation started, or whether the plant has been watered. Also, while you reported putting your glasses beside the tea tin, no glasses are visible in kitchen-06 and their current location is unknown.",
+  "next_step": "Check whether the kettle has water inside and if it is warm so you can continue making tea in the blue mug.",
+  "observations": [
+    {
+      "frame_id": "kitchen-06",
+      "description": "A blue mug with a light-colored interior sits on a wooden counter, with no liquid or tea bag visible inside."
+    },
+    {
+      "frame_id": "kitchen-06",
+      "description": "A silver metal kettle with a black lid and handle rests on the upper right of the wooden counter."
+    },
+    {
+      "frame_id": "kitchen-06",
+      "description": "A closed square silver tin sits to the right of the blue mug, and no glasses are visible next to it."
+    },
+    {
+      "frame_id": "kitchen-06",
+      "description": "A small cream saucer holding a metal spoon sits below the square tin, and a folded light-colored cloth rests near the top edge of the counter."
+    }
+  ],
+  "uncertainties": [
+    "Whether the kettle contains water, is powered, or has been heated is not visible.",
+    "Whether the square silver tin holds tea or was previously opened is unknown.",
+    "Whether any step of making the tea or watering the plant was completed before or during the gap is not shown.",
+    "No glasses are visible beside the tin despite being reported as placed there; where they are or who moved them is unknown.",
+    "The plant by the window is outside the camera view."
+  ],
+  "frame_ids": [
+    "kitchen-06"
+  ],
+  "transcript_ids": [
+    "plan-01",
+    "location-02",
+    "preference-03",
+    "interruption-04",
+    "question-05"
+  ],
+  "engine": "gemini",
+  "capture_metadata": {
+    "synthetic_inputs": true,
+    "description": "Real Gemini API response to supplied fictional conversation and AI-generated test image. Not patient data.",
+    "captured_at": "2026-11-15T01:11:16Z",
+    "elapsed_seconds": 9.65,
+    "image_bytes": 66665
+  }
+}

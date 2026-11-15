@@ -2,7 +2,7 @@
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
-import { sampleSeed, moodSeries } from './sample-data.mjs';
+import { sampleSeed, DEMO_QUESTION } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -17,7 +17,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const fmtWhen = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed" };
+const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", fictional: "Fictional demo" };
 
 const MODES = {
   reflection: { description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Cycle timing is optional self-reported context — never a cause, diagnosis, or judgment." },
@@ -38,6 +38,7 @@ const life = { days: {}, cycle: { starts: [], notify: false, haptic: false, noti
 const todayKey = (d = new Date()) => localDate(d);
 function dayRec(key = todayKey()) { return (life.days[key] ||= { energy: [], others: 0, mine: 0, hrSum: 0, hrN: 0, hrMin: null, hrMax: null, watchSteps: null, bandSteps: 0 }); }
 function loadThread(key) {
+  flushLiveWork();
   workspaceVersion += 1;
   stopVision();
   decisions.clear();
@@ -54,41 +55,60 @@ function loadThread(key) {
   Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], energyLog: saved?.energyLog || [], actions: saved?.actions || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
   life.taskDrafts = saved?.taskDrafts || [];
   threadLoaded = true;
-  seedSample(key);
-}
-/* Sample data fills empty screens for the demo; every item is flagged sample and labelled. */
-const sampleOffKey = (key) => `threadline.sample.off.${key}`;
-function sampleOff(key = threadKey) { try { return localStorage.getItem(sampleOffKey(key)) === "1"; } catch { return false; } }
-function seedSample(key) {
-  if (sampleOff(key)) return;
-  const seed = sampleSeed(new Date());
-  const notes = sessions.reflection.notes;
-  if (!notes.length) notes.push(...seed.notes);
-  if (!(life.tasks || []).length) life.tasks = seed.tasks;
-  if (!(life.energyLog || []).length) life.energyLog = seed.energyLog;
-  if (!(life.actions || []).length) life.actions = seed.actions;
-  if (!life.energy) life.energy = seed.energy;
-  for (const [day, rec] of Object.entries(seed.days)) if (!life.days[day]) life.days[day] = rec;
-  try { if (!JSON.parse(localStorage.getItem(`threadline.transcripts.v1.${key}`) || "[]").length) localStorage.setItem(`threadline.transcripts.v1.${key}`, JSON.stringify(seed.archive)); } catch { /* storage off */ }
+  if (!isFictionalDemo()) {
+    for (const m of ["reflection", "routine"]) sessions[m].notes = sessions[m].notes.filter(n => !n.sample);
+    for (const field of ["tasks", "taskDrafts", "energyLog", "actions"]) life[field] = life[field].filter(x => !x.sample);
+    if (life.energy?.sample) life.energy = null;
+    for (const [day, rec] of Object.entries(life.days)) if (rec.sample) delete life.days[day];
+    saveArchive(loadArchive().filter(x => !x.sample));
+  }
   renderSampleBanner();
 }
-function hasSample() {
-  return sessions.reflection.notes.some((n) => n.sample) || (life.tasks || []).some((t) => t.sample) || (life.actions || []).some((a) => a.sample)
-    || (life.energyLog || []).some((e) => e.sample) || loadArchive().some((e) => e.sample);
+/* Fictional history is opt-in and has separate storage for each selected band. */
+const realThreadKey = () => bandNumber ? `band-${bandNumber}` : "browser";
+function isFictionalDemo() { return threadKey.startsWith("fictional-"); }
+function processingConsent() { return isFictionalDemo() ? $("sample-consent").checked : $("rec-consent").checked; }
+function renderSampleBanner() {
+  const active = isFictionalDemo();
+  $("sample-banner").hidden = !active;
+  $("sample-load").hidden = active;
+  $("sample-exit").hidden = !active;
 }
-function renderSampleBanner() { const b = $("sample-banner"); if (b) b.hidden = !hasSample(); }
+function loadSample() {
+  if (busy || capture.active || care.ws || lh.ws || watch.owningLive) return message("Stop the live session before opening fictional history.", true);
+  saveThread();
+  loadThread(`fictional-${realThreadKey()}`);
+  if (!sessions.routine.notes.length) {
+    const seed = sampleSeed();
+    sessions.reflection.notes = seed.notes.map(n => ({ ...n }));
+    sessions.routine.notes = seed.notes.map(n => ({ ...n }));
+    saveArchive(seed.archive);
+  }
+  mode = "routine"; sessions.routine.question = DEMO_QUESTION;
+  care.history = []; $("care-history").replaceChildren();
+  stopDemoFeed(); render(); renderCareRoutine(); renderCareHealth();
+  showAnswer("Fictional history loaded. Allow demo processing above, then ask Gemini to recover the interrupted plan.");
+  message("Fictional history only · your real notes and recordings are kept separately.");
+  location.hash = "thread";
+}
+function exitSample() {
+  if (!isFictionalDemo()) return;
+  saveThread(); loadThread(realThreadKey()); mode = "reflection";
+  $("sample-consent").checked = false;
+  care.history = []; $("care-history").replaceChildren();
+  render(); renderCareRoutine(); renderCareHealth();
+  if (demoWanted()) startDemoFeed();
+  showAnswer("Back to your own notes. Fictional history is stored separately.");
+}
 function clearSample() {
-  try { localStorage.setItem(sampleOffKey(threadKey), "1"); } catch { /* storage off */ }
-  sessions.reflection.notes = sessions.reflection.notes.filter((n) => !n.sample);
-  for (const k of ["tasks", "energyLog", "actions"]) life[k] = (life[k] || []).filter((x) => !x.sample);
-  if (life.energy?.sample) life.energy = null;
-  for (const [day, rec] of Object.entries(life.days)) if (rec.sample) delete life.days[day];
-  saveArchive(loadArchive().filter((e) => !e.sample));
-  saveThread(); render(); renderArchive(); renderEnergy(); renderTasks(); renderToday(); renderDays(); renderSampleBanner();
+  if (!isFictionalDemo()) return;
+  for (const m of ["reflection", "routine"]) sessions[m].notes = [];
+  life.tasks = []; life.taskDrafts = []; life.energyLog = []; life.actions = []; life.days = {}; life.energy = null;
+  saveArchive([]); saveThread(); exitSample();
 }
 /* The owner's Apple Health history (uploaded from the iPhone) — shown on the default profile only. */
 const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
-let ownerMood = moodSeries({}, 30);
+let ownerMood = { days: [], weeks: [] }; // Only actual caregiver assessments belong in this series.
 const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
 function drawDashboard() {
@@ -100,6 +120,10 @@ function drawDashboard() {
 window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); });
 function renderMood() {
   if (!$("mood-chart")) return;
+  if (!ownerMood.days.length) {
+    $("mood-today").textContent = "No caregiver mood assessments recorded. Sleep and activity do not determine a mood or clinical score.";
+    $("mood-chart").replaceChildren(); $("mood-weeks").replaceChildren(); return;
+  }
   const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
   $("mood-today").replaceChildren(...(t ? [["This morning", `${t.morningLabel} · ${moodWord(t.morning)} (${t.morning > 0 ? "+" : ""}${t.morning})`], ["This evening", `${t.eveningLabel} · ${moodWord(t.evening)} (${t.evening > 0 ? "+" : ""}${t.evening})`], ["Evening agitation", `${["none", "mild", "moderate", "severe"][t.agitation]} (NPI-Q ${t.agitation})`], ["Repeated questions", String(t.repeats)]].map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v }))) : []));
   const svg = $("mood-chart"), mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
@@ -121,7 +145,7 @@ const HEALTH_COLS = [
   ["mindful_min", "Mindful (min)", r0], ["workouts", "Workouts", (v, h) => `${h.workout_count ?? 1} · ${Math.round(v)} min`], ["mood", "Logged mood (valence)", (v) => v.toFixed(2)],
   ["menstrual_flow", "Period logged", () => "yes"],
 ];
-function healthOn() { return isDefaultProfile() || !configuredBand; }
+function healthOn() { return !isFictionalDemo() && (isDefaultProfile() || !configuredBand); }
 function hDay(key) { return healthOn() ? ownerHealth.byDay[key] || null : null; }
 function hLatest() { return healthOn() ? ownerHealth.latest : null; }
 async function loadOwnerHealth() {
@@ -132,13 +156,13 @@ async function loadOwnerHealth() {
     const keys = Object.keys(ownerHealth.byDay).sort();
     ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
     ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
-    ownerMood = moodSeries(ownerHealth.byDay, 30);
     drawDashboard();
     renderEnergy(); renderToday(); renderDays(); renderIntegrations();
   } catch { /* offline: screens keep live readings only */ }
 }
 /* Live watch readings win; the latest Health day fills whatever the watch hasn't sent. */
 function sensorsWithHealth() {
+  if (isFictionalDemo()) return {};
   const h = hLatest() || {}, live = Object.fromEntries(Object.entries(watch.sensors || {}).filter(([, v]) => v != null));
   return { heart_rate: h.heart_rate, hrv_sdnn_ms: h.hrv_sdnn, resting_hr: h.resting_heart_rate, respiratory_rate: h.respiratory_rate, spo2: h.oxygen_saturation,
     sleep_hours_last_night: h.sleep_hours, env_noise_db: h.audio_exposure_db, exercise_min_today: h.exercise_min, mindful_min_today: h.mindful_min, ...live };
@@ -155,6 +179,28 @@ function saveThread() {
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
 const capture = { active: false, band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
+// Paint speech before doing storage, charts or agent work. These share the browser thread.
+let liveWorkTimer = 0, liveWork = [];
+function flushLiveWork() {
+  clearTimeout(liveWorkTimer); liveWorkTimer = 0;
+  const pending = liveWork; liveWork = [];
+  if (!pending.length) return;
+  for (const item of pending) collectUtterance(item.msg, item.at, item.who);
+  archiveSession(capture.finals, { startedAt: capture.startedAt, source: capture.source, marks: capture.marks || [], id: capture.archiveId });
+  const voice = voiceMetrics(capture.finals); if (voice) life.voice = voice;
+  renderEnergy();
+}
+function queueLiveWork(msg, at, who) {
+  liveWork.push({ msg, at, who });
+  if (!liveWorkTimer) liveWorkTimer = setTimeout(flushLiveWork, 100);
+}
+function showLiveDraft(text) {
+  if (!text?.trim()) return; // Empty endpoint events must not erase words still being read.
+  $("live-interim").textContent = text;
+  $("care-band-interim").textContent = text;
+  $("care-band-transcript").hidden = false;
+}
+function clearLiveDraft() { $("live-interim").textContent = ""; $("care-band-interim").textContent = ""; }
 const utterances = createUtteranceCollector();
 function flushUtterance() {
   clearTimeout(capture.utteranceTimer);
@@ -187,7 +233,7 @@ function renderTimeline() {
   const session = sessions[mode];
   if (typeof scheduleGraph === "function") scheduleGraph();
   rebuildWordRecords(); saveThread(); renderEnergy(); renderDays(); renderToday(); scheduleDaySummary();
-  $("sample-label").textContent = `Your statements only — stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Nothing is stored on the server.`;
+  $("sample-label").textContent = isFictionalDemo() ? "Fictional Meera history · written demo, not recorded speech or clinical data." : `Your statements only — stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Nothing is stored on the server.`;
   $("timeline").replaceChildren();
   for (const note of session.notes) {
     const time = el("time", { dateTime: note.at, textContent: fmtWhen(note.at) }, el("span", { className: "note-id", textContent: note.id }));
@@ -214,6 +260,7 @@ function editNote(li, note) {
 }
 function addNotes(items) {
   const session = sessions[mode];
+  if (isFictionalDemo()) items = items.map(item => ({ ...item, source: "fictional", sample: true, context: "Fictional Meera demo · added during demo" }));
   const added = items.filter(item => !item.id || !session.notes.some(n => n.id === item.id)).map((item) => ({ id: newId("n"), context: "", ...item }));
   session.notes.push(...added);
   renderTimeline(); renderDays();
@@ -422,7 +469,7 @@ fetch("/api/device").then((r) => r.json()).then(async (d) => {
   configuredBand = d.vexo_band_number;
   try { localStorage.removeItem("threadline.token"); } catch { /* storage off */ }
   const fromUrl = new URLSearchParams(location.search).get("band");
-  const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : recentBands()[0] || configuredBand;
+  const start = (fromUrl && /^\d{1,3}$/.test(fromUrl) && Number(fromUrl) > 0) ? Number(fromUrl) : configuredBand || recentBands()[0];
   if (start) chooseBand(start, false); else { loadThread("browser"); render(); }
   renderPair(); setRecUI();
   await ensureService();
@@ -623,6 +670,7 @@ $("band-disconnect").addEventListener("click", async () => { try { await capture
 
 $("rec-start").addEventListener("click", async () => {
   if (capture.active) return;
+  if (isFictionalDemo()) return recState("Exit fictional history before recording real speech.", true);
   if (!$("rec-consent").checked) return recState("Confirm recording consent first.", true);
   try { await ensureService(); } catch (e) { return recState(e.message, true); }
   if (!service.transcription) return recState("Transcription is temporarily unavailable. Please try again later.", true);
@@ -664,7 +712,7 @@ $("rec-start").addEventListener("click", async () => {
   capture.pcm = Boolean(capture.decoder);
   capture.bandPackets = 0; capture.lastDecodedAt = Date.now();
   $("rec-takeback").hidden = true;
-  $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
+  $("live").hidden = false; $("live-lines").replaceChildren(); $("care-band-lines").replaceChildren(); clearLiveDraft(); $("care-band-transcript").hidden = false; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
   if (camera) startVideo(stream);
   capture.marks = [];
   if (!vexo) {
@@ -729,7 +777,7 @@ function openSocket() {
       recState(capture.vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
     } else if (msg.type === "result") {
       if (msg.transcript?.trim() && capture.firstTextMs == null) capture.firstTextMs = Math.round(performance.now() - capture.streamReadyAt);
-      if (msg.is_final && msg.transcript?.trim()) capture.lastTextAt = Date.now();
+      if (msg.transcript?.trim()) capture.lastTextAt = Date.now();
       if (!msg.is_final && msg.transcript?.trim()) capture.interimCount += 1;
       if (msg.is_final) {
         if (msg.transcript.trim()) {
@@ -739,9 +787,8 @@ function openSocket() {
           if (watch.sensors?.heart_rate != null && Date.now() - watch.sensorsAt < 10000) final.hr = Math.round(watch.sensors.heart_rate);
           capture.finals.push(final); addLiveLine(final);
         }
-        $("live-interim").textContent = "";
-      } else $("live-interim").textContent = msg.transcript;
-    } else if (msg.type === "utterance_end") flushUtterance();
+      } else showLiveDraft(msg.transcript);
+    } else if (msg.type === "utterance_end") { flushLiveWork(); flushUtterance(); }
     else if (msg.type === "error") { capture.lastError = msg.message; recState(msg.message, true); }
     else if (msg.type === "closed") ws.closedCleanly = true;
   };
@@ -765,18 +812,17 @@ function addLiveLine(msg) {
   const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((x) => x != null))];
   const who = speakers.length ? speakers[0] : null;
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
-  $("live-interim").textContent = "";
+  clearLiveDraft();
   $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
     el("span", { className: "avatar", "aria-hidden": "true", textContent: who ?? "?" }),
     el("div", {},
       el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }),
         el("span", { textContent: ` · ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` })),
       el("p", { textContent: msg.transcript }))));
-  if (location.hash === "#live" || !location.hash) { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
-  archiveSession(capture.finals, { startedAt: capture.startedAt, source: capture.source, marks: capture.marks || [], id: capture.archiveId });
-  const voice = voiceMetrics(capture.finals); if (voice) life.voice = voice;
-  renderEnergy(); renderToday();
-  collectUtterance(msg, at, who);
+  const mirror = el("li", {}, el("span", { className: "caption", textContent: `${who == null ? "Speaker ?" : `Speaker ${who}`} · ${at.toLocaleTimeString()}` }), el("p", { textContent: msg.transcript }));
+  $("care-band-lines").append(mirror); $("care-band-transcript").hidden = false;
+  for (const id of ["live-lines", "care-band-lines"]) { const box = $(id); while (box.children.length > 200) box.firstChild.remove(); box.scrollTop = box.scrollHeight; }
+  queueLiveWork(msg, at, who);
 }
 async function stopLive(reason) {
   if (!capture.active || capture.stopping) return;
@@ -810,7 +856,7 @@ async function finishLive() {
     recState("Checking the last words before opening your transcript…");
     await recoverSpeech();
   }
-  flushUtterance();
+  flushLiveWork(); flushUtterance();
   clearInterval(capture.timer); $("live-timer").textContent = `stopped · ${$("live-timer").textContent.replace("● live · ", "")}`;
   const { finals, source, startedAt } = capture;
   if (finals.length) { archiveSession(finals, { startedAt, source, marks: capture.marks || [], id: capture.archiveId }); const vm = voiceMetrics(finals); if (vm) { life.voice = vm; saveThread(); renderEnergy(); } }
@@ -963,7 +1009,7 @@ function setBusy(value) {
   if (!value) setRecUI();
 }
 function liveHeaders() {
-  if (!$("rec-consent").checked) throw new Error("Allow recording and processing on Your band before sending notes or audio.");
+  if (!processingConsent()) throw new Error("Allow recording and processing on Your band before sending notes or audio.");
   if (!service.ready) throw new Error("Threadline is still connecting. Try again in a moment.");
   return {};
 }
@@ -999,7 +1045,7 @@ $("question-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const question = $("question").value.trim(), notes = sessions[mode].notes;
   if (busy || !question) return;
   if (!notes.length) return message("Add a note before asking a question.", true);
-  if (!service.reflection || !$("rec-consent").checked) {
+  if (!service.reflection || !processingConsent()) {
     const stop = new Set(["what", "did", "the", "and", "when", "last", "time", "where", "was", "with", "that", "this", "for", "about", "felt", "feel"]);
     const words = (question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((w) => !stop.has(w));
     const matches = notes.filter((note) => words.some((word) => note.text.toLowerCase().includes(word)));
@@ -1020,7 +1066,7 @@ function render() {
   if ($("mode-description")) $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations(); renderToday();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations(); renderToday(); renderSampleBanner();
 }
 
 /* ---------- Band signals ---------- */
@@ -1057,10 +1103,10 @@ async function stopSignals() {
 }
 
 /* ---------- Stored transcripts (this browser, per band) ---------- */
-const archiveKey = () => `threadline.transcripts.v1.${bandNumber ? `band-${bandNumber}` : "browser"}`;
+const archiveKey = () => `threadline.transcripts.v1.${threadKey || realThreadKey()}`;
 function loadArchive() { try { return JSON.parse(localStorage.getItem(archiveKey()) || "[]"); } catch { return []; } }
 function saveArchive(list) { try { localStorage.setItem(archiveKey(), JSON.stringify(list.slice(0, 50))); return true; } catch { return false; } }
-function transcriptProviders(lines) { return [...new Set(lines.map(l => l.provider === "gemini" ? "Gemini recovery" : "Deepgram"))].join(" + "); }
+function transcriptProviders(lines) { return [...new Set(lines.map(l => l.provider === "fictional" ? "Written fictional dialogue" : l.provider === "gemini" ? "Gemini recovery" : "Deepgram"))].join(" + "); }
 function archiveSession(finals, meta) {
   const lines = finals.map((f) => {
     const speakers = [...new Set(f.words.map((w) => w.speaker).filter((s) => s != null))];
@@ -1083,7 +1129,7 @@ function renderArchive() {
     const mins = Math.max(1, Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000));
     const a = el("button", { type: "button", className: `session${entry.id === archiveSel ? " current" : ""}`, "aria-pressed": String(entry.id === archiveSel) },
       el("span", { className: "s-top" }, el("b", { textContent: new Date(entry.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }), entry.marks ? el("span", { className: "s-star", textContent: `★ ${entry.marks}` }) : null),
-      el("span", { className: "caption", textContent: `${entry.device} · ${mins} min · ${entry.lines.length} lines` }));
+      el("span", { className: "caption", textContent: `${entry.sample ? "Fictional · " : ""}${entry.title || entry.device} · ${mins} min · ${entry.lines.length} lines` }));
     a.addEventListener("click", () => { archiveSel = entry.id; renderArchive(); });
     box.append(el("li", {}, a));
   }
@@ -1096,6 +1142,7 @@ function renderArchive() {
     const a = el("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: `threadline-transcript-${entry.startedAt.slice(0, 16).replace(/[:T]/g, "-")}.txt` });
     document.body.append(a); a.click(); a.remove();
   });
+  review.hidden = Boolean(entry.sample);
   review.addEventListener("click", () => { location.hash = "live"; openReview(entry.lines.map((l) => ({ speaker: l.speakers[0] ?? null, text: l.text, offset: l.offset })), entry.source === "browser" ? "mic" : entry.source === "watch" ? "watch" : "vexo", new Date(entry.startedAt), `${entry.device} · stored transcript from ${new Date(entry.startedAt).toLocaleString()}.`); });
   del.addEventListener("click", () => { if (confirm("Delete this transcript from this browser?")) { saveArchive(loadArchive().filter((e) => e.id !== entry.id)); archiveSel = ""; renderArchive(); } });
   const mark = (text) => { if (!q) return [text]; const i = text.toLowerCase().indexOf(q); return i < 0 ? [text] : [text.slice(0, i), el("mark", { textContent: text.slice(i, i + q.length) }), text.slice(i + q.length)]; };
@@ -1112,7 +1159,7 @@ $("archive-clear").addEventListener("click", () => { if (confirm("Delete every s
 /* ---------- Knowledge graph (rebuilds as statements are saved) ---------- */
 const graph = { timer: 0, version: 0, data: null, selected: null, signature: "" };
 const TYPE_COLORS = { person: "#0E7C86", feeling: "#E8452C", time: "#D99A1E", place: "#6B5BD6", commitment: "#16161A", preference: "#3B4BDB", topic: "#8A8A92" };
-function graphEngine() { return service.reflection && $("rec-consent").checked ? "gemini" : "local"; }
+function graphEngine() { return service.reflection && processingConsent() ? "gemini" : "local"; }
 function scheduleGraph(delay = 8000) {
   if (mode !== "reflection") { $("graph-panel").hidden = true; return; }
   $("graph-panel").hidden = false;
@@ -1205,6 +1252,7 @@ async function openWatchFeed(token) {
     } else if (msg.type === "sensors") {
       applyWatchSensors(msg);
     } else if (msg.type === "cycle") {
+      if (isFictionalDemo()) return;
       let added = 0;
       for (const d of msg.period_starts || []) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !life.cycle.starts.some((x) => x.date === d)) { life.cycle.starts.push({ date: d, source: "health" }); added += 1; }
       renderDays(); watchMsg(added ? `Added ${added} period start date${added > 1 ? "s" : ""} from Apple Health.` : "Cycle dates from Apple Health are already here.");
@@ -1419,7 +1467,7 @@ async function summarizeToday() {
   const signature = JSON.stringify(notes), scope = workspaceVersion;
   if (!notes.length) { for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "caption", textContent: "Your summary will update automatically as your words are saved." })); } daySummary.signature = signature; return; }
   if (signature === daySummary.signature && scope === daySummary.scope) return;
-  if (!service.reflection || !$("rec-consent").checked) return;
+  if (!service.reflection || !processingConsent()) return;
   const info = cycleInfo();
   const readings = [r?.energy.length ? `${r.energy.length} low-energy words` : "", r?.others ? `${r.others} lines from other people in reviewed conversations` : "",
     r?.watchSteps != null ? `${r.watchSteps} steps on the watch` : "", r?.hrN ? `average heart rate ${Math.round(r.hrSum / r.hrN)}` : "", info.dayOf ? `self-reported cycle day ${info.dayOf(key)}` : ""].filter(Boolean).join("; ");
@@ -1465,15 +1513,24 @@ document.addEventListener("click", (e) => { const a = e.target.closest("a[href='
 /* Recorder waveform from the band's loudness */
 const WAVE_BARS = 48, waveLevels = new Array(WAVE_BARS).fill(0);
 $("wave").replaceChildren(...waveLevels.map(() => el("span")));
+let waveFrame = 0;
 function pushWave(level) {
   waveLevels.shift(); waveLevels.push(level);
-  [...$("wave").children].forEach((b, i) => { b.style.height = `${4 + Math.round(waveLevels[i] * 40)}px`; });
+  if (waveFrame) return;
+  waveFrame = requestAnimationFrame(() => {
+    waveFrame = 0;
+    [...$("wave").children].forEach((b, i) => { b.style.height = `${4 + Math.round(waveLevels[i] * 40)}px`; });
+  });
 }
 
 
 /* ---------- Agent: Gemini Decisions API chooses what would help; rules are enforced on the server ---------- */
-function agentEngine() { return service.reflection && $("rec-consent").checked ? "gemini" : "local"; }
+function agentEngine() { return service.reflection && processingConsent() ? "gemini" : "local"; }
 function agentPayload(statement) {
+  if (isFictionalDemo()) return {
+    statement, recent: sessions.reflection.notes.filter(n => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
+    preferences: [], today: {}, tasks: [], voice: {}, devices: { band: false, watch: false }, engine: agentEngine(),
+  };
   const info = cycleInfo(), r = life.days[todayKey()];
   return {
     statement,
@@ -1821,6 +1878,7 @@ function resumeWatch() {
 
 /* One place that applies a watch reading to the page (your own paired watch, or the public demo). */
 function applyWatchSensors(msg) {
+  if (isFictionalDemo()) return;
   watch.sensors = msg; watch.sensorsAt = Date.now(); $("watch-sensors").hidden = false;
   const rec = dayRec();
   if (msg.heart_rate != null) { const h = Math.round(msg.heart_rate); rec.hrSum += h; rec.hrN += 1; rec.hrMin = rec.hrMin == null ? h : Math.min(rec.hrMin, h); rec.hrMax = rec.hrMax == null ? h : Math.max(rec.hrMax, h); }
@@ -1833,7 +1891,7 @@ function applyWatchSensors(msg) {
 
 /* ---------- Public demo: the default profile shows the demo owner's live watch readings ---------- */
 const demo = { ws: null, live: false, device: null, retry: 0 };
-function demoWanted() { return isDefaultProfile() && !savedWatch() && !watch.ws; }
+function demoWanted() { return !isFictionalDemo() && isDefaultProfile() && !savedWatch() && !watch.ws; }
 function startDemoFeed() {
   if (demo.ws) return;
   let ws;
@@ -1867,7 +1925,7 @@ $("rec-consent").addEventListener("change", () => {
   if ($("rec-consent").checked) { autoRec.userStopped = false; maybeAutoStart(); }
   else { autoRec.userStopped = true; stopLive("Recording permission removed. Stopping the band's microphone."); }
 });
-function canAutoRecord() { return $("rec-consent").checked && !autoRec.userStopped && !capture.active && !busy && capture.band && !capture.band.reconnecting && $("source").value === "vexo"; }
+function canAutoRecord() { return !isFictionalDemo() && $("rec-consent").checked && !autoRec.userStopped && !capture.active && !busy && capture.band && !capture.band.reconnecting && $("source").value === "vexo"; }
 function maybeAutoStart() {
   if (!canAutoRecord()) return;
   recState("Band connected and consent given — recording continuously. Press Stop or double-tap the band to pause.");
@@ -1957,6 +2015,7 @@ function lhStartFrames() {
   }, 1000);  // about one frame a second
 }
 $("lh-start").addEventListener("click", async () => {
+  if (isFictionalDemo()) return message("Exit fictional history before starting a live camera session.", true);
   if (lh.ws) return;
   lhSetState("busy", "Starting the camera…");
   try {
@@ -2027,13 +2086,17 @@ const pub = { lines: 0 };
 function addDemoLine(d) {
   if (capture.active) return;  // your own recording is already on screen
   const interim = $("live-interim");
-  if (!d.final) { interim.textContent = d.text || ""; return; }
-  interim.textContent = "";
+  if (!d.final) { showLiveDraft(d.text); return; }
+  clearLiveDraft();
   const who = d.speaker;
   $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
     el("span", { className: "avatar", "aria-hidden": "true", textContent: who ?? "?" }),
     el("div", {}, el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }), el("span", { textContent: ` · ${new Date(d.at || Date.now()).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · Vexo band (live demo)` })),
       el("p", { textContent: d.text }))));
+  $("care-band-transcript").hidden = false;
+  $("care-band-lines").append(el("li", {}, el("span", { className: "caption", textContent: `Speaker ${who ?? "?"} · shared live band` }), el("p", { textContent: d.text })));
+  while ($("care-band-lines").children.length > 200) $("care-band-lines").firstChild.remove();
+  $("care-band-lines").scrollTop = $("care-band-lines").scrollHeight;
   while ($("live-lines").children.length > 200) $("live-lines").firstChild.remove();
   { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
 }
@@ -2212,6 +2275,7 @@ function careStartFrames() {
   }, 1000);
 }
 async function careStart() {
+  if (isFictionalDemo()) return careLiveStatus("Exit fictional history before starting a live camera session.");
   if (care.ws) return;
   if (lh.ws) lhStop("Paused: live guidance on the Care page is using Gemini Live.");
   if (care.src === "file" && !care.files.length) return careLiveStatus("Upload a video first, or choose the GoPro or this computer's camera.");
@@ -2282,8 +2346,8 @@ function careWatchBand() {
 setInterval(careWatchBand, 2000);
 
 /* Routine (per band, kept in this browser) */
-const CARE_ROUTINE_DEFAULT = ["Breakfast 8:00", "Pills with breakfast", "Short walk 10:30", "Lunch 12:30", "Call with family 17:00"];
-function careRoutineKey() { return `threadline.care.routine.v1.${bandNumber || "default"}`; }
+const CARE_ROUTINE_DEFAULT = [];
+function careRoutineKey() { return `threadline.care.routine.v1.${isFictionalDemo() ? threadKey : bandNumber || "default"}`; }
 function careRoutine() { try { const v = JSON.parse(localStorage.getItem(careRoutineKey()) || "null"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : CARE_ROUTINE_DEFAULT.slice(); } catch { return CARE_ROUTINE_DEFAULT.slice(); } }
 function careSaveRoutine(items) { try { localStorage.setItem(careRoutineKey(), JSON.stringify(items.slice(0, 40))); } catch { /* storage off */ } }
 function renderCareRoutine() {
@@ -2342,8 +2406,9 @@ function careFmt(key, v) {
   if (key === "sleep_hours" || key === "wrist_temp" || key === "respiratory_rate") return v.toFixed(1);
   return String(Math.round(v));
 }
-function careLiveWatch() { return watch.sensors && Date.now() - watch.sensorsAt < 120000 ? watch.sensors : null; }
+function careLiveWatch() { return !isFictionalDemo() && watch.sensors && Date.now() - watch.sensorsAt < 120000 ? watch.sensors : null; }
 function careHealthToday() {
+  if (isFictionalDemo()) return {};
   const norm = care.health || {}, live = careLiveWatch(), out = {};
   for (const [key, , , aliases] of CARE_HM) {
     const lv = live ? carePick(live, aliases) : null;
@@ -2364,6 +2429,10 @@ function careSpark(title, series, key) {
   return el("figure", {}, el("figcaption", { textContent: `${title} · ${vals.length} days · latest ${careFmt(key, vals[vals.length - 1])}` }), svg);
 }
 function renderCareHealth() {
+  if (isFictionalDemo()) {
+    $("care-health").replaceChildren(el("p", { className: "caption", textContent: "No health measurements in fictional demo history." }));
+    $("care-spark").replaceChildren(); return;
+  }
   const norm = care.health || {}, live = careLiveWatch(), tiles = [];
   for (const [key, label, unit, aliases] of CARE_HM) {
     const lv = live ? carePick(live, aliases) : null, m = norm[key];
@@ -2421,6 +2490,11 @@ $("care-health-upload").addEventListener("click", () => {
 
 /* Caregiver agent */
 function careContext() {
+  if (isFictionalDemo()) return {
+    transcript: sessions.routine.notes.slice(-30).map(n => ({ at: n.at, speaker: "Fictional Meera", text: `[Fictional written demo] ${n.text}` })),
+    observations: [], band: null, health: {}, video: { source: null, live: false },
+    routine: sampleSeed().routine,
+  };
   const bandLines = [...document.querySelectorAll("#live-lines li p")].map((p) => p.textContent.trim()).filter(Boolean);
   const heard = care.lines.filter((l) => l.kind === "heard").map((l) => `Heard: ${l.text.trim()}`);
   const said = care.lines.filter((l) => l.kind === "said").map((l) => l.text.trim()).filter(Boolean);
@@ -2455,7 +2529,7 @@ function careRenderAssessment(d) {
   box.replaceChildren(...care.history.slice().reverse().map((h) => el("li", {}, el("span", { className: `dotk ${h.status}`, "aria-hidden": "true" }), el("time", { textContent: h.at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: `${CARE_STATUS_WORD[h.status]} · ${h.summary}` }))));
   box.scrollTop = 0;
   $("care-agent-state").textContent = `Checked ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${d.engine ? ` · ${d.engine}` : ""}.`;
-  if (status === "urgent" && (care.lastStatus !== "urgent" || Date.now() - care.lastTapAt > 5 * 60000)) {
+  if (!isFictionalDemo() && status === "urgent" && (care.lastStatus !== "urgent" || Date.now() - care.lastTapAt > 5 * 60000)) {
     care.lastTapAt = Date.now();
     sendHaptic("notification", (d.next_step || d.summary || "Please check in").slice(0, 80));
     try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline · please check in", { body: d.caregiver_note || d.summary || d.next_step || "" }); } catch { /* not allowed */ }
@@ -2465,6 +2539,7 @@ function careRenderAssessment(d) {
 }
 $("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {
+  if (isFictionalDemo() && (!manual || !processingConsent())) return;
   if (care.agentBusy) { if (manual) $("care-agent-state").textContent = "A check is already running…"; return; }
   care.agentBusy = true; $("care-check").disabled = true; $("care-agent-state").textContent = "Checking…";
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 30000);
@@ -2519,3 +2594,10 @@ navigator.serial?.addEventListener?.("connect", () => setTimeout(autoConnectBand
 setTimeout(autoConnectBand, 600);
 setInterval(autoConnectBand, 10000);
 $("sample-clear")?.addEventListener("click", clearSample);
+$("sample-load")?.addEventListener("click", loadSample);
+$("sample-exit")?.addEventListener("click", exitSample);
+$("sample-ask")?.addEventListener("click", () => {
+  if (!processingConsent()) { $("sample-consent").focus(); return message("Allow sending the fictional notes to Google first.", true); }
+  mode = "routine"; sessions.routine.question = DEMO_QUESTION; render(); location.hash = "thread";
+  $("question-form").requestSubmit();
+});

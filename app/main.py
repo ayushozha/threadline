@@ -717,13 +717,14 @@ async def live_transcribe(client: WebSocket):
     source = hello.get("source")
     if source not in {"vexo", "vexo_pcm", "browser"}:
         return await fail("Unknown audio source.")
-    send, on_ready, demo_id = client.send_json, None, None
+    send, on_ready, demo_id, publisher = client.send_json, None, None, None
     if demo_feed.key_ok(hello.get("publish_key")):
         demo_id = secrets.token_hex(8)
+        publisher = demo_feed.TranscriptPublisher(demo_id, source)
 
         async def send(message: dict) -> None:
-            await demo_feed.publish_line(demo_id, source, message)
             await client.send_json(message)
+            publisher.submit(message)
 
         async def on_ready() -> None:
             await demo_feed.set_recording(demo_id, True)
@@ -731,6 +732,7 @@ async def live_transcribe(client: WebSocket):
         await transcribe_session(client, source, send, on_ready, fail)
     finally:
         if demo_id:
+            await publisher.close()
             await demo_feed.set_recording(demo_id, False)
 
 
@@ -1326,3 +1328,6 @@ app.include_router(vision_bridge.router)
 from app import care_agent; app.include_router(care_agent.router)  # noqa: E402,E702  (caregiver assessment)
 from app import health_import; app.include_router(health_import.router)  # noqa: E402,E702  (Apple Health import)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")
+demo_assets = ROOT.parent / "assets" / "demo" / "dementia"
+if demo_assets.is_dir():
+    app.mount("/demo", StaticFiles(directory=demo_assets, html=True), name="dementia-demo")

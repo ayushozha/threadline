@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && useradd --create-home --uid 10001 appuser
 
 COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser assets/demo/dementia ./assets/demo/dementia
 USER appuser
 EXPOSE 3000
 

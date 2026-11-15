@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-11-15T01:12:28.463Z",
+  "resolution": "1280x720",
+  "capture_fps": 12,
+  "output_fps": 24,
+  "duration_seconds": 55.12,
+  "narration": "Jessica; ElevenLabs; existing approved v2 narration",
+  "visuals": "AI-generated fictional stills, deterministic browser typography and motion",
+  "inference": "Captured actual Gemini response; fictional inputs",
+  "provider_capture": "provider-response.json",
+  "browser_errors": [],
+  "review_frames": ".artifacts/dementia-render-73716",
+  "visual_review": "Inspected frames at 0, 12, 22, 29, 36, 46 and 52 seconds: readable text, no clipping, expected imagery, actual response excerpt and sources visible.",
+  "full_decode": "ffmpeg decoded complete video and audio without errors",
+  "audio_peak_db": -4.4,
+  "audio_mean_db": -24.4
+}

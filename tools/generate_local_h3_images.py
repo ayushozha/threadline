@@ -18,6 +18,38 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENES = {
+    "tea-routine-pause": (
+        "A fictional photorealistic documentary-style editorial photograph of a "
+        "dignified older South Asian woman in her seventies pausing thoughtfully "
+        "at an oak kitchen counter in her ordinary home. She wears a soft sage "
+        "cardigan over a cream shirt, with silver hair loosely tied back, and "
+        "looks gently toward a single blue ceramic mug on the counter. A plain "
+        "closed stainless steel electric kettle sits safely on its base farther "
+        "back, alongside a small unmarked tea tin. Her hands rest naturally on "
+        "the counter, no pouring or active cooking. Soft morning window light, "
+        "warm cream cabinets, calm natural expression, authentic skin texture, "
+        "subtle film grain, realistic proportions. Wide landscape frame, woman "
+        "on the right, quiet negative space on the left. This illustrates a "
+        "moment of interrupted routine, not illness or distress. No writing, "
+        "logos, screens, medical equipment, wearable devices, steam or flames."
+    ),
+    "tea-routine-evidence": (
+        "A fictional photorealistic editorial photograph looking straight down "
+        "from directly above a calm home kitchen counter, a true bird's-eye view. "
+        "counter in warm morning window light. One empty blue ceramic mug with "
+        "its clean empty interior clearly visible is in the foreground, beside "
+        "a plain unmarked closed tea tin and a small teaspoon resting on a "
+        "saucer. Along the upper edge of the same oak counter is a closed stainless "
+        "steel electric kettle safely seated on its base, with its spout facing "
+        "left. A folded cream tea towel lies at the edge. The camera lens is "
+        "vertically above the mug, looking directly at its clean ivory circular "
+        "bottom, which is entirely visible with no liquid inside. Muted "
+        "sage and warm cream kitchen background, precise believable object "
+        "geometry, realistic materials, soft shadow, subtle film grain. Wide "
+        "landscape composition with objects on the right half and uncluttered "
+        "space to the left. No person, hands, text, labels, logos, screens, "
+        "flames, steam, spill or medical equipment."
+    ),
     "mug-plant": (
         "A quiet, photorealistic editorial still life photographed on a full-frame "
         "camera with a natural 50mm lens. A single matte ivory ceramic mug stands "
