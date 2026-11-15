@@ -115,7 +115,7 @@ const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -
 function drawDashboard() {
   try {
     renderDashboard($("dashboard"), { health: healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
-      transcripts: loadArchive(), tasks: life.tasks || [], who: "Dad" });
+      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? "Meera · fictional demo" : "Your person" });
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
 window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); });
@@ -190,6 +190,7 @@ function flushLiveWork() {
   archiveSession(capture.finals, { startedAt: capture.startedAt, source: capture.source, marks: capture.marks || [], id: capture.archiveId });
   const voice = voiceMetrics(capture.finals); if (voice) life.voice = voice;
   renderEnergy();
+  if (location.hash === "#dashboard" || !location.hash) drawDashboard();
 }
 function queueLiveWork(msg, at, who) {
   liveWork.push({ msg, at, who });
@@ -1504,6 +1505,7 @@ function showView(name) {
   if (name === "graph" && typeof drawGraph === "function") { drawGraph(); scheduleGraph(0); }
   if (name === "today") renderToday(); if (name === "transcripts") renderArchive();
   careOnView(name);
+  if (name === "dashboard") drawDashboard();
   if (name === "energy") renderEnergy(); if (name === "integrations") renderIntegrations(); if (name === "tasks") renderTasks();
 }
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
@@ -2524,7 +2526,7 @@ function careRenderAssessment(d) {
   $("care-text-family").href = `sms:?&body=${encodeURIComponent(`Threadline Care: ${d.caregiver_note || d.summary || "please check in"}`.slice(0, 300))}`;
   $("care-reasons").replaceChildren(...[...(d.reasons || []), ...(d.observations || []).map((o) => `Seen: ${o}`)].slice(0, 12).map((r) => el("li", { textContent: String(r) })));
   const at = d.at ? new Date(d.at) : new Date();
-  care.history.push({ status, summary: d.summary || CARE_STATUS_WORD[status], at });
+  care.history.push({ status, summary: d.summary || CARE_STATUS_WORD[status], next_step: d.next_step || "", at });
   if (care.history.length > 60) care.history.shift();
   const box = $("care-history");
   box.replaceChildren(...care.history.slice().reverse().map((h) => el("li", {}, el("span", { className: `dotk ${h.status}`, "aria-hidden": "true" }), el("time", { textContent: h.at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: `${CARE_STATUS_WORD[h.status]} · ${h.summary}` }))));
@@ -2537,6 +2539,7 @@ function careRenderAssessment(d) {
     if (typeof logAction === "function") logAction("Caregiver agent: urgent, tapped the watch");
   }
   care.lastStatus = status;
+  if (location.hash === "#dashboard" || !location.hash) drawDashboard();
 }
 $("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {

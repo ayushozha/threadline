@@ -1,9 +1,6 @@
 {
   "scene": "tea-routine-pause",
   "synthetic": true,
-  "model_file": "minimax_h3_image_pruned_w4a8.safetensors",
-  "encoder_file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-  "vae_file": "minimax_h3_image_vae_fp16.safetensors",
   "width": 1536,
   "height": 864,
   "seed": 14201,
@@ -20,5 +17,6 @@
   "cfg": 1,
   "visual_review": "Reviewed: dignified older adult, natural resting hands, blue mug and kettle, no acute distress or invented hardware.",
   "purpose": "Fictional editorial illustration, not recorded patient data",
-  "motion": "Five-second editorial zoom from this still; not a live recording."
+  "motion": "Five-second editorial zoom from this still; not a live recording.",
+  "model_configuration": "See docs/demo/LOCAL_IMAGE_RUNTIME.md; model selection is loaded from local environment variables."
 }

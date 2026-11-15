@@ -25,37 +25,29 @@ export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHi
     return { label, value: show(now7), unit, delta, good: delta == null ? null : (better === "up" ? delta >= 0 : delta <= 0), spark: arr };
   };
   const sleep = series("sleep_hours"), steps = series("steps"), rhr = series("resting_heart_rate"), hrv = series("hrv_sdnn"), spo2 = series("oxygen_saturation");
-  const moodAvg = M.map((d) => d.morning != null ? (d.morning + d.evening) / 2 : null), agit = M.map((d) => d.agitation ?? null), rep = M.map((d) => d.repeats ?? null);
+  const moodAvg = M.map((d) => d.morning != null && d.evening != null ? (d.morning + d.evening) / 2 : null), agit = M.map((d) => d.agitation ?? null), rep = M.map((d) => d.repeats ?? null);
   const csdd = mood.weeks.at(-1)?.score ?? null, csddPrev = mood.weeks.at(-2)?.score ?? null;
   const tiles = [
     tile("Sleep", sleep, "per night", 1, "up", hm), tile("Steps", steps, "per day", 0, "up"), tile("Resting HR", rhr, "bpm", 0, "down"),
     tile("HRV", hrv, "ms", 0, "up"), tile("Mood", moodAvg, "−1 … +1", 2, "up", (v) => (v > 0 ? "+" : "") + fmt(v, 2)),
-    tile("Agitated evenings", agit.map((a) => a == null ? null : a >= 2 ? 1 : 0), "of last 7", 0, "down", () => String(last7(agit).filter((a) => a >= 2).length)),
+    tile("Agitated evenings", agit.map((a) => a == null ? null : a >= 2 ? 1 : 0), "of logged evenings", 0, "down", () => last7(agit).some(a => a != null) ? `${last7(agit).filter(a => a >= 2).length} / ${last7(agit).filter(a => a != null).length}` : "—"),
     tile("Repeated questions", rep, "per day", 1, "down"),
     { label: "CSDD", value: csdd == null ? "—" : String(csdd), unit: "weekly · 0–38", delta: csdd != null && csddPrev ? (csdd - csddPrev) / csddPrev : null, good: csdd != null && csddPrev != null ? csdd <= csddPrev : null, spark: mood.weeks.map((w) => w.score) },
   ];
-  // Insights: computed from the data, one line each.
+  // Describe supplied inputs; absence of measurements never becomes a health conclusion.
   const insights = [];
-  const shortN = keys.map((_, i) => sleep[i] != null && sleep[i] < 6), agOnShort = avg(agit.filter((_, i) => shortN[i])), agOnLong = avg(agit.filter((_, i) => sleep[i] != null && !shortN[i]));
-  if (agOnShort != null && agOnLong) insights.push({ big: `${fmt(agOnShort / agOnLong, 1)}×`, text: "more evening agitation after nights under 6 hours" });
-  const activeCalm = avg(agit.filter((_, i) => steps[i] > 8000)), lowCalm = avg(agit.filter((_, i) => steps[i] != null && steps[i] < 4000));
-  if (activeCalm != null && lowCalm != null) insights.push({ big: `${fmt(Math.max(0, (1 - activeCalm / (lowCalm || 1)) * 100))}%`, text: "calmer evenings on days with 8,000+ steps" });
-  const sun = avg(moodAvg.filter((_, i) => new Date(`${keys[i]}T12:00:00`).getDay() === 0)), rest = avg(moodAvg.filter((_, i) => new Date(`${keys[i]}T12:00:00`).getDay() !== 0));
-  if (sun != null && rest != null) insights.push({ big: `${sun - rest >= 0 ? "+" : ""}${fmt(sun - rest, 2)}`, text: "mood lift on Sundays, when family visits" });
-  insights.push({ big: String(transcripts.reduce((n, t) => n + (t.lines?.length || 0), 0)), text: "conversation lines captured by the band" });
-  // Action items: rules on the same numbers, each for one audience.
-  const actions = [];
-  const shortRun = (() => { let n = 0; for (let i = sleep.length - 1; i >= 0 && sleep[i] != null && sleep[i] < 6.5; i--) n++; return n; })();
-  if (csdd != null && csdd >= 11) actions.push({ who: "Doctor", level: "high", text: `Book a GP review — weekly CSDD ${csdd} (probable depression range)` });
-  else if (csdd != null && csdd >= 6) actions.push({ who: "Doctor", level: "mid", text: `Mention mild low-mood signs at the next visit (CSDD ${csdd})` });
-  if (avg(last7(sleep)) != null && avg(last7(sleep)) < 6.5) actions.push({ who: "Caregiver", level: "high", text: `Protect sleep: ${hm(avg(last7(sleep)))} average this week${shortRun > 1 ? `, ${shortRun} short nights in a row` : ""}. Same bedtime, no caffeine after noon, dim lights by 8 pm` });
-  if (last7(agit).filter((a) => a >= 2).length >= 2) actions.push({ who: "Caregiver", level: "mid", text: "Plan a calm 4–6 pm: lights on before dusk, familiar music, one simple task" });
-  if (avg(last7(rep)) >= 5) actions.push({ who: "Caregiver", level: "mid", text: `Put today's plan on the whiteboard — ${fmt(avg(last7(rep)), 1)} repeated questions a day` });
-  if (avg(last7(steps)) != null && avg(last7(steps)) < 6000) actions.push({ who: "Family", level: "mid", text: "Join a 15-minute walk after lunch — movement predicts calmer evenings here" });
-  const rhrD = tiles[2].delta; if (rhrD != null && rhrD > 0.04) actions.push({ who: "Doctor", level: "mid", text: `Resting heart rate up ${fmt(rhrD * 100)}% vs the previous 3 weeks` });
-  actions.push({ who: "Family", level: "low", text: "Sunday calls lift mood — keep the weekly visit or video call" });
-  for (const t of tasks.filter((x) => !x.done).slice(0, 2)) actions.push({ who: "Caregiver", level: "low", text: t.title });
-  const status = careHistory.at(-1)?.status || (actions.some((a) => a.level === "high") ? "needs_attention" : "ok");
+  const recorded = transcripts.filter(t => !t.sample && t.source !== "fictional").reduce((n, t) => n + (t.lines?.length || 0), 0);
+  const fictional = transcripts.filter(t => t.sample || t.source === "fictional").reduce((n, t) => n + (t.lines?.length || 0), 0);
+  if (recorded) insights.push({ big: String(recorded), text: "saved transcript lines · recorded or imported" });
+  if (fictional) insights.push({ big: String(fictional), text: "fictional dialogue lines · demonstration only" });
+  const healthDays = H.filter(d => Object.values(d).some(v => typeof v === "number")).length;
+  if (healthDays) insights.push({ big: String(healthDays), text: "days with supplied Health measurements" });
+  const latest = careHistory.at(-1);
+  if (latest) insights.push({ big: String(careHistory.length), text: "Care assessments in this session · review their evidence" });
+  const actions = tasks.filter(t => !t.done).map(t => ({ who: "Caregiver", level: "low", text: `${t.sample || t.source === "fictional" ? "Fictional task: " : "Saved task: "}${t.title}` }));
+  if (latest?.next_step) actions.unshift({ who: "Caregiver", level: "low", text: `Latest agent suggestion: ${latest.next_step}` });
+  const status = ["ok", "needs_attention", "urgent"].includes(latest?.status) ? latest.status : "unknown";
+
   return { keys, H, M, tiles, insights, actions, status, csdd, weeks: mood.weeks, sleep, steps, rhr, hrv, spo2, moodAvg, agit, rep };
 }
 
@@ -95,17 +87,17 @@ function gauge(score) {
 }
 
 /* ---------- reports ---------- */
-export function reportText(m, audience, who = "Dad") {
+export function reportText(m, audience, who = "this person") {
   const date = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   const t = Object.fromEntries(m.tiles.map((x) => [x.label, x]));
   const arrow = (x) => x.delta == null ? "" : ` (${x.delta >= 0 ? "▲" : "▼"} ${fmt(Math.abs(x.delta) * 100)}% vs prior 3 weeks)`;
   const acts = m.actions.filter((a) => audience === "Doctor" ? a.who === "Doctor" : audience === "Family" ? a.who !== "Doctor" : true).map((a) => `• ${a.text}`);
-  const head = `Threadline Care — ${audience === "Doctor" ? "30-day clinical summary" : audience === "Family" ? "weekly update" : "daily care report"} for ${who}\n${date}\n`;
-  const core = [`Sleep ${t.Sleep.value}/night${arrow(t.Sleep)}`, `Steps ${t.Steps.value}/day${arrow(t.Steps)}`, `Mood ${t.Mood.value}${arrow(t.Mood)}`, `Agitated evenings ${t["Agitated evenings"].value} of 7`, `Repeated questions ${t["Repeated questions"].value}/day`];
-  const clinical = [`Resting HR ${t["Resting HR"].value} bpm${arrow(t["Resting HR"])}`, `HRV ${t.HRV.value} ms${arrow(t.HRV)}`, `SpO₂ ${fmt(avg(m.spo2.slice(-7)), 0)}%`, `Weekly CSDD: ${m.weeks.map((w) => w.score).join(" → ")} (latest ${m.csdd ?? "—"}; ≥11 probable major depression)`];
+  const head = `Threadline Care — ${audience === "Doctor" ? "30-day input summary" : audience === "Family" ? "weekly update" : "daily care report"} for ${who}\n${date}\n`;
+  const core = [`Sleep ${t.Sleep.value}/night${arrow(t.Sleep)}`, `Steps ${t.Steps.value}/day${arrow(t.Steps)}`, `Mood ${t.Mood.value}${arrow(t.Mood)}`, `Agitated evenings ${t["Agitated evenings"].value} logged`, `Repeated questions ${t["Repeated questions"].value}/day`];
+  const clinical = [`Resting HR ${t["Resting HR"].value} bpm${arrow(t["Resting HR"])}`, `HRV ${t.HRV.value} ms${arrow(t.HRV)}`, `SpO₂ ${fmt(avg(m.spo2.slice(-7)), 0)}%`, `Supplied weekly CSDD scores: ${m.weeks.map((w) => w.score).join(" → ") || "not provided"}`];
   const ins = m.insights.map((i) => `• ${i.big} ${i.text}`);
   return [head, "KEY NUMBERS (7-day average)", ...core.map((x) => `• ${x}`), ...(audience !== "Family" ? clinical.map((x) => `• ${x}`) : []), "", "WHAT WE NOTICED", ...ins, "", "ACTION ITEMS", ...acts, "",
-    audience === "Doctor" ? "Sources: Apple Health (sleep, steps, HR, HRV, SpO₂), Vexo band transcripts, caregiver-rated NPI-Q agitation and CSDD. Screening information, not a diagnosis." : "Sent from Threadline Care."].join("\n");
+    "Prepared in Threadline from the available inputs. Missing values are shown as —. Fictional dialogue is labeled separately. No diagnosis or completed delivery is implied."].join("\n");
 }
 function reportCard(m, audience, icon, blurb, who) {
   const body = reportText(m, audience, who), subject = `Threadline Care — ${audience} report`;
@@ -126,15 +118,15 @@ function reportCard(m, audience, icon, blurb, who) {
 /* ---------- render ---------- */
 export function renderDashboard(root, input) {
   if (!root) return;
-  const m = buildModel(input), who = input.who || "Dad";
-  const statusWord = { ok: "Settled", needs_attention: "Needs attention", urgent: "Check in now" }[m.status] || "Settled";
+  const m = buildModel(input), who = input.who || "This person";
+  const statusWord = { ok: "Last check: no concern flagged", needs_attention: "Last check: needs attention", urgent: "Last check: check in now", unknown: "No assessment yet" }[m.status];
   const today = m.H.at(-1) || {}, tm = m.M.at(-1) || {};
   root.replaceChildren(
     h("section", { className: `dash-hero s-${m.status}` },
       h("div", {}, h("small", { textContent: new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }) }),
         h("h2", { textContent: `${who} today: ${statusWord}` }),
         h("p", { textContent: `${hm(today.sleep_hours)} sleep · ${fmt(today.steps)} steps · mood ${tm.morningLabel || "—"} → ${tm.eveningLabel || "—"} · evening agitation ${AGI[tm.agitation] ?? "—"}` })),
-      h("div", { className: "dash-hero-gauge" }, gauge(m.csdd), h("small", { textContent: "Weekly CSDD" }))),
+      h("div", { className: "dash-hero-gauge" }, gauge(m.csdd), h("small", { textContent: "Supplied CSDD score" }))),
     h("section", { className: "dash-tiles" }, ...m.tiles.map((t) => h("article", { className: "dash-tile" },
       h("small", { textContent: t.label }), h("b", { textContent: t.value }), h("span", { className: "unit", textContent: t.unit }),
       t.delta != null ? h("span", { className: `delta ${t.good ? "good" : "bad"}`, textContent: `${t.delta >= 0 ? "▲" : "▼"} ${fmt(Math.abs(t.delta) * 100)}%` }) : null,
@@ -145,15 +137,15 @@ export function renderDashboard(root, input) {
       frame("Daily steps", "30 days", barsLine(m.steps, m.moodAvg, { barCls: "b3", lineCls: "l3" })),
       frame("Heart", "resting HR · HRV", twoLines(m.rhr, m.hrv)),
       frame("Mood calendar", "top: morning · bottom: evening", heat(m.M, m.keys)),
-      frame("Agitation by weekday", "sundowning pattern", weekday(m.keys, m.agit)),
+      frame("Agitation by weekday", "supplied logs only", weekday(m.keys, m.agit)),
       frame("Repeated questions", "per day", barsLine(m.rep, [], { barCls: "b2" }))),
     h("section", { className: "dash-two" },
       h("div", { className: "dash-actions" }, h("h3", { textContent: "Action items" }),
-        h("ol", {}, ...m.actions.map((a) => h("li", { className: `lv-${a.level}` }, h("span", { className: `who w-${a.who.toLowerCase()}`, textContent: a.who }), h("span", { textContent: a.text }))))),
-      h("div", { className: "dash-reports" }, h("h3", { textContent: "Send a report" }),
+        h("ol", {}, ...(m.actions.length ? m.actions.map((a) => h("li", { className: `lv-${a.level}` }, h("span", { className: `who w-${a.who.toLowerCase()}`, textContent: a.who }), h("span", { textContent: a.text }))) : [h("li", { textContent: "No saved tasks or agent suggestions yet." })]))),
+      h("div", { className: "dash-reports" }, h("h3", { textContent: "Prepare a report" }),
         reportCard(m, "Caregiver", "🧡", "Today's plan and what to watch", who),
-        reportCard(m, "Doctor", "🩺", "30-day clinical summary with scales", who),
+        reportCard(m, "Doctor", "🩺", "Available measurements and supplied scores", who),
         reportCard(m, "Family", "👪", "A short weekly update", who))),
-    h("section", { className: "dash-why" }, ...[["Fewer surprises", "Sleep and activity flag hard evenings before they start."], ["Less repeating", "The band hears repeated questions; the plan goes on the whiteboard."], ["Earlier help", "Weekly CSDD and heart trends reach the doctor in one tap."], ["Shared care", "Caregiver, doctor and family see the same picture."]]
+    h("section", { className: "dash-why" }, ...[["Available evidence", "Charts show supplied measurements. Blank values remain unknown."], ["Personal memory", "Saved conversations can help recover a stated plan."], ["Review first", "Agent suggestions and reports need your review."], ["Your choice", "Email and Text open your app. You choose whether to send."]]
       .map(([b, t]) => h("div", {}, h("b", { textContent: b }), h("span", { textContent: t })))));
 }
