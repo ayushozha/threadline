@@ -1,0 +1,42 @@
+[
+  {
+    "id": "01-hook",
+    "direction": "[warm, personal]",
+    "text": "When my mum calls twice, I always wonder what I missed. Her question is simple: where are my glasses? But I can\u2019t see the kitchen from here. I\u2019m Daniel. This is Evelyn\u2019s story."
+  },
+  {
+    "id": "02-problem",
+    "direction": "[thoughtful]",
+    "text": "The hard part isn\u2019t the question. It\u2019s losing the little bit of context that came before it. Threadline brings that context back, without asking Mum to learn another app."
+  },
+  {
+    "id": "03-open",
+    "direction": "[conversational]",
+    "text": "Let me show you. This is Threadline. I\u2019m opening a kitchen example in the Library. The clip is generated, but the next response comes from a real request."
+  },
+  {
+    "id": "04-request",
+    "direction": "[interested]",
+    "text": "I press Ask Gemini again. Threadline looks at the frames, describes what it can see, and chooses a next step. We wait for that response, instead of replacing it with a script."
+  },
+  {
+    "id": "05-followup",
+    "direction": "[curious]",
+    "text": "Now I ask, where are the glasses? The answer stays beside the scene, so we can check it. That\u2019s the difference between a confident guess and help we can actually inspect."
+  },
+  {
+    "id": "06-memory-source",
+    "direction": "[warm]",
+    "text": "Then there\u2019s what happened before the camera was there. Here, I search Memory for the blue mug. Evelyn\u2019s own words appear: she likes her tea by the window. I can open the source and see when she said it. Context, without making her repeat herself."
+  },
+  {
+    "id": "07-language",
+    "direction": "[warm, conversational]",
+    "text": "And she can ask in her own language. Here, I ask in Nepali: where are my glasses? Gemini answers in Nepali, beside the same image. The words change. The support stays personal."
+  },
+  {
+    "id": "08-close",
+    "direction": "[gently]",
+    "text": "I can\u2019t be beside Mum every minute. But a forgotten detail shouldn\u2019t have to become a whole lost afternoon. Threadline. A little context. A little closer."
+  }
+]

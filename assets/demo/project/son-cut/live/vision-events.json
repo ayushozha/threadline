@@ -1,0 +1,21 @@
+{
+  "source": "https://threadline.ayushojha.com/",
+  "events": [
+    {
+      "at": 0,
+      "event": "Opened public synthetic glasses clip; existing response marked saved"
+    },
+    {
+      "at": 3,
+      "event": "Clicked Ask Gemini again (live)"
+    },
+    {
+      "at": 11,
+      "event": "Vision request finished",
+      "text": "🧠 Memory · Generated with MiniMax Hailuo-02Where are my glasses?Grandpa can't find his glasses for the third time today.CloseAsk Gemini again (live)Run live guidance on this videoText familyFresh answer from Gemini.🔊Gemini Decisions API · live runSpeak guidanceUrgency: soon · 71%Gemini says out loud“Your glasses are right here on the table. They are just to the left of the blue mug.”🔊 PlayWhat Gemini seesA person's hands are near a pair of glasses sitting next to a blue mug on a wooden kitchen table.SummaryGlasses are clearly visible on the wooden kitchen table next to a blue mug.configured Gemini model on 4 frames → configured Gemini model · Nov 14, 6:02 PMTalk to Gemini about this videoWhat should I do now?Should I call someone?Send🔇 Off"
+    }
+  ],
+  "reason": "🧠 Memory · Generated with MiniMax Hailuo-02Where are my glasses?Grandpa can't find his glasses for the third time today.CloseAsk Gemini again (live)Run live guidance on this videoText familyFresh answer from Gemini.🔊Gemini Decisions API · live runSpeak guidanceUrgency: soon · 71%Gemini says out loud“Your glasses are right here on the table. They are just to the left of the blue mug.”🔊 PlayWhat Gemini seesA person's hands are near a pair of glasses sitting next to a blue mug on a wooden kitchen table.SummaryGlasses are clearly visible on the wooden kitchen table next to a blue mug.configured Gemini model on 4 frames → configured Gemini model · Nov 14, 6:02 PMTalk to Gemini about this videoWhat should I do now?Should I call someone?Send🔇 Off",
+  "seconds": 18,
+  "privacy": "Owner Health and transcript feeds blocked; public synthetic scene only. No source response or displayed app output was replaced."
+}

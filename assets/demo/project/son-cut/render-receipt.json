@@ -1,0 +1,102 @@
+{
+  "duration_seconds": 120.0,
+  "timeline": [
+    {
+      "chapter": "01-hook",
+      "seconds": 14,
+      "source": "assets/demo/project/son-cut/presenter.mp4",
+      "label": "Dramatized son's perspective - illustrative presenter",
+      "start": 0,
+      "source_seconds": 6,
+      "at": 0.0,
+      "actual_seconds": 14,
+      "voice_seconds": 11.76
+    },
+    {
+      "chapter": "02-problem",
+      "seconds": 12,
+      "source": "assets/demo/dementia/images/tea-routine-pause-motion.mp4",
+      "label": "Illustrative routine - not a patient recording",
+      "start": 0,
+      "source_seconds": 5,
+      "at": 14.0,
+      "actual_seconds": 12,
+      "voice_seconds": 10.0
+    },
+    {
+      "chapter": "03-open",
+      "seconds": 10,
+      "source": "assets/demo/project/son-cut/live/01-library-before.jpg",
+      "label": "Actual deployed Threadline - public example scene",
+      "start": 0,
+      "at": 26.0,
+      "actual_seconds": 10,
+      "voice_seconds": 9.12
+    },
+    {
+      "chapter": "04-request",
+      "seconds": 18,
+      "source": "assets/demo/project/son-cut/live/vision-request.mp4",
+      "label": "Live request - original processing and response shown",
+      "start": 2.7,
+      "source_seconds": 14,
+      "at": 36.0,
+      "actual_seconds": 18,
+      "voice_seconds": 10.56
+    },
+    {
+      "chapter": "07-language",
+      "seconds": 24,
+      "source": "assets/demo/project/son-cut/live/nepali-live.mp4",
+      "label": "Actual Gemini reply in Nepali - no translation substituted",
+      "start": 0,
+      "crop": "1260:740:300:0",
+      "source_seconds": 24,
+      "at": 54.0,
+      "actual_seconds": 24,
+      "voice_seconds": 12.4
+    },
+    {
+      "chapter": "05-followup",
+      "seconds": 12,
+      "source": "assets/demo/project/son-cut/live/11-nepali-answer.jpg",
+      "label": "Actual question in Nepali - original processing and answer",
+      "start": 0,
+      "crop": "760:600:800:0",
+      "at": 78.0,
+      "actual_seconds": 12,
+      "voice_seconds": 10.24
+    },
+    {
+      "chapter": "06-memory-source",
+      "seconds": 17,
+      "source": "assets/demo/project/son-cut/live/memory-live.mp4",
+      "label": "Actual Memory graph - example history, no patient data",
+      "start": 0,
+      "source_seconds": 12,
+      "at": 90.0,
+      "actual_seconds": 17,
+      "voice_seconds": 14.4
+    },
+    {
+      "chapter": "08-close",
+      "seconds": 13,
+      "source": "assets/demo/project/son-cut/presenter.mp4",
+      "label": "Dramatized son's perspective - illustrative presenter",
+      "start": 0,
+      "source_seconds": 6,
+      "at": 107.0,
+      "actual_seconds": 13,
+      "voice_seconds": 10.88
+    }
+  ],
+  "narrator": "Chris; dramatized son perspective",
+  "source_type": "Actual recorded website interactions plus labeled illustrative portrait",
+  "voice": "Natural English male chapter narration; no voice speeding",
+  "captions": "Word-aligned captions in lower margin",
+  "full_decode": "Complete ffmpeg video/audio decode passed",
+  "alignment_review": "Nepali response appears at69.0s; narration andcaption start69.21s. Englishreflection follows completedresponse. No reversedinputclipused.",
+  "visual_review": "Reviewed opening male presenter, actual request processing, visible Nepali response, and source detail. Translation occupies top label; captions occupy lower margin.",
+  "spoken_language": "Natural English male narration; actual Nepali text response shown. No claim of captured spoken Nepali.",
+  "hardware": "No physical band or live camera validation is implied."
+}

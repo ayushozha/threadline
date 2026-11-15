@@ -1,0 +1,25 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "iP95p4xoKVk53GoZ742B",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\project\\son-cut\\narration\\01-hook.directed.txt",
+  "text_sha256": "1cc89542eb7bc98afedd126128f47a57662e28baabfe17b4083d1c585db55d96",
+  "characters": 193,
+  "audio_bytes": 189378,
+  "request_id": "D5D6ggUn5FQaN6Fjxfsx",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.35,
+    "similarity_boost": 0.75
+  },
+  "assembled_video": false,
+  "quality_review": "Technical decode and exact text alignment passed. Subjective listening not performed.",
+  "voice_name": "Chris - Charming, Down-to-Earth",
+  "speaker_role": "Fictional Daniel, Evelyn\u2019s son",
+  "decode_check": "Full ffmpeg decode passed",
+  "audio_levels": [
+    "[Parsed_volumedetect_0 @ 00000234dd8749c0] mean_volume: -24.1 dB",
+    "[Parsed_volumedetect_0 @ 00000234dd8749c0] max_volume: -4.5 dB"
+  ]
+}

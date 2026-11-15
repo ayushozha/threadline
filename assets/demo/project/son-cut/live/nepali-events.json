@@ -1,0 +1,27 @@
+{
+  "source": "https://threadline.ayushojha.com/",
+  "events": [
+    {
+      "at": 0,
+      "event": "Opened public synthetic glasses clip; existing response marked saved"
+    },
+    {
+      "at": 5,
+      "event": "Entered Nepali question",
+      "text": "मेरो चस्मा कहाँ छ? नेपालीमा उत्तर दिनुहोस्।"
+    },
+    {
+      "at": 8,
+      "event": "Submitted Nepali question"
+    },
+    {
+      "at": 15,
+      "event": "Nepali answer received",
+      "text": "मेरो चस्मा कहाँ छ? नेपालीमा उत्तर दिनुहोस्।तपाईंको चस्मा अहिले काठको टेबलमाथि नै छ। यो नीलो कपको ठीक छेउमा देखिन्छ।🔊 Speak guidance · routine · 76%"
+    }
+  ],
+  "chat": "मेरो चस्मा कहाँ छ? नेपालीमा उत्तर दिनुहोस्।तपाईंको चस्मा अहिले काठको टेबलमाथि नै छ। यो नीलो कपको ठीक छेउमा देखिन्छ।🔊 Speak guidance · routine · 76%",
+  "seconds": 24,
+  "fps": 4,
+  "privacy": "Owner Health and transcript feeds blocked; public synthetic scene only. No response replacement."
+}

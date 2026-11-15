@@ -1,0 +1,50 @@
+[
+  {
+    "id": "01-hook",
+    "audio": "assets/demo/project/son-cut/narration/01-hook.mp3",
+    "text": "When my mum calls twice, I always wonder what I missed. Her question is simple: where are my glasses? But I can\u2019t see the kitchen from here. I\u2019m Daniel. This is Evelyn\u2019s story.",
+    "duration": 11.76
+  },
+  {
+    "id": "02-problem",
+    "audio": "assets/demo/project/son-cut/narration/02-problem.mp3",
+    "text": "The hard part isn\u2019t the question. It\u2019s losing the little bit of context that came before it. Threadline brings that context back, without asking Mum to learn another app.",
+    "duration": 10.0
+  },
+  {
+    "id": "03-open",
+    "audio": "assets/demo/project/son-cut/narration/03-open.mp3",
+    "text": "Let me show you. This is Threadline. I\u2019m opening a kitchen example in the Library. The clip is generated, but the next response comes from a real request.",
+    "duration": 9.12
+  },
+  {
+    "id": "04-request",
+    "audio": "assets/demo/project/son-cut/narration/04-request.mp3",
+    "text": "I press Ask Gemini again. Threadline looks at the frames, describes what it can see, and chooses a next step. We wait for that response, instead of replacing it with a script.",
+    "duration": 10.56
+  },
+  {
+    "id": "05-followup",
+    "audio": "assets/demo/project/son-cut/narration/05-followup.mp3",
+    "text": "Now I ask, where are the glasses? The answer stays beside the scene, so we can check it. That\u2019s the difference between a confident guess and help we can actually inspect.",
+    "duration": 10.24
+  },
+  {
+    "id": "06-memory-source",
+    "audio": "assets/demo/project/son-cut/narration/06-memory-source.mp3",
+    "text": "Then there\u2019s what happened before the camera was there. Here, I search Memory for the blue mug. Evelyn\u2019s own words appear: she likes her tea by the window. I can open the source and see when she said it. Context, without making her repeat herself.",
+    "duration": 14.4
+  },
+  {
+    "id": "07-language",
+    "audio": "assets/demo/project/son-cut/narration/07-language.mp3",
+    "text": "And she can ask in her own language. Here, I ask in Nepali: where are my glasses? Gemini answers in Nepali, beside the same image. The words change. The support stays personal.",
+    "duration": 12.4
+  },
+  {
+    "id": "08-close",
+    "audio": "assets/demo/project/son-cut/narration/08-close.mp3",
+    "text": "I can\u2019t be beside Mum every minute. But a forgotten detail shouldn\u2019t have to become a whole lost afternoon. Threadline. A little context. A little closer.",
+    "duration": 10.88
+  }
+]

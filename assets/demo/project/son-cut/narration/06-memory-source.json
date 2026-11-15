@@ -1,0 +1,18 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "iP95p4xoKVk53GoZ742B",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\project\\son-cut\\narration\\06-memory-source.directed.txt",
+  "text_sha256": "8e6240034831a7beaf642ded91fba157fea3c22210aa8a3a20b2469abb2d34f7",
+  "characters": 270,
+  "audio_bytes": 231592,
+  "request_id": "8NEQlUCRNXZHqWTm0F7p",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.35,
+    "similarity_boost": 0.75
+  },
+  "assembled_video": false,
+  "quality_review": "Technical validation pending; subjective listening not performed."
+}

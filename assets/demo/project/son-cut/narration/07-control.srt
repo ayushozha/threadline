@@ -1,0 +1,18 @@
+1
+00:00:00,100 --> 00:00:03,020
+If she wants someone to help, Threadline
+prepares a message.
+
+2
+00:00:03,520 --> 00:00:05,640
+She sees the words before anything is
+shared.
+
+3
+00:00:06,080 --> 00:00:09,240
+The same interface can show large captions
+or describe a label.
+
+4
+00:00:09,700 --> 00:00:12,320
+The support changes; her control doesn’t.

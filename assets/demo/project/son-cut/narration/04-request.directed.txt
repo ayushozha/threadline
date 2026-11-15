@@ -1,0 +1,1 @@
+[interested] I press Ask Gemini again. Threadline looks at the frames, describes what it can see, and chooses a next step. We wait for that response, instead of replacing it with a script.

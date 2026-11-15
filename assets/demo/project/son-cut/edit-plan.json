@@ -1,0 +1,68 @@
+{
+  "shots": [
+    {
+      "chapter": "01-hook",
+      "seconds": 14,
+      "source": "assets/demo/project/son-cut/presenter.mp4",
+      "label": "Dramatized son's perspective - illustrative presenter",
+      "start": 0,
+      "source_seconds": 6
+    },
+    {
+      "chapter": "02-problem",
+      "seconds": 12,
+      "source": "assets/demo/dementia/images/tea-routine-pause-motion.mp4",
+      "label": "Illustrative routine - not a patient recording",
+      "start": 0,
+      "source_seconds": 5
+    },
+    {
+      "chapter": "03-open",
+      "seconds": 10,
+      "source": "assets/demo/project/son-cut/live/01-library-before.jpg",
+      "label": "Actual deployed Threadline - public example scene",
+      "start": 0
+    },
+    {
+      "chapter": "04-request",
+      "seconds": 18,
+      "source": "assets/demo/project/son-cut/live/vision-request.mp4",
+      "label": "Live request - original processing and response shown",
+      "start": 2.7,
+      "source_seconds": 14
+    },
+    {
+      "chapter": "07-language",
+      "seconds": 24,
+      "source": "assets/demo/project/son-cut/live/nepali-live.mp4",
+      "label": "Actual Gemini reply in Nepali - no translation substituted",
+      "start": 0,
+      "crop": "1260:740:300:0",
+      "source_seconds": 24
+    },
+    {
+      "chapter": "05-followup",
+      "seconds": 12,
+      "source": "assets/demo/project/son-cut/live/11-nepali-answer.jpg",
+      "label": "Actual question in Nepali - original processing and answer",
+      "start": 0,
+      "crop": "760:600:800:0"
+    },
+    {
+      "chapter": "06-memory-source",
+      "seconds": 17,
+      "source": "assets/demo/project/son-cut/live/memory-live.mp4",
+      "label": "Actual Memory graph - example history, no patient data",
+      "start": 0,
+      "source_seconds": 12
+    },
+    {
+      "chapter": "08-close",
+      "seconds": 13,
+      "source": "assets/demo/project/son-cut/presenter.mp4",
+      "label": "Dramatized son's perspective - illustrative presenter",
+      "start": 0,
+      "source_seconds": 6
+    }
+  ]
+}

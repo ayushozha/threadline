@@ -1,4 +1,5 @@
 """Build the downloadable Threadline media kit from reviewed local artifacts."""
+import json
 import shutil
 import zipfile
 from pathlib import Path
@@ -28,6 +29,27 @@ def main():
     for optional in ("threadline-two-minute-demo.srt", "threadline-two-minute-demo.vtt"):
         if (MEDIA / optional).is_file():
             files.append(MEDIA / optional)
+    son = MEDIA / "son-cut"
+    if (son / "edit-plan.json").exists():
+        files.extend(son / name for name in (
+            "newfilm.mp4", "newfilm.srt", "newfilm.vtt", "poster.jpg", "render-receipt.json",
+            "presenter.png", "presenter.mp4", "presenter-receipt.json", "edit-plan.json",
+            "narration.txt", "narration-chapters.json", "chapters-source.json",
+        ))
+        plan = json.loads((son / "edit-plan.json").read_text(encoding="utf-8"))
+        chapters = dict.fromkeys(shot["chapter"] for shot in plan["shots"])
+        spoken = [(son / "narration" / f"{chapter}.txt").read_text(encoding="utf-8").strip() for chapter in chapters]
+        (son / "narration.txt").write_text("\n\n".join(spoken) + "\n", encoding="utf-8")
+        for chapter in chapters:
+            files.extend(son / "narration" / f"{chapter}{suffix}" for suffix in (".mp3", ".txt", ".srt", ".vtt", ".json", ".directed.txt"))
+        # Keep the actual language interaction and event receipts, not the unusable
+        # backwards English-typing capture or an unbounded recursive media archive.
+        used_sources = {ROOT / shot["source"] for shot in plan["shots"]}
+        files.extend(source for source in used_sources if source.is_relative_to(MEDIA))
+        for source in (son / "live").glob("*"):
+            if source.suffix.lower() in {".jpg", ".png", ".json", ".txt"} and "chat-typing" not in source.name:
+                files.append(source)
+    files = list(dict.fromkeys(files))
     if len(list((MEDIA / "screenshots").glob("*.png"))) != 6:
         raise SystemExit("Expected the six reviewed screenshots.")
     for source in files:

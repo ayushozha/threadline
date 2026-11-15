@@ -1,0 +1,20 @@
+1
+00:00:00,100 --> 00:00:01,940
+And she can ask in her own language.
+
+2
+00:00:02,520 --> 00:00:05,280
+Here, I ask in Nepali: where are my glasses?
+
+3
+00:00:05,960 --> 00:00:08,740
+Gemini answers in Nepali, beside the same
+image.
+
+4
+00:00:09,160 --> 00:00:10,220
+The words change.
+
+5
+00:00:10,560 --> 00:00:12,240
+The support stays personal.

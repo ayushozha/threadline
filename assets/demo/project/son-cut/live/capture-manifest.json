@@ -1,0 +1,23 @@
+{
+  "site": "https://threadline.ayushojha.com/",
+  "clips": {
+    "vision-request.mp4": {
+      "seconds": 18,
+      "content": "Real click, pending request and fresh Gemini response on public synthetic glasses footage"
+    },
+    "nepali-live.mp4": {
+      "seconds": 24,
+      "content": "Real Nepali input, processing and fresh Devanagari response"
+    },
+    "memory-live.mp4": {
+      "seconds": 12,
+      "content": "Example history graph, search and actual selected source detail"
+    }
+  },
+  "limitations": [
+    "Vexo band is not connected in these captures.",
+    "Example history and generated video are labeled in the UI.",
+    "The Memory graph shows a server demo-session-limit status; local source selection still works.",
+    "A separate Gemini Live audio attempt did not start; no audio is claimed."
+  ]
+}
