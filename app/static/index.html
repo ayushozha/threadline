@@ -283,6 +283,9 @@
               <div class="care-status-row">
                 <div><h2 id="care-agent-h" class="care-status-word">Not checked yet</h2><p id="care-agent-summary" class="care-summary">The agent reads the transcript, what Gemini sees, the band, the watch and the routine.</p></div>
                 <div class="row tight"><button type="button" id="care-check" class="secondary">Check now</button><button type="button" id="care-sim-fall" class="text-button" title="Demo only: acts as if the band felt a fall">Simulate fall (demo)</button></div>
+              <form id="ec-form" class="ec-form" aria-label="Emergency contacts"><b>Emergency contacts</b>
+                <div class="ec-row"><input id="ec-name" type="text" maxlength="40" placeholder="Contact name, e.g. Ana (daughter)" aria-label="Emergency contact name"><input id="ec-phone" type="tel" maxlength="20" placeholder="Phone" aria-label="Emergency contact phone"><input id="ec-services" type="tel" maxlength="6" placeholder="911" aria-label="Emergency services number"><button type="submit" class="secondary">Save</button></div>
+                <span id="ec-msg" class="caption" role="status">When the agent detects an emergency it counts down 10 seconds, then calls this contact. Emergency services are one tap away.</span></form>
               </div>
               <div class="care-next"><b>Next step</b><p id="care-next">—</p></div>
               <div class="care-note"><b>For the family</b><p id="care-note">—</p><a id="care-text-family" class="text-button" href="sms:">Review text for family</a></div>

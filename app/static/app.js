@@ -7,6 +7,7 @@ import { renderDashboard } from './dashboard.mjs';
 import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 import { mountLibrary } from './library.mjs';
+import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -2720,6 +2721,7 @@ function careRenderAssessment(d) {
   box.replaceChildren(...care.history.slice().reverse().map((h) => el("li", {}, el("span", { className: `dotk ${h.status}`, "aria-hidden": "true" }), el("time", { textContent: h.at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: `${CARE_STATUS_WORD[h.status]} · ${h.summary}` }))));
   box.scrollTop = 0;
   $("care-agent-state").textContent = `Checked ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${d.engine ? ` · ${d.engine}` : ""}.`;
+  if (status === "urgent" && (care.lastStatus !== "urgent" || Date.now() - care.lastTapAt > 5 * 60000)) emergency.trigger({ reason: d.summary || "Possible emergency", note: d.caregiver_note || d.next_step || "" });
   if (!isFictionalDemo() && status === "urgent" && (care.lastStatus !== "urgent" || Date.now() - care.lastTapAt > 5 * 60000)) {
     care.lastTapAt = Date.now();
     sendHaptic("notification", (d.next_step || d.summary || "Please check in").slice(0, 80));
@@ -2729,6 +2731,10 @@ function careRenderAssessment(d) {
   care.lastStatus = status;
   if (location.hash === "#dashboard" || !location.hash) drawDashboard();
 }
+const emergency = mountEmergency({ el, onLog: (t) => { try { logAction(t); } catch { /* not ready */ } } });
+function renderContacts() { const c = loadContacts(); if (!$("ec-name")) return; $("ec-name").value = c.name; $("ec-phone").value = c.phone; $("ec-services").value = c.services; }
+$("ec-form")?.addEventListener("submit", (e) => { e.preventDefault(); saveContacts({ name: $("ec-name").value.trim(), phone: $("ec-phone").value.trim(), services: $("ec-services").value.trim() || "911" }); $("ec-msg").textContent = "Saved. In an emergency Threadline calls this contact after a 10-second countdown."; });
+renderContacts();
 $("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {
   if (!isFictionalDemo() && !$("care-consent").checked && !$("rec-consent").checked) return;
