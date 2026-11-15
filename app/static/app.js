@@ -70,6 +70,7 @@ function isFictionalDemo() { return threadKey.startsWith("fictional-"); }
 function processingConsent() { return isFictionalDemo() ? $("sample-consent").checked : $("rec-consent").checked; }
 function renderSampleBanner() {
   const active = isFictionalDemo();
+  if (active) $("care-band-transcript").hidden = true;
   $("sample-banner").hidden = !active;
   $("sample-load").hidden = active;
   $("sample-exit").hidden = !active;
