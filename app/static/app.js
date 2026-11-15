@@ -1417,7 +1417,7 @@ let memGraph = null;
 const NAME_STOP = new Set("I Im Ill Ive Dad Mum Mom Yes No Okay Ok Oh Good The That This She He It Its Has Did Where What When Who Why How Is Are Was Can Could Should Would Will Do Does Monday Tuesday Wednesday Thursday Friday Saturday Sunday Today Tomorrow Right Then And But So We You They My Our Your There Here Hello Hi Thanks Thank Please".split(" "));
 function namesIn(text) {
   const out = new Set();
-  for (const sent of String(text || "").split(/[.?!·,]\s*/)) sent.split(/\s+/).forEach((w, i) => { const m = w.replace(/[^A-Za-z']/g, "").replace(/'s$/, ""); if (/^[A-Z][a-z]{2,}$/.test(m) && !NAME_STOP.has(m) && !/^(GP|Morning|Video|Refill|Walk|Pharmacy|Water|Physio|Eye|Call|Lunch|Charge|Check|Put|Grocery|Short|Dentist|Fix|Memory|Sunday|Install|Hearing|Show|Open|Take|Remind|Give|Add|Tell|Order|Buy|Logged|Energy|Said)$/.test(m) && (i > 0 || /with|call|visit|from|to/i.test(sent))) out.add(m); });
+  for (const sent of String(text || "").split(/[.?!·,]\s*/)) sent.split(/\s+/).forEach((w, i) => { const m = w.replace(/[^A-Za-z']/g, "").replace(/'s$/, ""); if (/^[A-Z][a-z]{2,}$/.test(m) && !NAME_STOP.has(m) && !/^(GP|Morning|Video|Refill|Walk|Pharmacy|Water|Physio|Eye|Call|Lunch|Charge|Check|Put|Grocery|Short|Dentist|Fix|Memory|Sunday|Install|Hearing|Show|Open|Take|Remind|Give|Add|Tell|Order|Buy|Logged|Energy|Said|Too|After|Before|Also|Then|Just|Maybe|Still|Very|Really|Well|Yeah|Hey|Hello|Thanks|Sorry|Please|Today|Tonight|Morning|Evening|Afternoon|Yesterday|Tomorrow|English|French|Nepali|Spanish|Threadline|Gemini|Vexo|Apple|Watch)$/.test(m) && (i > 0 || /with|call|visit|from|to/i.test(sent))) out.add(m); });
   return [...out];
 }
 function memoryData() {
@@ -1467,7 +1467,8 @@ function renderMemoryInsights(data) {
   const people = byType("person").slice(0, 6), places = byType("place").slice(0, 5), things = byType("object").slice(0, 6), topics = [...byType("topic"), ...byType("event")].slice(0, 10);
   const where = [...things.map((t) => ({ name: t.label, note: lastMention(t.label) })), ...notes.filter((n) => /\b(glasses|keys|phone|wallet|tablets|pills|hearing aid|remote)\b.*\b(in|on|by|next to|under)\b/i.test(n.text)).slice(0, 4).map((n) => ({ name: (n.text.match(/\b(glasses|keys|phone|wallet|tablets|pills|hearing aid|remote)\b/i) || ["Item"])[0], note: n }))]
     .filter((x, i, a) => x.note && a.findIndex((y) => y.name.toLowerCase() === x.name.toLowerCase()) === i).slice(0, 5);
-  const recent = notes.filter((n) => n.source === "voice" || n.source === "vexo" || n.source === "typed" || !n.sample).slice(0, 6);
+  const cmd = /^(please\s+)?(show|open|go|take me|navigate|start|stop|check out|order|buy|remind|add|put|play|switch|turn|scroll|close|cancel|yes|no|okay|ok)\b/i;
+  const recent = notes.filter((n) => (n.source === "voice" || n.source === "vexo" || n.source === "typed" || !n.sample) && !cmd.test(n.text)).slice(0, 6);
   const go = (id) => () => { memGraph?.select?.(id); $("memory-graph")?.scrollIntoView({ behavior: "smooth", block: "center" }); };
   const card = (title, icon, body) => el("article", { className: "mi-card" }, el("h3", {}, el("span", { className: "mi-ic", textContent: icon }), title), body);
   const stat = (n, label) => el("div", { className: "mi-stat" }, el("b", { textContent: String(n) }), el("span", { textContent: label }));
