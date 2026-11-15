@@ -58,4 +58,11 @@ export function mountEssentials(root, { el, request, contactName, onLog }) {
     root.replaceChildren(...[banner, el("div", { className: "ess-layout" }, el("div", {}, sug, catalog), cartBox)].filter(Boolean));
   }
   load();
+  const total = () => [...cart].reduce((s, [id, q]) => s + (byId(id)?.cents || 0) * q, 0);
+  return {
+    add: (id, n = 1) => { if (!byId(id)) return null; add(id, n); return `${byId(id).name} × ${cart.get(id) || 0} in the cart`; },
+    remove: (id) => { cart.delete(id); render(); return "Removed from the cart"; },
+    summary: () => ({ items: [...cart].map(([id, q]) => ({ id, name: byId(id)?.name, qty: q })), total_usd: total() / 100, stripe_ready: stripe }),
+    totalText: () => money(total()),
+  };
 }

@@ -1329,6 +1329,7 @@ from app import care_agent; app.include_router(care_agent.router)  # noqa: E402,
 from app import health_import; app.include_router(health_import.router)  # noqa: E402,E702  (Apple Health import)
 from app import scenario_agent; app.include_router(scenario_agent.router)  # noqa: E402,E702  (scenario video reasoning)
 from app import essentials; app.include_router(essentials.router)  # noqa: E402,E702  (Stripe essentials)
+from app import assistant; app.include_router(assistant.router)  # noqa: E402,E702  (Talk to Threadline)
 from app import videos; app.include_router(videos.router)  # noqa: E402,E702  (recorded videos + chat)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")
 demo_assets = ROOT.parent / "assets" / "demo" / "dementia"

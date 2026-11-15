@@ -9,6 +9,7 @@ import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 import { mountLibrary } from './library.mjs';
 import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
 import { mountEssentials } from './essentials.mjs';
+import { mountAssistant } from './assistant.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -218,8 +219,8 @@ function drawDashboard() {
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
 window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); if (location.hash === "#tasks") renderTasks(); if (location.hash === "#essentials") openEssentials(); });
-let essentialsMounted = false;
-function openEssentials() { if (essentialsMounted || !$("essentials")) return; essentialsMounted = true; mountEssentials($("essentials"), { el, request, contactName: () => loadContacts().name, onLog: (t) => { try { logAction(t); } catch { /* */ } } }); }
+let essentialsMounted = false, shop = null;
+function openEssentials() { if (essentialsMounted || !$("essentials")) return; essentialsMounted = true; shop = mountEssentials($("essentials"), { el, request, contactName: () => loadContacts().name, onLog: (t) => { try { logAction(t); } catch { /* */ } } }); }
 let library = null;
 function openLibrary() {
   if (library || !$("library")) return;
@@ -778,15 +779,16 @@ function attachBand(band) {
   });
   const gestures = createTapGesture(kind => {
     if (band.transportKind === "sim") return;
-    if (kind === "sos") return requestAssistance("Three taps on the band");
+    if (kind === "sos") { emergency.trigger({ reason: "SOS from the band", note: "Three taps on the band." }); return requestAssistance("Three taps on the band"); }
     if (accessMode === "sight") {
       const ws = care.ws?.readyState === 1 ? care.ws : lh.ws;
       if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "text", text: accessInfo().question }));
       else { location.hash = "care"; careLiveStatus("Allow live guidance, then double-tap to ask about the scene."); }
       return;
     }
-    if (capture.active) { autoRec.userStopped = true; stopLive(); }
-    else if (!busy) { autoRec.userStopped = false; $("rec-start").click(); }
+    // Double-tap = "talk to Threadline": keep the band listening and send the next sentence to the assistant.
+    if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); }
+    assistant?.openWindow();
   });
   band.on("tap", () => gestures.push("single"));
   band.on("double-tap", () => gestures.push("double"));
@@ -982,6 +984,7 @@ function openSocket() {
   };
 }
 function addLiveLine(msg) {
+  try { assistant?.feedBand(msg.transcript || ""); } catch { /* assistant not ready */ }
   msg.id ||= newId("line");
   const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((x) => x != null))];
   const who = speakers.length ? speakers[0] : null;
@@ -2798,7 +2801,29 @@ render();
 renderAccessMode();
 showView(location.hash.slice(1) || "dashboard");
 if (location.hash === "#library") openLibrary();
-if (location.hash === "#essentials") setTimeout(openEssentials, 0);
+setTimeout(openEssentials, 0);
+/* Talk to Threadline (dashboard): voice in through the Vexo band or the mic, Gemini decides, the page acts. */
+function assistantContext() {
+  const h = hLatest() || {}, last = (typeof care !== "undefined" ? care.history : []).at(-1), c = loadContacts();
+  return { now: new Date().toString(), mode: accessMode, person: "the person Threadline supports",
+    health_today: Object.fromEntries(Object.entries(h).filter(([k, v]) => k !== "workout_types" && v != null)),
+    health_30d_days: ownerHealth.days, last_care_check: last ? { status: last.status, summary: last.summary, at: last.at } : null,
+    tasks: (life.tasks || []).filter((t) => !t.done).map((t) => t.title).slice(0, 12), suggested_tasks: (life.taskDrafts || []).map((d) => d.title).slice(0, 8),
+    cart: shop?.summary() || null, emergency_contact: c.name || null, band_connected: Boolean(capture.band),
+    mood_today: moodOf(todayKey()) || null };
+}
+async function assistantAction(a) {
+  if (a.type === "add_to_cart") { openEssentials(); return shop?.add(a.id, a.qty || 1); }
+  if (a.type === "remove_from_cart") { openEssentials(); return shop?.remove(a.id); }
+  if (a.type === "checkout") { openEssentials(); location.hash = "essentials"; return `Order ready for caregiver approval · ${shop?.totalText() || ""}`; }
+  if (a.type === "open_view") { location.hash = a.view; return `Opened ${VIEW_TITLES[a.view] || a.view}`; }
+  if (a.type === "add_task") { (life.tasks ||= []).push({ id: newId("t"), title: a.title, due: todayKey(), big: false, done: false, note: "From Talk to Threadline" }); renderTasks(); logAction(`Task added by voice: ${a.title}`); return `Task added: ${a.title}`; }
+  if (a.type === "care_check") { careAssess(true); return "Care check started"; }
+  if (a.type === "set_mode") { selectAccessMode(a.mode); return `${ACCESS_MODES[a.mode]?.label || a.mode} mode`; }
+  if (a.type === "emergency") { emergency.trigger({ reason: a.reason || "Help requested by voice", note: "Asked for help out loud." }); return "Emergency alert started"; }
+  return null;
+}
+const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, bandOn: () => Boolean(capture.band && capture.active) }) : null;
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
