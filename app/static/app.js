@@ -724,15 +724,29 @@ async function connectBand(kind, port = null) {
   const mine = ++pair.attempt, wanted = bandLabel();
   pair.busy = true;
   setPairState("busy", "Connecting…");
-  bandStatus(quiet ? `Reconnecting ${wanted} on the USB cable…` : kind === "ble" ? `Pick ${wanted} in the list, then press Pair.` : kind === "serial" ? "Pick “Vexo Open band” in the list, then press Connect." : "Starting the pretend band…");
+  bandStatus(quiet ? `Reconnecting ${wanted}${kind === "ble" ? " over Bluetooth" : " on the USB cable"}…` : kind === "ble" ? `Pick ${wanted} in the list, then press Pair.` : kind === "serial" ? "Pick “Vexo Open band” in the list, then press Connect." : "Starting the pretend band…");
   let connected = null;
   try {
     await loadKit();
     pair.slow = setTimeout(() => { if (mine === pair.attempt && pair.busy) bandStatus(logic.stillConnectingMessage(kind, wanted)); }, logic.STILL_CONNECTING_MS);
     let transport = kind;
-    if (port) {  // a port this site was already allowed to use: open it directly, no chooser
+    if (port && kind === "serial") {  // a port this site was already allowed to use: open it directly, no chooser
       const Remembered = class extends kit.WebSerialTransport { async open() { await this._start(port); } };
       transport = new Remembered();
+    } else if (port && kind === "ble") {  // a band this site was already allowed to use over Bluetooth: no chooser
+      const device = port;
+      const RememberedBle = class extends kit.WebBluetoothTransport {
+        async open() {
+          this.device = device;
+          device.addEventListener("gattserverdisconnected", () => {
+            if (device.gatt?.connected) return;
+            const wasUp = this._rx !== null; this._rx = null;
+            if (wasUp) this.onClose(this._closing ? "closed" : "lost");
+          });
+          await this._connect();
+        }
+      };
+      transport = new RememberedBle(bandNumber);
     }
     // The library filters Bluetooth to this exact name and refuses a band whose number differs.
     connected = await kit.Band.connect(bandNumber, { transport, autoReconnect: true });
@@ -2893,15 +2907,34 @@ loadOwnerHealth(); renderSampleBanner();
 /* Keep the owner's band connected: reopen the USB port this site was already allowed to use — on load,
    whenever the cable is plugged back in, and every 10 s while disconnected. No chooser, no re-pairing. */
 async function autoConnectBand() {
-  if (!bandNumber || capture.band || pair.busy || !navigator.serial?.getPorts) return;
-  let ports = [];
-  try { ports = await navigator.serial.getPorts(); } catch { return; }
-  for (const port of ports) {
-    if (capture.band || pair.busy) return;
-    if (port.readable) continue;  // already open in this page
-    await connectBand("serial", port);
+  if (!bandNumber || capture.band || pair.busy) return;
+  // 1) USB: any port this site may already use.
+  if (navigator.serial?.getPorts) {
+    let ports = [];
+    try { ports = await navigator.serial.getPorts(); } catch { ports = []; }
+    for (const port of ports) {
+      if (capture.band || pair.busy) return;
+      if (port.readable) continue;  // already open in this page
+      await connectBand("serial", port);
+    }
+  }
+  if (capture.band || pair.busy) return;
+  // 2) Bluetooth: the band this site was already allowed to use (Chrome/Edge remember it), matched by its name.
+  if (navigator.bluetooth?.getDevices) {
+    let devices = [];
+    try { devices = await navigator.bluetooth.getDevices(); } catch { devices = []; }
+    const wanted = bandLabel();
+    const dev = devices.find((d) => d.name === wanted) || devices.find((d) => (d.name || "").startsWith("Vexo"));
+    if (!dev) return;
+    if (dev.watchAdvertisements && !dev.__threadlineWatching) {  // wake the GATT link once the band is heard nearby
+      dev.__threadlineWatching = true;
+      dev.addEventListener("advertisementreceived", () => { if (!capture.band && !pair.busy) connectBand("ble", dev); });
+      try { await dev.watchAdvertisements(); } catch { /* not supported: try a direct connect */ }
+    }
+    await connectBand("ble", dev);
   }
 }
+try { localStorage.setItem("threadline.lastBand", String(bandNumber || "")); } catch { /* */ }
 navigator.serial?.addEventListener?.("connect", () => setTimeout(autoConnectBand, 800));
 setTimeout(autoConnectBand, 600);
 setInterval(autoConnectBand, 10000);
