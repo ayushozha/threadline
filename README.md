@@ -1,8 +1,35 @@
 # Threadline Care
 
-A memory aid for people living with dementia or Alzheimer's, and for the people who care for them. Built at VexoHacks (AI wearables, Y Combinator, November 14, 2026).
+An assistant with four chosen support modes: Memory, Sight, Hearing and Mobility. Built at VexoHacks (AI wearables, Y Combinator, November 14, 2026).
 
 [Live prototype](https://threadline.ayushojha.com/#care) · [Demo script](docs/DEMO.md) · [API setup](docs/API_SETUP.md) · [Live video and device setup](docs/LIVE_CAPTURE_HANDOFF.md) · [Deployment](deploy/README.md) · [Watch app](watch/README.md)
+
+## Four support modes
+
+Choose a mode on the Dashboard. The selection changes Gemini Live instructions, the Care assessment and report label. It does not diagnose a disability or change the physical hardware.
+
+| Mode | Current behavior |
+| --- | --- |
+| Memory | Recovers a stated intention or last mentioned location from saved conversations; keeps uncertainty. |
+| Sight | Describes camera frames and reads visible text. No face identification, dosing advice or safe-navigation guarantee. |
+| Hearing | Large captions from incoming speech, speaker numbers, and an optional name cue sent to a paired watch. |
+| Mobility | Access preferences, supplied movement readings and user-requested assistance drafts. No calculated fall-risk score. |
+
+The **Load fictional [mode] demo** control opens separate per-band/mode history:
+Memory has 48 dialogue lines; Sight, Hearing and Mobility each have 21. Fourteen
+days of labeled synthetic chart data fill the existing Dashboard. These are not
+patient recordings, device readings or clinical evidence. No completed actions
+are seeded. Consent is required before sending fictional notes to Gemini. Exit
+returns to real data. The [four-mode concept film](https://threadline.ayushojha.com/accessibility/)
+is 59 seconds with Jessica narration; [production notes](docs/demo/ACCESSIBILITY_VIDEO.md)
+list the real footage still needed.
+
+Live guidance requires its own consent checkbox. **Request assistance** prepares
+a message for review. Three tap events within 700 ms use the same flow; the
+firmware exposes single/double events, so recognition is implemented in the app
+and remains to be verified on the physical band. Sight double-tap asks about the
+scene during an active live session. Email/Text opens another app for the user
+to send; Threadline does not confirm delivery.
 
 ## The problem
 
@@ -33,7 +60,7 @@ GoPro (Open GoPro bridge) / looped clips / laptop camera ──frames──> Gem
 transcript + what was seen + band + watch + routine ──> /api/care/assess ──> status, next step, family note
 ```
 
-## Safety rules (enforced in code, after the model)
+## Evidence boundaries
 
 `app/care_agent.py` checks every Gemini answer before it reaches the page:
 
@@ -53,7 +80,7 @@ Vexo (band 73, Vexo Open kit) · Google Gemini (Live API for spoken guidance; In
 - Not a medical device, diagnostic, or emergency service. Status is a prompt for a human to look, not a verdict.
 - Family alerts are a pre-filled text-message link, not push notifications. **Not built yet:** remote family alerts, medication schedule alarms, wandering/geofence detection.
 - Health data shown is the builder's, not a patient's. There are no per-user accounts yet; the public site is a single-owner demo.
-- Speaker labels separate voices; they are not identity verification. Physical-band behaviour beyond our own band 73 is untested.
+- Speaker labels separate voices; they are not identity verification. The new triple-tap and name cue paths need physical band/watch verification; the browser and protocol checks do not prove hardware behavior.
 - Audio goes to Deepgram and frames/text go to Google when those features run; their retention terms apply.
 
 ## Run locally (PowerShell)

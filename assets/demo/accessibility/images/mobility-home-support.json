@@ -1,0 +1,21 @@
+{
+  "scene": "mobility-home-support",
+  "synthetic": true,
+  "width": 1536,
+  "height": 864,
+  "seed": 15603,
+  "prompt": "A fictional photorealistic editorial photograph of a relaxed adult wheelchair user sitting comfortably in a modern manual wheelchair in a welcoming ordinary living room. A woman friend stands nearby listening attentively at the same eye line, no lifting or physical assistance. Natural dignified everyday interaction, both adults in casual clothes, believable anatomy, wheelchair wheel geometry and footrests. Warm cream walls, sage sofa, oak side table with a blue mug, soft afternoon window light. Wide landscape frame with subjects on the right and calm negative space on the left. No fall, no injury, no medical setting, no wearable electronics, no text, logos, screens, graphs or graphics.",
+  "status": "completed",
+  "elapsed_seconds": 9.01,
+  "bytes": 1816141,
+  "output": "mobility-home-support.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Reviewed: natural editorial scene, no readable medicine or fabricated hardware; synthetic illustration.",
+  "purpose": "Fictional editorial illustration, not recorded patient data",
+  "model_configuration": "Uses local model configuration documented in docs/demo/LOCAL_IMAGE_RUNTIME.md"
+}

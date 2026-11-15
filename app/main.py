@@ -1331,3 +1331,6 @@ app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), na
 demo_assets = ROOT.parent / "assets" / "demo" / "dementia"
 if demo_assets.is_dir():
     app.mount("/demo", StaticFiles(directory=demo_assets, html=True), name="dementia-demo")
+accessibility_assets = ROOT.parent / "assets" / "demo" / "accessibility"
+if accessibility_assets.is_dir():
+    app.mount("/accessibility", StaticFiles(directory=accessibility_assets, html=True), name="accessibility-demo")

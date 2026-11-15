@@ -1,0 +1,21 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "/v1/text-to-dialogue",
+  "voice_id": "cgSgspJ2msm6clMCkdW9",
+  "model": "eleven_v4",
+  "text_file": "assets\\demo\\accessibility\\narration-directed.txt",
+  "text_sha256": "e7794faa41c8d79db3f1aa510f32eee0fb706a82df83dd03c8a447234c7c02ea",
+  "characters": 982,
+  "audio_bytes": 941705,
+  "request_id": "81UkMgkOpHxDA8An1CUd",
+  "audio_tags_added": true,
+  "settings": {
+    "stability": 0.3,
+    "similarity_boost": 0.65
+  },
+  "assembled_video": false,
+  "quality_review": "Full ffmpeg decode and forced alignment checked. Subjective listening not performed.",
+  "duration_seconds": 58.8,
+  "voice_name": "Jessica - Playful, Bright, Warm",
+  "synthetic_voice": true
+}

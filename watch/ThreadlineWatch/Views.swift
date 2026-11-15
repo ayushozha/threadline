@@ -170,11 +170,6 @@ private struct StreamContent: View {
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
-                Toggle("Share cycle dates", isOn: $session.shareCycle)
-                    .onChange(of: session.shareCycle) { _, _ in session.shareCycleChanged() }
-                Text(session.cycleNote ?? "Off by default. When on, sends the first day of each period you logged in Health (last 12 months) to your page. No flow levels, no predictions.")
-                    .font(.caption2).foregroundStyle(.secondary)
-
                 Text(sharingText).font(.caption2).foregroundStyle(.secondary)
 
                 if let onUnpair {

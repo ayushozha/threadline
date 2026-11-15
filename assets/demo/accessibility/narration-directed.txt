@@ -1,0 +1,15 @@
+[warmly] The same everyday moment can ask different things of different people. Finding your place. Reading a label. Following a conversation. Asking for help.
+
+Threadline adapts one assistant to the support you choose.
+
+[storytelling] In Memory mode, Meera asks where she left her glasses. Her saved words point to the kitchen table. The assistant explains what it knows, and what might have changed.
+
+In Sight mode, Ravi asks about a package. The camera helps read the visible label, without guessing hidden text or giving medical directions.
+
+In Hearing mode, Alex follows large, live captions, with speaker labels that separate voices.
+
+In Mobility mode, Jordan asks Morgan for help. Threadline prepares a message to review. Nothing is sent without a choice.
+
+One shared dashboard connects conversations, source evidence and the next step. These are fictional examples of a prototype, not safety guarantees.
+
+[reassuring] Threadline. Different needs. One assistant that listens.

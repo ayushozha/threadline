@@ -151,3 +151,37 @@ def test_missing_model_env_is_explicit(setup, monkeypatch):
         ws.send_json({"token": "test-only-access", "mode": "memory"})
         assert "GEMINI_LIVE_MODEL" in ws.receive_json()["message"]
     assert calls == []
+
+
+@pytest.mark.parametrize("mode,expected", [
+    ("memory", "last seen or mentioned"), ("sight", "Read legible text aloud verbatim"),
+    ("hearing", "accurate transcription"), ("mobility", "Do not infer fall risk"),
+])
+def test_selected_mode_reaches_provider_with_shared_boundaries(setup, mode, expected):
+    client, fake, _ = setup
+    with client.websocket_connect("/api/live-gemini") as ws:
+        start(ws, mode=mode)
+        ws.send_json({"type": "stop"})
+    instruction = fake.sent[0]["setup"]["systemInstruction"]["parts"][0]["text"]
+    assert expected in instruction
+    assert "Never diagnose" in instruction
+    assert "not identify them" in instruction
+    assert "external action completed" in instruction
+
+
+@pytest.mark.parametrize("mode", ["unknown", None, {}, ["memory"]])
+def test_invalid_mode_cannot_contact_provider(setup, mode):
+    client, _, calls = setup
+    with client.websocket_connect("/api/live-gemini") as ws:
+        ws.send_json({"token": "test-only-access", "mode": mode})
+        assert "Unknown assistance mode" in ws.receive_json()["message"]
+    assert calls == []
+
+
+def test_missing_mode_keeps_existing_memory_behavior(setup):
+    client, fake, _ = setup
+    with client.websocket_connect("/api/live-gemini") as ws:
+        ws.send_json({"token": "test-only-access"})
+        assert ws.receive_json()["type"] == "ready"
+        ws.send_json({"type": "stop"})
+    assert "memory support" in fake.sent[0]["setup"]["systemInstruction"]["parts"][0]["text"]

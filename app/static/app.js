@@ -2,15 +2,23 @@
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
-import { sampleSeed, DEMO_QUESTION } from './sample-data.mjs';
+import { sampleSeed, DEMO_QUESTIONS } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
+import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
-import { MODES as HELP_MODES, MODE_KEYS, currentMode, setMode, modeScenes } from './modes.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) { if (key.includes("-")) node.setAttribute(key, value); else node[key] = value; }
   node.append(...children.filter((c) => c != null)); return node;
+};
+let accessMode = "memory";
+const accessInfo = () => ACCESS_MODES[accessMode];
+let seedCache;
+const demoSeed = () => {
+  const day = new Date().toDateString();
+  if (!seedCache || seedCache.mode !== accessMode || seedCache.day !== day) seedCache = { mode: accessMode, day, value: sampleSeed(new Date(), accessMode) };
+  return seedCache.value;
 };
 const HOUR = 3600000, DAY = 24 * HOUR;
 const ago = (days, hour = 20, minute = 0) => { const d = new Date(Date.now() - days * DAY); d.setHours(hour, minute, 0, 0); return d.toISOString(); };
@@ -80,17 +88,17 @@ function renderSampleBanner() {
 function loadSample() {
   if (busy || capture.active || care.ws || lh.ws || watch.owningLive) return message("Stop the live session before opening fictional history.", true);
   saveThread();
-  loadThread(`fictional-${realThreadKey()}`);
+  loadThread(`fictional-v2-${accessMode}-${realThreadKey()}`);
   if (!sessions.routine.notes.length) {
-    const seed = sampleSeed();
+    const seed = demoSeed();
     sessions.reflection.notes = seed.notes.map(n => ({ ...n }));
     sessions.routine.notes = seed.notes.map(n => ({ ...n }));
-    saveArchive([...seed.archive, ...modeScenes()]);
+    saveArchive(seed.archive);
   }
-  mode = "routine"; sessions.routine.question = DEMO_QUESTION;
+  mode = "routine"; sessions.routine.question = DEMO_QUESTIONS[accessMode];
   care.history = []; $("care-history").replaceChildren();
-  stopDemoFeed(); render(); renderCareRoutine(); renderCareHealth();
-  showAnswer("Fictional history loaded. Allow demo processing above, then ask Gemini to recover the interrupted plan.");
+  stopDemoFeed(); render(); renderAccessMode(); renderCareRoutine(); renderCareHealth();
+  showAnswer("Fictional history loaded. Allow demo processing above, then ask Gemini about the linked conversations.");
   message("Fictional history only · your real notes and recordings are kept separately.");
   location.hash = "thread";
 }
@@ -99,7 +107,7 @@ function exitSample() {
   saveThread(); loadThread(realThreadKey()); mode = "reflection";
   $("sample-consent").checked = false;
   care.history = []; $("care-history").replaceChildren();
-  render(); renderCareRoutine(); renderCareHealth();
+  render(); renderAccessMode(); renderCareRoutine(); renderCareHealth();
   if (demoWanted()) startDemoFeed();
   showAnswer("Back to your own notes. Fictional history is stored separately.");
 }
@@ -109,42 +117,83 @@ function clearSample() {
   life.tasks = []; life.taskDrafts = []; life.energyLog = []; life.actions = []; life.days = {}; life.energy = null;
   saveArchive([]); saveThread(); exitSample();
 }
+function renderAccessMode() {
+  document.querySelectorAll('[data-access-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.accessMode === accessMode)));
+  $('access-description').textContent = accessInfo().description;
+  $('sample-load').textContent = `Load fictional ${accessInfo().label} demo`;
+  $('care-live-h').textContent = `${accessInfo().label} · live assistance`;
+  $('hearing-screen').hidden = accessMode !== 'hearing';
+  $('caption-demo').hidden = !isFictionalDemo();
+  $('hearing-name').value = localStorage.getItem(`threadline.caption-name.${realThreadKey()}`) || '';
+  care.muted = accessMode === 'hearing'; lh.muted = care.muted; $('care-mute').checked = care.muted;
+}
+function selectAccessMode(value) {
+  if (!ACCESS_MODES[value] || value === accessMode) return;
+  const demo = isFictionalDemo();
+  if (demo) exitSample();
+  careStop('Mode changed. Confirm consent and restart live assistance.'); lhStop();
+  accessMode = value;
+  try { localStorage.setItem(`threadline.access-mode.${realThreadKey()}`, value); } catch { /* optional persistence */ }
+  $('care-consent').checked = false; $('lh-consent').checked = false;
+  care.history = []; $('care-history').replaceChildren(); $('assistance-panel').hidden = true;
+  renderAccessMode(); if (demo) loadSample();
+  drawDashboard();
+}
+document.querySelectorAll('[data-access-mode]').forEach(b => b.addEventListener('click', () => selectAccessMode(b.dataset.accessMode)));
+let lastCaptionCue = 0;
+function renderHearingCaption(text, final, speaker = null) {
+  if (accessMode !== 'hearing' || !text?.trim()) return;
+  $('caption-live').textContent = text;
+  $('caption-status').textContent = final ? `Final · ${speaker == null ? 'speaker not identified' : `Speaker ${speaker}`}` : 'Live draft · words may change';
+  if (final) {
+    $('caption-history').append(el('li', {}, el('span', { className: 'caption', textContent: speaker == null ? 'Speaker not identified' : `Speaker ${speaker}` }), el('p', { textContent: text })));
+    while ($('caption-history').children.length > 50) $('caption-history').firstChild.remove();
+    const name = $('hearing-name').value.trim();
+    if (!isFictionalDemo() && name && text.toLocaleLowerCase().includes(name.toLocaleLowerCase()) && $('hearing-cue').checked && Date.now() - lastCaptionCue > 5000) {
+      lastCaptionCue = Date.now();
+      const sent = sendHaptic('notification', 'Your chosen name was heard in the transcript');
+      $('caption-cue-status').textContent = sent ? 'Name cue requested from the paired watch.' : 'Name heard. Pair a watch for a wrist cue.';
+    }
+  }
+}
+$('caption-demo').addEventListener('click', async () => {
+  if (!isFictionalDemo() || accessMode !== 'hearing') return;
+  const scope = workspaceVersion;
+  $('caption-demo').disabled = true; $('caption-history').replaceChildren();
+  for (const line of demoSeed().archive[0].lines) {
+    if (scope !== workspaceVersion) break;
+    renderHearingCaption(line.text, true, line.speakers[0]);
+    $('caption-status').textContent = 'Fictional transcript playback · not a live microphone';
+    await new Promise(resolve => setTimeout(resolve, 900));
+  }
+  $('caption-demo').disabled = false;
+});
+$('hearing-name').addEventListener('change', () => { try { localStorage.setItem(`threadline.caption-name.${realThreadKey()}`, $('hearing-name').value.trim()); } catch { /* optional */ } });
+$('care-consent').addEventListener('change', () => { if (!$('care-consent').checked) careStop('Consent removed. Live guidance stopped.'); });
+$('lh-consent').addEventListener('change', () => { if (!$('lh-consent').checked) lhStop('Consent removed. Live help stopped.'); });
+function requestAssistance(reason) {
+  const synthetic = isFictionalDemo();
+  $('assistance-panel').hidden = false;
+  $('assistance-reason').textContent = `${synthetic ? 'Fictional demonstration: ' : ''}${reason}. Review the message below. Nothing has been sent.`;
+  $('assistance-draft').value = `${synthetic ? '[FICTIONAL DEMO] ' : ''}I am requesting assistance. Please contact me or check in with me. (${reason})`;
+  $('assistance-status').textContent = 'Draft prepared · not sent';
+  $('assistance-draft').dispatchEvent(new Event('input'));
+  if (!synthetic) sendHaptic('notification', 'Assistance requested; review the family message');
+  location.hash = 'care';
+}
+$('assistance-open').addEventListener('click', () => requestAssistance('I pressed the assistance button'));
+$('assistance-dismiss').addEventListener('click', () => { $('assistance-panel').hidden = true; });
+$('assistance-draft').addEventListener('input', () => { $('assistance-send').href = `sms:?&body=${encodeURIComponent($('assistance-draft').value)}`; });
+$('assistance-send').addEventListener('click', () => { $('assistance-status').textContent = 'Opening your messaging app. Choose a recipient and send there; delivery is not verified.'; });
 /* The owner's Apple Health history (uploaded from the iPhone) — shown on the default profile only. */
 const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
 let ownerMood = { days: [], weeks: [] }; // Only actual caregiver assessments belong in this series.
 const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
-function renderModeSwitch() {
-  const box = $("mode-switch"); if (!box) return;
-  const cur = currentMode(), m = HELP_MODES[cur];
-  box.replaceChildren(
-    el("div", { className: "mode-chips", role: "tablist" }, ...MODE_KEYS.map((k) => { const b = el("button", { type: "button", role: "tab", className: `mode-chip${k === cur ? " on" : ""}`, "aria-selected": String(k === cur) },
-      el("span", { className: "mode-ic", textContent: HELP_MODES[k].icon }), el("b", { textContent: HELP_MODES[k].label }), el("small", { textContent: HELP_MODES[k].who }));
-      b.addEventListener("click", () => { setMode(k); renderModeSwitch(); if (care.ws || lh.ws) message(`${HELP_MODES[k].label} mode is set. Restart live guidance to use it.`); }); return b; })),
-    el("div", { className: `mode-card m-${cur}` }, el("div", {}, el("p", { className: "mode-line", textContent: m.line }),
-      el("ul", { className: "mode-does" }, ...m.does.map((d) => el("li", { textContent: d })))),
-      el("div", { className: "mode-side" }, ...m.signals.map((x) => el("span", { className: "mode-sig", textContent: x })),
-        cur === "hearing" ? el("button", { type: "button", className: "primary-sm", textContent: "Open live captions", onclick: openCaptions }) : null,
-        el("a", { className: "secondary", href: "#care", textContent: "Start live guidance" }))));
-}
-let captionsTimer = 0;
-function openCaptions() {
-  $("captions").hidden = false; clearInterval(captionsTimer);
-  const tickC = () => {
-    const lines = [...document.querySelectorAll("#live-lines li")].slice(-4).map((li) => ({ who: li.querySelector(".line-meta b")?.textContent || "", text: li.querySelector("p")?.textContent || "" }));
-    const heard = (typeof care !== "undefined" ? care.lines : []).filter((l) => l.kind === "heard").slice(-2).map((l) => ({ who: "Heard", text: l.text }));
-    const all = [...lines, ...heard].slice(-4);
-    $("captions-lines").replaceChildren(...(all.length ? all.map((l) => el("li", {}, el("small", { textContent: l.who }), el("span", { textContent: l.text }))) : [el("li", { className: "empty" }, el("span", { textContent: "Waiting for speech from the band…" }))]));
-    $("captions-interim").textContent = $("live-interim")?.textContent || "";
-  };
-  tickC(); captionsTimer = setInterval(tickC, 300);
-}
-$("captions-close").addEventListener("click", () => { $("captions").hidden = true; clearInterval(captionsTimer); });
 function drawDashboard() {
-  renderModeSwitch();
   try {
-    renderDashboard($("dashboard"), { health: healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
-      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? "Meera · fictional demo" : "Your person" });
+    renderDashboard($("dashboard"), { health: isFictionalDemo() ? demoSeed().demoHealth : healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
+      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: isFictionalDemo() });
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
 window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); });
@@ -173,10 +222,9 @@ const HEALTH_COLS = [
   ["oxygen_saturation", "Blood oxygen (%)", r0], ["sleep_hours", "Sleep", hm], ["wrist_temp_c", "Wrist temp (°C)", (v) => v.toFixed(2)],
   ["walking_speed_kmh", "Walking speed (km/h)", r1], ["walking_steadiness", "Walking steadiness (%)", r0], ["audio_exposure_db", "Noise (dB)", r0],
   ["mindful_min", "Mindful (min)", r0], ["workouts", "Workouts", (v, h) => `${h.workout_count ?? 1} · ${Math.round(v)} min`], ["mood", "Logged mood (valence)", (v) => v.toFixed(2)],
-  ["menstrual_flow", "Period logged", () => "yes"],
 ];
 function healthOn() { return !isFictionalDemo() && (isDefaultProfile() || !configuredBand); }
-function hDay(key) { return healthOn() ? ownerHealth.byDay[key] || null : null; }
+function hDay(key) { return isFictionalDemo() ? demoSeed().demoHealth[key] || null : healthOn() ? ownerHealth.byDay[key] || null : null; }
 function hLatest() { return healthOn() ? ownerHealth.latest : null; }
 async function loadOwnerHealth() {
   try {
@@ -229,6 +277,7 @@ function showLiveDraft(text) {
   if (!text?.trim()) return; // Empty endpoint events must not erase words still being read.
   $("live-interim").textContent = text;
   $("care-band-interim").textContent = text;
+  renderHearingCaption(text, false);
   $("care-band-transcript").hidden = false;
 }
 function clearLiveDraft() { $("live-interim").textContent = ""; $("care-band-interim").textContent = ""; }
@@ -355,7 +404,7 @@ function renderSupport() {
     el("p", { className: "eyebrow", textContent: "Support you asked for" }),
     el("h3", { textContent: offer.pref.action === "schedule" ? "Want to look at tomorrow and make some space?" : offer.pref.action === "update" ? `Send your update${offer.pref.updateTo ? ` to ${offer.pref.updateTo}` : ""}?` : "Here's what you said before." }),
     el("p", { className: "caption", textContent: "Why this is showing:" }), why,
-    el("p", { className: "caption", textContent: offer.decided ? `Decided by ${offer.decided} from your own words and preferences — no inference about your mood, cycle, or judgment.` : `Matched by your own word “${offer.hit}” using a local rule — no AI, and no inference about your mood, cycle, or judgment.` }),
+    el("p", { className: "caption", textContent: offer.decided ? `Decided by ${offer.decided} from your own words and preferences — no inference about your mood or judgment.` : `Matched by your own word “${offer.hit}” using a local rule — no AI, and no inference about your mood or judgment.` }),
   ];
   if (offer.status === "offered" && offer.pref.action === "schedule") {
     const yes = el("button", { type: "button", className: "primary", innerHTML: "Review my schedule <span aria-hidden=\"true\">→</span>" });
@@ -525,11 +574,12 @@ async function ensureService() {
 function chooseBand(number, remember = true) {
   if (capture.band || pair.busy) return;
   bandNumber = number;
+  try { const saved = localStorage.getItem(`threadline.access-mode.band-${number}`); accessMode = ACCESS_MODES[saved] ? saved : "memory"; } catch { accessMode = "memory"; }
   $("pick-number").value = String(number).padStart(2, "0");
   if (remember) rememberBand(number);
   const url = new URL(location.href); url.searchParams.set("band", String(number).padStart(2, "0")); history.replaceState(null, "", url);
   loadThread(`band-${number}`); render(); renderProfile(); setTimeout(() => { resumeWatch(); if (demoWanted()) startDemoFeed(); else stopDemoFeed(); }, 0);
-  renderPair(); renderArchive(); bandStatus("");
+  renderPair(); renderArchive(); renderAccessMode(); bandStatus("");
 }
 $("pick-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -646,8 +696,21 @@ function attachBand(band) {
       } catch { recState("The band reconnected, but audio did not restart. Press Take it back.", true); $("rec-takeback").hidden = false; }
     }
   });
-  band.on("double-tap", () => { if (band.transportKind === "sim") return;  // the pretend band double-taps by itself
-    if (capture.active) { autoRec.userStopped = true; stopLive(); } else if (!busy) { autoRec.userStopped = false; $("rec-start").click(); } });
+  const gestures = createTapGesture(kind => {
+    if (band.transportKind === "sim") return;
+    if (kind === "sos") return requestAssistance("Three taps on the band");
+    if (accessMode === "sight") {
+      const ws = care.ws?.readyState === 1 ? care.ws : lh.ws;
+      if (ws?.readyState === 1) ws.send(JSON.stringify({ type: "text", text: accessInfo().question }));
+      else { location.hash = "care"; careLiveStatus("Allow live guidance, then double-tap to ask about the scene."); }
+      return;
+    }
+    if (capture.active) { autoRec.userStopped = true; stopLive(); }
+    else if (!busy) { autoRec.userStopped = false; $("rec-start").click(); }
+  });
+  band.on("tap", () => gestures.push("single"));
+  band.on("double-tap", () => gestures.push("double"));
+  band.on("disconnect", () => gestures.clear());
   band.on("stream-taken", (e) => { recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true); $("rec-takeback").hidden = false; });
   band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
   // Audio goes to whichever Deepgram socket is open right now (sockets are replaced on reconnect).
@@ -844,6 +907,8 @@ function addLiveLine(msg) {
   const who = speakers.length ? speakers[0] : null;
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
   clearLiveDraft();
+  renderHearingCaption(msg.transcript, true, who);
+  if (/\b(help me|i need help|i fell|cannot get up|can.t get up)\b/i.test(msg.transcript)) requestAssistance("Help requested in the transcript");
   $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
     el("span", { className: "avatar", "aria-hidden": "true", textContent: who ?? "?" }),
     el("div", {},
@@ -1221,7 +1286,7 @@ function memoryData() {
   const N = new Map(), E = [], seen = new Set();
   const add = (id, label, type, weight = 1, extra = {}) => { if (!N.has(id)) N.set(id, { id, label, type, weight, ...extra }); else N.get(id).weight += weight; return id; };
   const link = (a, b) => { if (!a || !b || a === b) return; const k = a < b ? a + "|" + b : b + "|" + a; if (!seen.has(k)) { seen.add(k); E.push({ source: a, target: b }); } };
-  const self = add("self", "Dad", "self", 8), gd = graph.data;
+  const self = add("self", isFictionalDemo() ? demoSeed().persona : "You", "self", 8), gd = graph.data;
   if (gd) { for (const n of gd.nodes) add(n.id, n.label, TYPE_STYLE[n.type] ? n.type : "topic", n.weight || 1, { sources: n.sources }); for (const e of gd.edges) link(e.source, e.target);
     for (const n of gd.nodes) if (n.weight >= 2 || ["person", "place"].includes(n.type)) link(self, n.id); }
   for (const note of sessions.reflection.notes.slice(-80)) {
@@ -1296,11 +1361,6 @@ async function openWatchFeed(token) {
       $("watch-code-box").hidden = true; watch.owningLive = false;
     } else if (msg.type === "sensors") {
       applyWatchSensors(msg);
-    } else if (msg.type === "cycle") {
-      if (isFictionalDemo()) return;
-      let added = 0;
-      for (const d of msg.period_starts || []) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !life.cycle.starts.some((x) => x.date === d)) { life.cycle.starts.push({ date: d, source: "health" }); added += 1; }
-      renderDays(); watchMsg(added ? `Added ${added} period start date${added > 1 ? "s" : ""} from Apple Health.` : "Cycle dates from Apple Health are already here.");
     } else if (msg.type === "log_mood_sent") { $("mood-msg").textContent = "On your watch now — confirm there to save it in Apple Health.";
     } else if (msg.type === "mood_failed") { $("mood-msg").textContent = "The watch couldn't save it (needs watchOS 11 and Health permission).";
     } else if (msg.type === "mood_logged") { $("mood-msg").textContent = "Saved to Apple Health (State of Mind) after your confirmation."; logAction("Saved a mood to Apple Health (you confirmed on the watch)");
@@ -1312,11 +1372,12 @@ async function openWatchFeed(token) {
       if (!watch.owningLive) { watch.owningLive = true; watch.startedAt = watch.startedAt || new Date(); $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; $("live-source").textContent = `${watch.device} · microphone`; $("signals").hidden = true; }
       if (msg.is_final && msg.transcript.trim()) {
         watch.finals.push(msg);
+        renderHearingCaption(msg.transcript, true, msg.words?.[0]?.speaker);
         const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
         $("live-lines").append(el("li", {}, el("span", { className: "caption", textContent: `${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${watch.device} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}` }), el("p", { textContent: msg.transcript })));
         { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
         $("live-interim").textContent = "";
-      } else if (!msg.is_final) $("live-interim").textContent = msg.transcript;
+      } else if (!msg.is_final) showLiveDraft(msg.transcript);
     } else if (msg.type === "watch_disconnected") {
       watchState("busy", "Watch stopped · waiting for it again");
       finishWatchSession();
@@ -1412,31 +1473,19 @@ $("cam-connect").addEventListener("click", async () => {
 navigator.mediaDevices?.addEventListener?.("devicechange", () => { if ($("cam-on").checked) listCameras(); });
 
 
-/* ---------- Your days + cycle (only real inputs; stored in this browser per band) ---------- */
+/* ---------- Daily log: saved words and measurements ---------- */
 const DAY_MS = 86400000;
 const parseDay = (s) => new Date(`${s}T12:00:00`);
-function cycleInfo() {
-  const starts = [...new Set(life.cycle.starts.map((x) => x.date))].sort();
-  if (!starts.length) return { starts };
-  const last = starts[starts.length - 1];
-  const dayOf = (key) => { const d = Math.floor((parseDay(key) - parseDay(last)) / DAY_MS) + 1; return d >= 1 ? d : null; };
-  const gaps = starts.slice(1).map((d, i) => Math.round((parseDay(d) - parseDay(starts[i])) / DAY_MS)).filter((g) => g >= 15 && g <= 60).slice(-6);
-  if (!gaps.length) return { starts, last, dayOf };
-  const avg = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
-  const spread = Math.max(...gaps) - Math.min(...gaps);
-  const next = new Date(parseDay(last).getTime() + avg * DAY_MS);
-  return { starts, last, dayOf, avg, spread, next, cycles: gaps.length };
-}
 function renderDays() {
   if (!$("days-body")) return;
   $("days-panel").hidden = mode !== "reflection";
   $("energy-words").value = life.energyWords;
-  const info = cycleInfo(), rows = [];
+  const rows = [];
   // Columns come from the data: every metric found in the Health history gets its own column automatically.
   const DAYS = 30, keys = [...Array(DAYS)].map((_, i) => todayKey(new Date(Date.now() - i * DAY_MS)));
-  const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) present.add(m);
+  const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) if (!["menstrual_flow", "cycle", "period_starts", "sample", "source", "provenance"].includes(m)) present.add(m);
   const cols = HEALTH_COLS.filter(([m]) => present.has(m));
-  for (const m of present) if (!["date", "workout_types", "workout_count"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
+  for (const m of present) if (!["date", "workout_types", "workout_count", "sample", "source", "provenance"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
   // Direction: +1 higher is better, -1 lower is better, 0 neutral. Groups give the table its section headers.
   const DIR = { steps: 1, distance_km: 1, active_energy_kcal: 1, exercise_min: 1, flights_climbed: 1, stand_hours: 1, stand_min: 1, sleep_hours: 1, hrv_sdnn: 1, walking_steadiness: 1, walking_speed_kmh: 1, mindful_min: 1, oxygen_saturation: 1, resting_heart_rate: -1, audio_exposure_db: -1, heart_rate: 0, respiratory_rate: 0, wrist_temp_c: 0, workouts: 1, mood: 1 };
   const GROUP = { sleep_hours: "Sleep", resting_heart_rate: "Heart", heart_rate: "Heart", hrv_sdnn: "Heart", oxygen_saturation: "Breathing", respiratory_rate: "Breathing", wrist_temp_c: "Breathing",
@@ -1476,49 +1525,14 @@ function renderDays() {
       ...cols.map(([m, , f]) => el("td", { className: tone(m, h[m]), textContent: fmt(m, f) })),
       present.has("workout_types") ? el("td", { className: "dl-wrap", textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)}m`).join(", ") : "—" }) : null));
   }
-  $("days-status").textContent = ownerHealth.days ? `Auto-logged · ${filled}/${DAYS} days · ${cols.length} metrics · ${ownerHealth.days} days of history` : "Waiting for Health data…";
+  $("days-status").textContent = isFictionalDemo() ? "14 days of synthetic chart examples; not recorded health data." : ownerHealth.days ? `Auto-logged · ${filled}/${DAYS} days · ${cols.length} metrics · ${ownerHealth.days} days of history` : "Waiting for Health data…";
   $("days-body").replaceChildren(...rows);
-  // cycle
-  $("cycle-dates").replaceChildren(...info.starts.slice(-8).reverse().map((d) => {
-    const src = life.cycle.starts.find((x) => x.date === d)?.source;
-    const rm = el("button", { type: "button", className: "text-button", textContent: "Remove", "aria-label": `Remove ${d}` });
-    rm.addEventListener("click", () => { life.cycle.starts = life.cycle.starts.filter((x) => x.date !== d); renderDays(); });
-    return el("li", {}, el("span", { textContent: parseDay(d).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) }), src === "health" ? el("span", { className: "badge vexo", textContent: "Apple Health" }) : null, rm);
-  }));
-  $("cycle-estimate").textContent = !info.starts.length ? "Add the first day of your last periods, or share them from Apple Health on the watch."
-    : !info.avg ? `Cycle day ${info.dayOf(todayKey()) ?? "—"} today. Add one more start date to estimate the next one.`
-    : `Cycle day ${info.dayOf(todayKey())} today. Next period estimated around ${info.next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} — from your last ${info.cycles} cycle${info.cycles > 1 ? "s" : ""} (average ${info.avg} days${info.spread ? `, they varied by ${info.spread} day${info.spread > 1 ? "s" : ""}` : ""}).`;
-  $("cycle-notify").checked = life.cycle.notify; $("cycle-haptic").checked = life.cycle.haptic;
   saveThread();
-  maybeNotifyCycle(info);
-}
-function maybeNotifyCycle(info = cycleInfo()) {
-  if (!life.cycle.notify || !info.next) return;
-  const daysLeft = Math.ceil((info.next - new Date()) / DAY_MS), key = todayKey(info.next);
-  if (daysLeft > 2 || daysLeft < -3 || life.cycle.notifiedFor === key) return;
-  const text = `Your period is estimated around ${info.next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, from your own dates.`;
-  try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline", { body: text }); } catch { /* not allowed */ }
-  if (life.cycle.haptic) sendHaptic("notification", "Cycle estimate reminder");
-  logAction("Cycle reminder from your own dates");
-  life.cycle.notifiedFor = key; saveThread();
-  message(text);
 }
 function sendHaptic(kind, reason) {
-  if (watch.ws?.readyState === 1) watch.ws.send(JSON.stringify({ type: "haptic", kind, reason }));
+  if (watch.ws?.readyState !== 1) return false;
+  watch.ws.send(JSON.stringify({ type: "haptic", kind, reason })); return true;
 }
-$("cycle-add").addEventListener("click", () => {
-  const d = $("cycle-date").value;
-  if (!d || parseDay(d) > new Date()) return message("Pick a start date that isn't in the future.", true);
-  if (!life.cycle.starts.some((x) => x.date === d)) life.cycle.starts.push({ date: d, source: "typed" });
-  $("cycle-date").value = ""; renderDays();
-});
-$("cycle-notify").addEventListener("change", async () => {
-  life.cycle.notify = $("cycle-notify").checked;
-  if (life.cycle.notify && "Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignored */ } }
-  if (life.cycle.notify && "Notification" in window && Notification.permission === "denied") message("This browser blocks notifications for the site; the reminder will show on the page instead.", true);
-  renderDays();
-});
-$("cycle-haptic").addEventListener("change", () => { life.cycle.haptic = $("cycle-haptic").checked; if (life.cycle.haptic && !watch.ws) message("Pair the Apple Watch (Devices) so it can tap your wrist.", true); renderDays(); });
 $("energy-words").addEventListener("change", () => { life.energyWords = $("energy-words").value; saveThread(); });
 const daySummary = { timer: null, running: false, signature: "", scope: -1 };
 function scheduleDaySummary() {
@@ -1535,9 +1549,8 @@ async function summarizeToday() {
   if (!notes.length) { for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "caption", textContent: "Your summary will update automatically as your words are saved." })); } daySummary.signature = signature; return; }
   if (signature === daySummary.signature && scope === daySummary.scope) return;
   if (!service.reflection || !processingConsent()) return;
-  const info = cycleInfo();
   const readings = [r?.energy.length ? `${r.energy.length} low-energy words` : "", r?.others ? `${r.others} lines from other people in reviewed conversations` : "",
-    r?.watchSteps != null ? `${r.watchSteps} steps on the watch` : "", r?.hrN ? `average heart rate ${Math.round(r.hrSum / r.hrN)}` : "", info.dayOf ? `self-reported cycle day ${info.dayOf(key)}` : ""].filter(Boolean).join("; ");
+    r?.watchSteps != null ? `${r.watchSteps} steps on the watch` : "", r?.hrN ? `average heart rate ${Math.round(r.hrSum / r.hrN)}` : ""].filter(Boolean).join("; ");
   try {
     daySummary.running = true;
     const headers = liveHeaders();
@@ -1599,13 +1612,12 @@ function agentPayload(statement) {
     statement, recent: sessions.reflection.notes.filter(n => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
     preferences: [], today: {}, tasks: [], voice: {}, devices: { band: false, watch: false }, engine: agentEngine(),
   };
-  const info = cycleInfo(), r = life.days[todayKey()];
+  const r = life.days[todayKey()];
   return {
     statement,
     recent: sessions.reflection.notes.filter((n) => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
     preferences: sessions.reflection.prefs.slice(-20).map(({ id, text, triggers, action }) => ({ id, text, triggers, action })),
     today: { low_energy_words: r?.energy.length || 0, lines_from_others: r?.others || 0, steps: r?.watchSteps ?? (r?.bandSteps || null), heart_rate_avg: r?.hrN ? Math.round(r.hrSum / r.hrN) : null,
-      cycle_day: info.dayOf ? info.dayOf(todayKey()) : null, next_period_estimate: info.next ? todayKey(info.next) : null,
       hrv_sdnn_ms: watch.sensors?.hrv_sdnn_ms ?? null, resting_hr: watch.sensors?.resting_hr ?? null, sleep_hours: watch.sensors?.sleep_hours_last_night ?? null },
     tasks: (life.tasks || []).slice(-40).map((t) => ({ id: t.id, title: t.title, due: t.due, big_decision: Boolean(t.big), done: Boolean(t.done) })),
     voice: life.voice ? { words_per_min: life.voice.words_per_min, avg_pause_s: life.voice.avg_pause_s, loudness: life.voice.loudness, talk_share: life.voice.talk_share } : {},
@@ -1751,7 +1763,7 @@ function showCheckinPrompt(text) {
   const yes = el("button", { type: "button", className: "primary-sm", textContent: "Yes, gentle check-ins" });
   const no = el("button", { type: "button", className: "text-button", textContent: "No thanks" });
   const box = el("div", { className: "checkin-prompt" }, el("p", { textContent: text }), el("p", { className: "caption", textContent: "A check-in is a soft tap on your Apple Watch — no message, nothing sent to anyone." }), el("div", { className: "row tight" }, yes, no));
-  yes.addEventListener("click", async () => { life.checkins.optedIn = true; saveThread(); box.replaceChildren(el("p", { className: "done", textContent: "Check-ins on. You can turn them off in Energy." })); if ("Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignore */ } } renderEnergy(); });
+  yes.addEventListener("click", async () => { life.checkins.optedIn = true; saveThread(); box.replaceChildren(el("p", { className: "done", textContent: "Check-ins on. You can turn them off in Wellbeing." })); if ("Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignore */ } } renderEnergy(); });
   no.addEventListener("click", () => { life.checkins.optedIn = false; saveThread(); box.replaceChildren(el("p", { className: "caption", textContent: "Okay — no check-ins. Threadline won't ask again." })); renderEnergy(); });
   $("agent-feed").querySelector(".agent-empty")?.remove();
   $("agent-feed").prepend(el("li", { className: "act" }, box));
@@ -1778,13 +1790,12 @@ function renderEnergy() {
   $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "no signal yet";
   $("energy-why").textContent = e ? `Your self-report: “${e.text}”.` : "Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.";
   $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
-  const v = life.voice, w = sensorsWithHealth(), r = life.days[todayKey()] || {}, info = cycleInfo(), h = hLatest() || {};
+  const v = life.voice, w = sensorsWithHealth(), r = life.days[todayKey()] || {}, h = hLatest() || {};
   const rows = (pairs) => pairs.filter(([, val]) => val != null && val !== "").flatMap(([k, val]) => [el("dt", { textContent: k }), el("dd", { textContent: String(val) })]);
   const fill = (id, pairs, empty) => { const items = rows(pairs); $(id).replaceChildren(...(items.length ? items : [el("dt", { className: "empty", textContent: empty })])); };
   fill("sig-voice", [["Speaking pace", v?.words_per_min ? `${v.words_per_min} wpm` : null], ["Pauses", v?.avg_pause_s ? `${v.avg_pause_s} s avg` : null], ["Loudness", v?.loudness != null ? `${Math.round(v.loudness * 100)}%` : null], ["Most-heard speaker's share", v?.talk_share != null ? `${Math.round(v.talk_share * 100)}%` : null]], "Record a session to measure");
   fill("sig-body", [["Heart rate", w.heart_rate != null ? `${Math.round(w.heart_rate)} bpm` : null], ["HRV (SDNN)", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Breathing", w.respiratory_rate != null ? `${Math.round(w.respiratory_rate)} /min` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Sleep last night", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Noise", w.env_noise_db != null ? `${Math.round(w.env_noise_db)} dB` : null], ["Logged mood", w.state_of_mind ? `${w.state_of_mind.valence > 0.2 ? "pleasant" : w.state_of_mind.valence < -0.2 ? "unpleasant" : "neutral"}${w.state_of_mind.labels?.length ? ` · ${w.state_of_mind.labels.join(", ")}` : ""}` : null]], "Pair the Apple Watch in Devices");
   fill("sig-move", [["Steps today", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${Math.round(w.exercise_min_today)} min` : null], ["Mindful", w.mindful_min_today != null ? `${Math.round(w.mindful_min_today)} min` : null], ["Distance", h.distance_km != null ? `${h.distance_km.toFixed(1)} km` : null], ["Active energy", h.active_energy_kcal != null ? `${Math.round(h.active_energy_kcal)} kcal` : null], ["Walking speed", h.walking_speed_kmh != null ? `${h.walking_speed_kmh.toFixed(1)} km/h` : null], ["Walking steadiness", h.walking_steadiness != null ? `${Math.round(h.walking_steadiness)}%` : null]], "Connect the band or watch");
-  fill("sig-cycle", [["Cycle day", info.dayOf ? info.dayOf(todayKey()) : null], ["Next, estimated", info.next ? info.next.toLocaleDateString([], { month: "short", day: "numeric" }) : null], ["Wrist temp", w.wrist_temp_delta_c != null ? `${w.wrist_temp_delta_c > 0 ? "+" : ""}${w.wrist_temp_delta_c.toFixed(1)} °C` : null]], "Add dates in Your days");
   const mood = state === "low" ? "calm" : state === "positive" ? "uplifting" : "steady";
   $("music-links").replaceChildren(...["calm", "steady", "uplifting"].map((m) => el("div", { className: `music-chip m-${m}${m === mood ? " current" : ""}` }, el("b", { textContent: m }),
     el("a", { href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Apple Music" }),
@@ -1838,7 +1849,7 @@ function renderIntegrations() {
   $("int-grid").replaceChildren(
     card("Vexo band", Boolean(capture.band), "Microphone (voice pace, pauses, loudness), movement, steps, taps to mark moments, battery.", "Bluetooth or USB · official Vexo Open kit · Devices"),
     card("Apple Health history", Boolean(ownerHealth.days && healthOn()), ownerHealth.days ? `${ownerHealth.days} days imported from the iPhone (steps, heart rate, HRV, sleep, blood oxygen, walking steadiness, workouts…).` : "Daily history from the iPhone's Health app.", ownerHealth.importedAt ? `Threadline Health app · last sent ${new Date(ownerHealth.importedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Threadline Health iPhone app · or upload an export on Care"),
-    card("Apple Watch · Health", $("watch-pair").dataset.state === "connected", "Heart rate, HRV, resting HR, breathing, blood oxygen, sleep, wrist temperature, noise, exercise, mindful minutes, State of Mind, period days you logged. Taps for check-ins.", "Threadline watch app · pairing code · Devices"),
+    card("Apple Watch · Health", $("watch-pair").dataset.state === "connected", "Heart rate, HRV, resting HR, breathing, blood oxygen, sleep, wrist temperature, noise, exercise, mindful minutes, State of Mind. Taps for check-ins.", "Threadline watch app · pairing code · Devices"),
     card("Camera · GoPro", Boolean(capture.camStream), "Video via the GoPro Webcam app; stays in this browser.", "Live session → Add video"),
     card("Calendar", (life.tasks || []).length > 0 || agent.events.length > 0, "Quiet-time blocks and notes around tasks and decisions.", "Add to Google Calendar links or .ics files — each needs your tap"),
     card("Music", true, "Calm, steady or uplifting search to match your energy.", "Opens Apple Music or Spotify — nothing is played or tracked"),
@@ -1882,8 +1893,8 @@ function renderToday() {
   const marked = loadArchive().filter((e) => todayKey(new Date(e.startedAt)) === key).flatMap((e) => e.lines.filter((l) => l.marked));
   $("day-moments").replaceChildren(...[...events.map((e) => el("span", { className: `moment m-${e.state}`, textContent: `${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${e.word}”` })),
     ...marked.slice(-6).map((l) => el("span", { className: "moment m-mark", textContent: `★ ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${l.text.slice(0, 40)}${l.text.length > 40 ? "…" : ""}”` }))]);
-  const r = life.days[key] || {}, w = sensorsWithHealth(), info = cycleInfo(), h = hDay(key) || hLatest() || {};
-  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Cycle day", info.dayOf ? info.dayOf(key) : null]].filter(([, v]) => v != null);
+  const r = life.days[key] || {}, w = sensorsWithHealth(), h = hDay(key) || hLatest() || {};
+  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null]].filter(([, v]) => v != null);
   $("measured").replaceChildren(...(m.length ? m.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })]) : [el("dt", { className: "empty", textContent: "Nothing measured yet today." })]));
   const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
@@ -2082,6 +2093,7 @@ function lhStartFrames() {
   }, 1000);  // about one frame a second
 }
 $("lh-start").addEventListener("click", async () => {
+  if (!$("lh-consent").checked) return lhSetState("idle", "Allow sending selected audio and camera to Gemini first.");
   if (isFictionalDemo()) return message("Exit fictional history before starting a live camera session.", true);
   if (lh.ws) return;
   lhSetState("busy", "Starting the camera…");
@@ -2099,7 +2111,7 @@ $("lh-start").addEventListener("click", async () => {
     lh.out = new AudioContext({ sampleRate: 24000 }); lh.playAt = 0;
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
     ws.binaryType = "arraybuffer"; lh.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: currentMode(), ...(lh.bridge ? { vision: "bridge" } : {}) }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: accessMode, ...(lh.bridge ? { vision: "bridge" } : {}) }));
     ws.onmessage = async (event) => {
       if (event.data instanceof ArrayBuffer) return lhPlay(event.data);
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
@@ -2108,9 +2120,9 @@ $("lh-start").addEventListener("click", async () => {
         if (notes.length) ws.send(JSON.stringify({ type: "context", notes }));
         const where = await lhStartAudio().catch((e) => { lhLog("said", `(No microphone: ${e.message})`); return "no microphone"; });
         if (!lh.bridge) lhStartFrames();
-        lhSetState("live", `Live with ${msg.model || "Gemini"} · camera ${lh.bridge ? "GoPro (bridge)" : (lh.stream?.getVideoTracks()[0]?.label || "on")} · listening through ${where}. Ask “What was I doing?”`);
-        if (typeof logAction === "function") logAction("Started Gemini Live memory help");
-      } else if (msg.type === "heard") lhLog("heard", msg.text);
+        lhSetState("live", `Live with ${msg.model || "Gemini"} · camera ${lh.bridge ? "GoPro (bridge)" : (lh.stream?.getVideoTracks()[0]?.label || "on")} · listening through ${where}. ${accessInfo().question}`);
+        if (typeof logAction === "function") logAction(`Started Gemini Live ${accessInfo().label} help`);
+      } else if (msg.type === "heard") { lhLog("heard", msg.text); renderHearingCaption(msg.text, false); }
       else if (msg.type === "said") lhLog("said", msg.text);
       else if (msg.type === "turn_complete") { const l = $("lh-log").lastElementChild; if (l) l.dataset.done = "1"; }
       else if (msg.type === "interrupted") lhInterrupt();
@@ -2154,6 +2166,7 @@ function addDemoLine(d) {
   if (capture.active) return;  // your own recording is already on screen
   const interim = $("live-interim");
   if (!d.final) { showLiveDraft(d.text); return; }
+  renderHearingCaption(d.text, true, d.speaker);
   clearLiveDraft();
   const who = d.speaker;
   $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
@@ -2289,6 +2302,7 @@ document.querySelectorAll("input[name=care-src]").forEach((r) => r.addEventListe
 function careSendPcm(int16) { if (care.ws?.readyState === 1 && int16.length) care.ws.send(int16.buffer); }
 function careLog(kind, text, done = false) {
   if (!text) return;
+  if (kind === "heard") renderHearingCaption(text, false);
   const box = $("care-log"), last = care.lines[care.lines.length - 1];
   if (last && last.kind === kind && !last.done) { last.text += text; box.lastElementChild.querySelector("p").textContent = last.text; }
   else {
@@ -2342,9 +2356,9 @@ function careStartFrames() {
   }, 1000);
 }
 async function careStart() {
+  if (!$("care-consent").checked) return careLiveStatus("Allow sending the selected audio and camera to Gemini before starting.");
   if (isFictionalDemo()) return careLiveStatus("Exit fictional history before starting a live camera session.");
   if (care.ws) return;
-  if (!$("care-consent").checked) return careLiveStatus("Tick the consent box first: the person in view and their caregiver agreed to live guidance.");
   if (lh.ws) lhStop("Paused: live guidance on the Care page is using Gemini Live.");
   if (care.src === "file" && !care.files.length) return careLiveStatus("Upload a video first, or choose the GoPro or this computer's camera.");
   if (care.src === "camera" && !(await careStartCamera())) return careLiveStatus("Camera unavailable. Pick another source.");
@@ -2357,14 +2371,14 @@ async function careStart() {
     ws.binaryType = "arraybuffer"; care.ws = ws;
     const bridge = care.src === "bridge";
     const openTimer = setTimeout(() => { if (care.ws === ws && $("care-live").dataset.state === "busy") careStop("Gemini Live didn't answer. It may be unavailable right now."); }, 15000);
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: currentMode(), ...(bridge ? { vision: "bridge" } : {}) }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: accessMode, ...(bridge ? { vision: "bridge" } : {}) }));
     ws.onmessage = async (event) => {
       if (care.ws !== ws) return;
       if (event.data instanceof ArrayBuffer) return livePlayPcm24(care, event.data);
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === "ready") {
         clearTimeout(openTimer);
-        const notes = ["This person lives with dementia. Speak calmly, in short sentences, one step at a time; reassure, never rush.",
+        const notes = [`Selected assistance mode: ${accessMode}. ${accessInfo().description}`,
           ...careRoutine().map((r) => `Usual routine: ${r}`)];
         ws.send(JSON.stringify({ type: "context", notes }));
         const where = await careStartAudio().catch((e) => { careLog("note", `No audio input (${e.message}). Gemini still sees the video.`, true); return "no microphone"; });
@@ -2374,7 +2388,7 @@ async function careStart() {
         if (typeof logAction === "function") logAction("Started Care live guidance");
       } else if (msg.type === "heard") careLog("heard", msg.text);
       else if (msg.type === "said") careLog("said", msg.text);
-      else if (msg.type === "turn_complete") { const l = care.lines[care.lines.length - 1]; if (l) l.done = true; }
+      else if (msg.type === "turn_complete") { const l = care.lines[care.lines.length - 1]; if (l) l.done = true; const heard = [...care.lines].reverse().find(x => x.kind === "heard"); if (heard) renderHearingCaption(heard.text, true); }
       else if (msg.type === "interrupted") liveInterrupt(care);
       else if (msg.type === "error") { careLiveStatus(msg.message || "Gemini Live reported an error."); if ($("care-live").dataset.state === "busy") careStop(`Gemini Live unavailable: ${msg.message || "error"}`); }
       else if (msg.type === "vision") careLiveStatus(msg.live ? `Seeing through ${msg.camera || "the GoPro"}.` : "Waiting for GoPro frames from the bridge…");
@@ -2404,12 +2418,8 @@ function careWatchBand() {
   const b = capture.band;
   if (b && !care.bandSeen.has(b)) {
     care.bandSeen.add(b);
-    b.on("tap", () => { const t = Date.now(); care.taps.push(t);
-      if (care.taps.filter((x) => t - x < 2000).length >= 3 && t - (care.sos || 0) > 10000) {  // triple-tap = SOS
-        care.sos = t; careLog("note", "SOS: triple-tap on the band. Alerting the caregiver.", true); sendHaptic("notification", "SOS sent to your caregiver");
-        if (typeof logAction === "function") logAction("SOS triple-tap on the band"); careAssess(true);
-      } });
-    b.on("free-fall", () => { care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
+    b.on("tap", () => care.taps.push(Date.now()));
+    b.on("free-fall", () => { requestAssistance("Band reported a possible fall"); care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
   }
   const cut = Date.now() - 10 * 60000;
   care.taps = care.taps.filter((t) => t > cut); care.falls = care.falls.filter((t) => t > cut);
@@ -2420,7 +2430,7 @@ setInterval(careWatchBand, 2000);
 /* Routine (per band, kept in this browser) */
 const CARE_ROUTINE_DEFAULT = [];
 function careRoutineKey() { return `threadline.care.routine.v1.${isFictionalDemo() ? threadKey : bandNumber || "default"}`; }
-function careRoutine() { try { const v = JSON.parse(localStorage.getItem(careRoutineKey()) || "null"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : CARE_ROUTINE_DEFAULT.slice(); } catch { return CARE_ROUTINE_DEFAULT.slice(); } }
+function careRoutine() { if (isFictionalDemo()) return demoSeed().routine; try { const v = JSON.parse(localStorage.getItem(careRoutineKey()) || "null"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : CARE_ROUTINE_DEFAULT.slice(); } catch { return CARE_ROUTINE_DEFAULT.slice(); } }
 function careSaveRoutine(items) { try { localStorage.setItem(careRoutineKey(), JSON.stringify(items.slice(0, 40))); } catch { /* storage off */ } }
 function renderCareRoutine() {
   care.routineKey = careRoutineKey();
@@ -2502,7 +2512,8 @@ function careSpark(title, series, key) {
 }
 function renderCareHealth() {
   if (isFictionalDemo()) {
-    $("care-health").replaceChildren(el("p", { className: "caption", textContent: "No health measurements in fictional demo history." }));
+    const days = Object.values(demoSeed().demoHealth), last = days.at(-1);
+    $("care-health").replaceChildren(el("p", { className: "demo-chart-label", textContent: "Synthetic chart values for this fictional profile. Not device readings or clinical predictions." }), ...[["Sleep", `${last.sleep_hours} h`], ["Steps", last.steps], ["Resting HR", `${last.resting_heart_rate} bpm`]].map(([label,value])=>el("div", {className:"hm"},el("div",{className:"hm-k",textContent:label}),el("div",{className:"hm-v",textContent:String(value)}))));
     $("care-spark").replaceChildren(); return;
   }
   const norm = care.health || {}, live = careLiveWatch(), tiles = [];
@@ -2563,9 +2574,10 @@ $("care-health-upload").addEventListener("click", () => {
 /* Caregiver agent */
 function careContext() {
   if (isFictionalDemo()) return {
-    transcript: sessions.routine.notes.slice(-30).map(n => ({ at: n.at, speaker: "Fictional Meera", text: `[Fictional written demo] ${n.text}` })),
+    mode: accessMode,
+    transcript: sessions.routine.notes.slice(-30).map(n => ({ at: n.at, speaker: `Fictional ${demoSeed().persona}`, text: `[Fictional written demo] ${n.text}` })),
     observations: [], band: null, health: {}, video: { source: null, live: false },
-    routine: sampleSeed().routine,
+    routine: demoSeed().routine,
   };
   const bandLines = [...document.querySelectorAll("#live-lines li p")].map((p) => p.textContent.trim()).filter(Boolean);
   const heard = care.lines.filter((l) => l.kind === "heard").map((l) => `Heard: ${l.text.trim()}`);
@@ -2575,7 +2587,8 @@ function careContext() {
   const nowIso = new Date().toISOString();
   const src = { file: "file", upload: "file", files: "file", bridge: "gopro", gopro: "gopro", camera: "camera" }[care.src] || null;
   return {
-    transcript: [...bandLines, ...heard, ...(care.sos && Date.now() - care.sos < 600000 ? ["SOS: help requested by triple-tap on the band"] : [])].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
+    mode: accessMode,
+    transcript: [...bandLines, ...heard].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
     observations: [...said.slice(-19).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
       ...(moodOf(todayKey()) ? [{ at: nowIso, text: `Care log today: mood ${moodOf(todayKey()).morningLabel} in the morning, ${moodOf(todayKey()).eveningLabel} in the evening; evening agitation ${["none", "mild", "moderate", "severe"][moodOf(todayKey()).agitation]}; ${moodOf(todayKey()).repeats} repeated questions; latest weekly CSDD ${ownerMood.weeks.at(-1)?.score ?? "n/a"}.` }] : [])],
     band: { activity: signals.activity || w?.activity || null, steps: Number.isFinite(signals.steps) && signals.steps > 0 ? Math.round(signals.steps) : null, taps_last_10min: care.taps.length, free_fall_last_10min: care.falls.length > 0, connected: Boolean(capture.band) },
@@ -2612,15 +2625,19 @@ function careRenderAssessment(d) {
 }
 $("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {
+  if (!isFictionalDemo() && !$("care-consent").checked && !$("rec-consent").checked) return;
   if (isFictionalDemo() && (!manual || !processingConsent())) return;
   if (care.agentBusy) { if (manual) $("care-agent-state").textContent = "A check is already running…"; return; }
   care.agentBusy = true; $("care-check").disabled = true; $("care-agent-state").textContent = "Checking…";
+  const scope = workspaceVersion, selectedMode = accessMode;
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 30000);
   try {
     const r = await fetch("/api/care/assess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context: careContext(), engine: "gemini" }), signal: ctl.signal });
     if (r.status === 404 || r.status === 405) throw new Error("unavailable");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    careRenderAssessment(await r.json());
+    const result = await r.json();
+    if (scope !== workspaceVersion || selectedMode !== accessMode) return;
+    careRenderAssessment(result);
   } catch (e) {
     $("care-agent-state").textContent = e.message === "unavailable" ? "Caregiver agent unavailable." : `Caregiver agent unavailable (${e.name === "AbortError" ? "timed out" : e.message}). Trying again in 30 s.`;
   } finally { clearTimeout(timer); care.agentBusy = false; $("care-check").disabled = false; }
@@ -2647,6 +2664,7 @@ window.addEventListener("pagehide", () => { careStop(); careStopCamera(); careRe
 careSetSource("file");
 
 render();
+renderAccessMode();
 showView(location.hash.slice(1) || "dashboard");
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
@@ -2671,6 +2689,6 @@ $("sample-load")?.addEventListener("click", loadSample);
 $("sample-exit")?.addEventListener("click", exitSample);
 $("sample-ask")?.addEventListener("click", () => {
   if (!processingConsent()) { $("sample-consent").focus(); return message("Allow sending the fictional notes to Google first.", true); }
-  mode = "routine"; sessions.routine.question = DEMO_QUESTION; render(); location.hash = "thread";
+  mode = "routine"; sessions.routine.question = DEMO_QUESTIONS[accessMode]; render(); location.hash = "thread";
   $("question-form").requestSubmit();
 });

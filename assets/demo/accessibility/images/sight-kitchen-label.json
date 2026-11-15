@@ -1,0 +1,21 @@
+{
+  "scene": "sight-kitchen-label",
+  "synthetic": true,
+  "width": 1536,
+  "height": 864,
+  "seed": 15601,
+  "prompt": "A fictional photorealistic editorial still life in a warm accessible home kitchen. A plain light cream cardboard food box with a large completely blank dark sage rectangular label panel stands upright on an oak counter beside a simple blue mug. A folded white mobility cane with a black handle rests horizontally far behind the box, not obstructing it. No person or hands. Natural morning window light, muted cream and green palette, authentic surfaces, cinematic quiet composition, the box placed on the right half with uncluttered negative space on the left. The blank panel is deliberately unprinted for later typesetting. No letters, numbers, logos, medicine, screen, electronic hardware, traffic or stairs.",
+  "status": "completed",
+  "elapsed_seconds": 9.02,
+  "bytes": 1617279,
+  "output": "sight-kitchen-label.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Reviewed: natural editorial scene, no readable medicine or fabricated hardware; synthetic illustration.",
+  "purpose": "Fictional editorial illustration, not recorded patient data",
+  "model_configuration": "Uses local model configuration documented in docs/demo/LOCAL_IMAGE_RUNTIME.md"
+}

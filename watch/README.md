@@ -2,7 +2,7 @@
 
 A small standalone watchOS app. Its main job is to be a **sensor**: while you stream, it sends live readings (heart rate, active energy, steps, activity, and whether the screen is awake) to the Threadline server about once a second. The server passes them to the web page you paired with. Recording audio is optional (the **Record audio too** toggle). The Vexo band is still the main recorder, and the page can show both in one session.
 
-The readings are just readings. Threadline does not interpret heart rate or anything else as stress, mood, health or cycle state.
+The readings are just readings. Threadline does not interpret heart rate or anything else as stress, mood, health state.
 
 ## How it fits together
 
@@ -38,9 +38,8 @@ You need a Mac with Xcode, the iPhone your Apple Watch is paired with, and an Ap
 
 **Free personal team limits** (Apple: [Developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account/)): provisioning profiles for apps installed on a device expire 7 days after issue, so after a week you rebuild and reinstall from Xcode. A personal team can also register at most 3 devices and 10 App IDs (each expiring after 7 days) and install at most 3 apps per device.
 
-## Cycle dates (opt-in) and haptics
+## Haptics
 
-- **Share cycle dates** is off by default. When you turn it on, the watch asks Health for read access to menstrual flow, reads the flow days you logged in the last 12 months, groups consecutive days into periods and sends only each period's first day, once per streaming session: `{"type":"cycle","period_starts":["YYYY-MM-DD",…]}` (ascending, at most 24, no flow levels, no predictions). The server checks the dates (valid ISO date, within 2 years, not after tomorrow UTC), forwards them to the paired page and stores nothing.
 - **Haptics:** the paired page can send `{"type":"haptic","kind":"notification"|"success"|"directionUp"|"click","reason":"…"}` on its feed socket (at most one every 3 seconds per code). The watch plays the haptic and shows the reason for a few seconds.
 
 ## More Apple Health values and State of Mind
@@ -79,4 +78,4 @@ Use `https://threadline.ayushojha.com` or another HTTPS server. On a real watch,
 
 Watch → `WS /api/watch/stream`. The first text frame is `{"code","device","format":"sensors"|"pcm16"}` (plus `"watch_key"` for watch-started codes), and the server replies `{"type":"ready","source":…}`. In `sensors` mode, the watch sends text frames like `{"type":"sensors","t","heart_rate","steps","active_kcal","activity","wrist_raised"}`. In `pcm16` mode, the watch sends binary frames of 16 kHz mono little-endian Int16 PCM (100 ms each), and can interleave sensor text frames on the same socket. Sending `{"type":"stop"}` ends the session.
 
-HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header (plus `X-Watch-Key` for watch-started codes) and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post. Cycle dates go as the same `cycle` text frame on the socket, or to `POST /api/watch/cycle`. Haptics reach the watch as a `{"type":"haptic","kind","reason"}` text frame, or in the next `POST /api/watch/sensors` response as `{"forwarded":…,"haptics":[…]}` (up to 3 queued). The feed replies `{"type":"haptic_sent"}` or `{"type":"error","message":…}`.
+HTTPS fallback: `POST /api/watch/sensors` (JSON body), `POST /api/watch/audio` (raw PCM body) and `POST /api/watch/audio/stop`, each with an `X-Watch-Code` header (plus `X-Watch-Key` for watch-started codes) and an optional `X-Watch-Device` header. The audio responses carry `{"messages":[…]}`, with the transcript results produced since the previous post. Haptics reach the watch as a `{"type":"haptic","kind","reason"}` text frame, or in the next `POST /api/watch/sensors` response as `{"forwarded":…,"haptics":[…]}` (up to 3 queued). The feed replies `{"type":"haptic_sent"}` or `{"type":"error","message":…}`.

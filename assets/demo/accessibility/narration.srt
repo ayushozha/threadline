@@ -1,0 +1,97 @@
+1
+00:00:00,120 --> 00:00:03,900
+The same everyday moment can ask different
+things of different people.
+
+2
+00:00:04,500 --> 00:00:05,500
+Finding your place.
+
+3
+00:00:06,000 --> 00:00:06,700
+Reading a label.
+
+4
+00:00:07,200 --> 00:00:08,460
+Following a conversation.
+
+5
+00:00:08,940 --> 00:00:09,760
+Asking for help.
+
+6
+00:00:10,240 --> 00:00:13,480
+Threadline adapts one assistant to the
+support you choose.
+
+7
+00:00:13,960 --> 00:00:17,040
+In Memory mode, Meera asks where she left
+her glasses.
+
+8
+00:00:17,460 --> 00:00:19,500
+Her saved words point to the kitchen table.
+
+9
+00:00:19,920 --> 00:00:23,000
+The assistant explains what it knows, and
+what might have changed.
+
+10
+00:00:23,480 --> 00:00:26,100
+In Sight mode, Ravi asks about a package.
+
+11
+00:00:26,500 --> 00:00:28,820
+The camera helps read the visible label,
+without
+
+12
+00:00:28,860 --> 00:00:31,540
+guessing hidden text or giving medical
+directions.
+
+13
+00:00:32,000 --> 00:00:34,800
+In Hearing mode, Alex follows large, live
+
+14
+00:00:34,900 --> 00:00:37,640
+captions, with speaker labels that separate
+voices.
+
+15
+00:00:38,080 --> 00:00:40,880
+In Mobility mode, Jordan asks Morgan for
+help.
+
+16
+00:00:41,300 --> 00:00:43,160
+Threadline prepares a message to review.
+
+17
+00:00:43,740 --> 00:00:45,420
+Nothing is sent without a choice.
+
+18
+00:00:46,000 --> 00:00:50,520
+One shared dashboard connects conversations,
+source evidence and the next step.
+
+19
+00:00:50,960 --> 00:00:54,400
+These are fictional examples of a prototype,
+not safety guarantees.
+
+20
+00:00:54,880 --> 00:00:55,440
+Threadline.
+
+21
+00:00:55,860 --> 00:00:56,640
+Different needs.
+
+22
+00:00:57,040 --> 00:00:58,560
+One assistant that listens.

@@ -1,0 +1,21 @@
+{
+  "scene": "hearing-conversation",
+  "synthetic": true,
+  "width": 1536,
+  "height": 864,
+  "seed": 15602,
+  "prompt": "A fictional photorealistic documentary editorial photograph of two adult friends talking across a small cafe table beside a window, one woman and one man in their thirties, faces in gentle three-quarter profile, natural conversational posture, relaxed hands resting on the table, two ceramic cups. Dignified everyday human interaction, diverse skin tones, ordinary casual clothing, warm cream and muted sage interior, soft daylight, realistic hands and proportions. Wide landscape composition with the pair on the right two-thirds and some quiet space at left. No visible devices, no screens, no text, no logos, no signs or graphics.",
+  "status": "completed",
+  "elapsed_seconds": 9.03,
+  "bytes": 1688924,
+  "output": "hearing-conversation.png",
+  "runtime_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "runtime_revision": "eee59185ff4f43ae2d9ad122b245619d27d9daad",
+  "steps": 6,
+  "sampler": "euler",
+  "scheduler": "simple",
+  "cfg": 1,
+  "visual_review": "Reviewed: natural editorial scene, no readable medicine or fabricated hardware; synthetic illustration.",
+  "purpose": "Fictional editorial illustration, not recorded patient data",
+  "model_configuration": "Uses local model configuration documented in docs/demo/LOCAL_IMAGE_RUNTIME.md"
+}

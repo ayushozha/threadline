@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-11-15T01:29:57.949Z",
+  "resolution": "1280x720",
+  "capture_fps": 12,
+  "output_fps": 24,
+  "duration_seconds": 58.8,
+  "narration": "Jessica; ElevenLabs; expressive narration",
+  "visuals": "Synthetic fictional stills, deterministic browser typography and motion",
+  "inference": "Concept film uses illustrative response text, not a recorded inference",
+  "browser_errors": [],
+  "review_frames": ".artifacts/accessibility-render-74096",
+  "visual_review": "Reviewed frames at 0, 11, 17, 27, 35, 41, 50 and 56 seconds; readable labels, no text clipping, intended mode progression.",
+  "full_decode": "Full ffmpeg video/audio decode passed",
+  "concept_only": true,
+  "audio_peak_dbfs": -2.7,
+  "audio_mean_dbfs": -24.4
+}

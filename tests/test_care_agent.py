@@ -117,3 +117,36 @@ def test_gemini_failure_falls_back_to_local(client, monkeypatch):
 def test_input_caps_keep_newest(client):
     transcript = [{"text": f"line {i}"} for i in range(60)] + [{"text": "please help"}]
     assert post(client, {"transcript": transcript})["status"] == "urgent"
+
+
+@pytest.mark.parametrize("mode,expected", [
+    ("memory", "Gently mention"), ("sight", "object or text"),
+    ("hearing", "captions"), ("mobility", "assistance"),
+])
+def test_care_mode_changes_prompt_and_local_step(client, mode, expected):
+    body = post(client, {"mode": mode, "routine": ["Tea at four"]})
+    assert body["mode"] == mode
+    assert expected in body["next_step"]
+    prompt = care_agent.prompt(care_agent.CareContext(mode=mode, routine=["Tea at four"]))
+    assert f"{mode.upper()} assistance mode" in prompt
+    assert "external action" in prompt
+
+
+def test_care_rejects_unknown_mode(client):
+    assert client.post("/api/care/assess", headers=TOKEN,
+                       json={"context": {"mode": "doctor"}, "engine": "local"}).status_code == 422
+
+
+def test_repetition_does_not_imply_memory_difficulty_in_other_modes(client):
+    repeated = [{"text": "Where is the exit?"}] * 3
+    for mode in ("sight", "hearing", "mobility"):
+        assert post(client, {"mode": mode, "transcript": repeated})["status"] == "ok"
+
+
+def test_unexecuted_external_action_claims_are_not_presented_as_completed(client, monkeypatch):
+    mock_gemini(monkeypatch, {"status": "needs_attention", "summary": "I have texted your family.",
+                            "next_step": "Your caregiver has been notified.",
+                            "caregiver_note": "The report was sent."})
+    body = post(client, {"mode": "mobility", "transcript": [{"text": "Please help me"}]}, "gemini")
+    for field in ("summary", "next_step", "caregiver_note"):
+        assert "no delivery is performed here" in body[field]

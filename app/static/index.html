@@ -53,13 +53,12 @@
           <span class="dchip" id="chip-cam" hidden data-on="false"><span class="dchip-dot"></span><span class="dchip-k">Camera</span><span class="dchip-v" id="chip-cam-v">off</span></span>
         </div></div>
       </header>
-      <div class="row tight demo-controls"><button type="button" id="sample-load" class="text-button">Load fictional dementia demo</button><button type="button" id="sample-exit" class="text-button" hidden>Back to my data</button><a class="text-button" href="/demo/">Watch dementia demo</a></div>
+      <div class="row tight demo-controls"><button type="button" id="sample-load" class="text-button">Load fictional Memory demo</button><button type="button" id="sample-exit" class="text-button" hidden>Back to my data</button><a class="text-button" href="/demo/">Watch dementia demo</a></div>
       <section id="sample-banner" class="sample-banner" hidden aria-label="Fictional demo history">
-        <div><b>Fictional Meera demo</b><p>7 days of written dialogue. No patient recordings, device readings or precomputed AI decisions. Your own data stays separate.</p>
+        <div><b>Fictional mode demo</b><p>Written conversations and 14 days of synthetic chart values. No patient recordings, device measurements or precomputed decisions. Your own data stays separate.</p>
         <label class="check"><input type="checkbox" id="sample-consent"><span>Allow these fictional notes to be sent to Google for a fresh response.</span></label>
-        <div class="row tight"><button type="button" id="sample-ask" class="secondary">Ask Gemini: what was I doing?</button><button type="button" id="sample-clear" class="text-button">Clear fictional history</button></div></div>
+        <div class="row tight"><button type="button" id="sample-ask" class="secondary">Ask Gemini about this example</button><button type="button" id="sample-clear" class="text-button">Clear fictional history</button></div></div>
       </section>
-      <div id="captions" class="captions" hidden role="dialog" aria-label="Live captions"><button type="button" id="captions-close" class="captions-close">Close captions</button><ol id="captions-lines" class="captions-lines" aria-live="polite"></ol><p id="captions-interim" class="captions-interim"></p></div>
       <section class="view" data-view="live">
         <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Live from the Vexo band.</h2><p>What the band hears appears below as it is said, and is kept in Threadline's database.</p>
           <div class="row tight"><button type="button" id="connect-toggle" class="secondary">Connect a device</button><span id="demo-rec-badge" class="demo-rec" hidden>● Recording live</span></div></div>
@@ -189,8 +188,8 @@
           </div>
           <aside class="agent-col" aria-labelledby="agent-h">
             <section class="live-help" id="live-help" aria-labelledby="live-help-h" data-state="idle">
-              <p class="agent-eyebrow">Gemini Live · memory help</p>
-              <h2 id="live-help-h">Ask what you were doing</h2>
+              <p class="agent-eyebrow">Gemini Live · chosen support mode</p>
+              <h2 id="live-help-h">Ask about the moment</h2><label class="check"><input type="checkbox" id="lh-consent"> I have permission to send audio, video frames and notes to Gemini for this session.</label>
               <p class="caption">Sees through the camera (GoPro or any camera), hears through the Vexo band or this computer's mic, and answers out loud. It only uses what it sees and hears — it can't confirm medication or recognise faces.</p>
               <div class="row tight">
                 <label class="visually-hidden" for="lh-camera">Camera</label>
@@ -210,7 +209,7 @@
               <p class="agent-eyebrow">Agent</p>
               <h2 id="agent-h">What Threadline noticed</h2>
               <p id="agent-status" class="caption" role="status">Ready to act on your next complete thought.</p>
-              <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and the routine, decides what would help, and says why.</li></ol>
+              <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and your chosen assistance mode, decides what would help, and says why.</li></ol>
             </div>
             <div id="support" class="support" hidden></div>
             <div id="calendar" class="calendar" hidden></div>
@@ -218,13 +217,20 @@
         </div>
       </section>
 
-      <section class="view" data-view="dashboard" hidden><div id="mode-switch" class="mode-switch" aria-label="Who Threadline is helping"></div><div id="dashboard" class="dash"><p class="caption">Loading the dashboard…</p></div></section>
+      <section class="view" data-view="dashboard" hidden>
+        <section class="card access-picker" aria-labelledby="access-h"><h2 id="access-h">Support that fits the person</h2>
+          <div class="access-buttons" role="group" aria-label="Assistance mode"><button data-access-mode="memory" aria-pressed="true">Memory</button><button data-access-mode="sight" aria-pressed="false">Sight</button><button data-access-mode="hearing" aria-pressed="false">Hearing</button><button data-access-mode="mobility" aria-pressed="false">Mobility</button></div>
+          <p id="access-description" class="caption"></p><a class="text-button" href="#care">Open selected mode</a><a class="text-button" href="/accessibility/">Watch the four-mode concept</a>
+        </section><div id="dashboard" class="dash"><p class="caption">Loading the dashboard…</p></div></section>
       <section class="view" data-view="care" hidden>
         <div class="care-grid">
           <div class="stack">
             <section class="card care-card" aria-labelledby="care-src-h">
               <p class="agent-eyebrow">Video source</p>
               <h2 id="care-src-h">What Threadline is watching</h2>
+              <button type="button" id="assistance-open" class="secondary">Request assistance</button>
+              <section id="assistance-panel" class="assistance-panel" hidden aria-label="Assistance request"><h3>Review your assistance message</h3><p id="assistance-reason"></p><label for="assistance-draft">Message</label><textarea id="assistance-draft" rows="3"></textarea><div class="row tight"><a id="assistance-send" href="sms:" class="primary-sm">Open text draft</a><button id="assistance-dismiss" type="button" class="text-button">Dismiss</button></div><p id="assistance-status" role="status"></p></section>
+              <section id="hearing-screen" class="hearing-screen" hidden aria-label="Large live captions"><h3>Live captions</h3><button type="button" id="caption-demo" class="secondary" hidden>Play fictional conversation</button><p id="caption-live" role="status" aria-live="polite">Start band recording to see words here.</p><p id="caption-status" class="caption"></p><label for="hearing-name">Your name for an optional wrist cue</label><input id="hearing-name" maxlength="60" autocomplete="off"><label class="check"><input id="hearing-cue" type="checkbox"> Request a watch tap when a finalized transcript includes my name</label><p id="caption-cue-status" class="caption">Name matching is based on transcript text, not speaker identity.</p><ol id="caption-history"></ol></section>
               <div class="care-tabs" role="radiogroup" aria-label="Video source">
                 <label class="care-tab"><input type="radio" name="care-src" value="file" checked> Upload videos</label>
                 <label class="care-tab"><input type="radio" name="care-src" value="bridge"> GoPro (via bridge)</label>
@@ -248,10 +254,9 @@
 
             <section class="card care-card live-help" id="care-live" data-state="idle" aria-labelledby="care-live-h">
               <p class="agent-eyebrow">Gemini Live · live guidance</p>
-              <h2 id="care-live-h">Gentle guidance, out loud</h2>
+              <h2 id="care-live-h">Live assistance</h2><label class="check"><input type="checkbox" id="care-consent"> I have permission to send the selected audio, video frames and notes to Gemini for this session.</label>
               <p class="caption">Sees the chosen video, hears through the Vexo band (or the video's own sound, or this computer's mic) and speaks calm, short guidance.</p>
               <div class="row tight">
-                <label class="check inline"><input type="checkbox" id="care-consent"> The person in view and their caregiver agreed to live guidance</label>
                 <button type="button" id="care-start" class="primary-sm">Start live guidance</button>
                 <button type="button" id="care-stop" class="secondary" hidden>Stop</button>
                 <label class="check inline"><input type="checkbox" id="care-mute"> Mute speech</label>
@@ -273,7 +278,7 @@
                 <div class="row tight"><button type="button" id="care-check" class="secondary">Check now</button><button type="button" id="care-sim-fall" class="text-button" title="Demo only: acts as if the band felt a fall">Simulate fall (demo)</button></div>
               </div>
               <div class="care-next"><b>Next step</b><p id="care-next">—</p></div>
-              <div class="care-note"><b>For the family</b><p id="care-note">—</p><a id="care-text-family" class="text-button" href="sms:">Text family</a></div>
+              <div class="care-note"><b>For the family</b><p id="care-note">—</p><a id="care-text-family" class="text-button" href="sms:">Review text for family</a></div>
               <ul id="care-reasons" class="care-reasons"></ul>
               <p id="care-agent-state" class="caption" role="status"></p>
               <h3 class="care-sub">Earlier checks</h3>
@@ -352,7 +357,7 @@
         <div class="energy-top">
           <div class="energy-now" id="energy-now" data-energy="unknown">
             <div class="dial"><div class="dial-halo"></div><div class="dial-core"><span id="energy-label">Unknown</span><small id="energy-since">no signal yet</small></div></div>
-            <h2>Your energy now</h2>
+            <h2>Wellbeing check-in</h2>
             <p id="energy-why" class="caption">Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.</p>
             <div class="row tight center">
               <button type="button" id="mood-to-health" class="secondary">Log this mood to Apple Health</button>
@@ -363,10 +368,9 @@
             <article class="sig-card"><header><b>Voice</b><span>Vexo band mic</span></header><dl id="sig-voice"></dl></article>
             <article class="sig-card"><header><b>Body</b><span>Apple Watch</span></header><dl id="sig-body"></dl></article>
             <article class="sig-card"><header><b>Movement</b><span>Band + watch</span></header><dl id="sig-move"></dl></article>
-            <article class="sig-card" hidden><header><b>Cycle</b><span>Your dates · Apple Health</span></header><dl id="sig-cycle"></dl><p class="caption">Context only — not a cause.</p></article>
           </div>
         </div>
-        <section class="card mood-card" aria-labelledby="mood-h">
+        <section class="card mood-card" aria-labelledby="mood-h" hidden>
           <div class="section-top"><h2 id="mood-h">Mood over the last 30 days</h2><span class="tag-demo" title="Demo profile">Demo</span></div>
           <p class="caption">Morning and evening mood on Apple Health's State of Mind scale, evening agitation on the NPI-Q severity scale (0–3), and a weekly Cornell Scale for Depression in Dementia score, read alongside sleep and activity from Apple Health.</p>
           <div class="mood-today" id="mood-today"></div>
@@ -377,11 +381,11 @@
           <p class="caption">CSDD under 6: no significant depressive symptoms · 6–10 mild · 11–17 probable major depression · 18+ definite. A screening aid for the care team, not a diagnosis.</p>
         </section>
         <section class="card music-card" aria-labelledby="music-h">
-          <h2 id="music-h">Music for your energy</h2>
+          <h2 id="music-h">Music and wellbeing</h2>
           <p class="caption">Opens a search in your music app. Threadline doesn't play or track anything.</p>
           <div class="row" id="music-links"></div>
           <div class="gen-music">
-            <button type="button" id="music-gen" class="secondary">Generate a track for this energy · MiniMax</button>
+            <button type="button" id="music-gen" class="secondary">Generate a comfort track · MiniMax</button>
             <span id="music-gen-msg" class="caption">Only the mood word (calm, steady or uplifting) is sent — never your words.</span>
             <audio id="music-player" controls hidden></audio>
           </div>
@@ -427,8 +431,8 @@
 
       <section class="view" data-view="today" hidden>
         <section class="card" aria-labelledby="arc-h">
-          <div class="section-top"><h2 id="arc-h">Energy across the day</h2><span class="caption" id="arc-caption"></span></div>
-          <div id="day-arc" class="day-arc" role="img" aria-label="Energy across the day"></div>
+          <div class="section-top"><h2 id="arc-h">Your words across the day</h2><span class="caption" id="arc-caption"></span></div>
+          <div id="day-arc" class="day-arc" role="img" aria-label="Your words across the day"></div>
           <div class="arc-scale"><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span></div>
           <div id="day-moments" class="moments"></div>
         </section>
@@ -451,10 +455,8 @@
 
       <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
           <div class="section-top"><h2 id="days-heading">Daily log</h2><span id="days-status" class="caption"></span><button type="button" id="day-summary" class="secondary" hidden>Refresh summary</button></div>
-          <p class="caption">Logged automatically, nothing to fill in. Colours compare each day with the last 30.</p>
-          <div id="days-summary" class="dl-summary"></div>
-          <div class="dl-legend"><span class="t-great">much better than usual</span><span class="t-good">better</span><span class="t-mid">typical</span><span class="t-watch">worse</span><span class="t-low">much worse</span><small>compared with the last 30 days</small></div>
-          <div class="table-wrap days-wrap"><table class="days-table">
+          <p class="caption">Logged automatically, nothing to fill in: every Apple Health metric for each day, plus the conversations, the band and the watch. Numbers describe what happened, not how anyone feels.</p>
+          <div id="days-summary" class="dl-summary"></div><p class="caption">Colors show variation against the available history, not clinical status.</p><div class="table-wrap days-wrap"><table class="days-table">
             <thead id="days-head"></thead>
             <tbody id="days-body"></tbody>
           </table></div>
@@ -463,18 +465,7 @@
             <summary>Words that mean low energy for me</summary>
             <input id="energy-words" type="text" maxlength="300" aria-label="Low-energy words, comma-separated">
             <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
-          </details>
-
-          <div class="cycle" aria-labelledby="cycle-heading" hidden>
-            <h3 id="cycle-heading">Cycle</h3>
-            <p id="cycle-estimate" class="cycle-estimate">Add the first day of your last periods, or share them from Apple Health on the watch.</p>
-            <div class="row tight"><label for="cycle-date" class="visually-hidden">Period start date</label><input id="cycle-date" type="date"><button type="button" id="cycle-add" class="secondary">Add start date</button></div>
-            <ul id="cycle-dates" class="cycle-dates"></ul>
-            <label class="check"><input id="cycle-notify" type="checkbox"><span>Notify me 2 days before the estimate (this browser)</span></label>
-            <label class="check"><input id="cycle-haptic" type="checkbox"><span>Also tap my Apple Watch when that notification comes</span></label>
-            <p class="caption">An estimate from your own dates, not a prediction of symptoms or a medical result.</p>
-          </div>
-        </section></section>
+          </details></section></section>
       <section class="view" data-view="graph" hidden><section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
           <div class="section-top"><h2 id="graph-heading">Memory</h2><span id="graph-status" class="caption"></span></div>
           <div class="row tight" role="radiogroup" aria-label="Graph engine" hidden>
@@ -538,7 +529,7 @@
           <p class="pair-hint">A web page cannot reach a watch over Bluetooth: the Threadline watch app sends its readings (and, if you choose, its microphone) to this server, and the code links it to this page. Readings are numbers, not feelings.</p>
         </div></div></section>
 
-      <footer><p>Your saved transcripts stay in this browser until you delete them.</p><p>Threadline supports people living with memory loss, low vision, hearing loss or limited mobility, and the people who care for them. It is not medical guidance, diagnosis or emergency monitoring.</p></footer>
+      <footer><p>Your saved transcripts stay in this browser until you delete them.</p><p>An accessibility prototype — not medical guidance, diagnosis, or emergency monitoring.</p></footer>
     </main>
   </div>
 </body>

@@ -18,6 +18,38 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENES = {
+    "sight-kitchen-label": (
+        "A fictional photorealistic editorial still life in a warm accessible home kitchen. "
+        "A plain light cream cardboard food box with a large completely blank dark sage "
+        "rectangular label panel stands upright on an oak counter beside a simple blue mug. "
+        "A folded white mobility cane with a black handle rests horizontally far behind "
+        "the box, not obstructing it. No person or hands. Natural morning window light, "
+        "muted cream and green palette, authentic surfaces, cinematic quiet composition, "
+        "the box placed on the right half with uncluttered negative space on the left. "
+        "The blank panel is deliberately unprinted for later typesetting. No letters, "
+        "numbers, logos, medicine, screen, electronic hardware, traffic or stairs."
+    ),
+    "hearing-conversation": (
+        "A fictional photorealistic documentary editorial photograph of two adult friends "
+        "talking across a small cafe table beside a window, one woman and one man in their "
+        "thirties, faces in gentle three-quarter profile, natural conversational posture, "
+        "relaxed hands resting on the table, two ceramic cups. Dignified everyday human "
+        "interaction, diverse skin tones, ordinary casual clothing, warm cream and muted "
+        "sage interior, soft daylight, realistic hands and proportions. Wide landscape "
+        "composition with the pair on the right two-thirds and some quiet space at left. "
+        "No visible devices, no screens, no text, no logos, no signs or graphics."
+    ),
+    "mobility-home-support": (
+        "A fictional photorealistic editorial photograph of a relaxed adult wheelchair "
+        "user sitting comfortably in a modern manual wheelchair in a welcoming ordinary "
+        "living room. A woman friend stands nearby listening attentively at the same eye "
+        "line, no lifting or physical assistance. Natural dignified everyday interaction, "
+        "both adults in casual clothes, believable anatomy, wheelchair wheel geometry and "
+        "footrests. Warm cream walls, sage sofa, oak side table with a blue mug, soft "
+        "afternoon window light. Wide landscape frame with subjects on the right and calm "
+        "negative space on the left. No fall, no injury, no medical setting, no wearable "
+        "electronics, no text, logos, screens, graphs or graphics."
+    ),
     "tea-routine-pause": (
         "A fictional photorealistic documentary-style editorial photograph of a "
         "dignified older South Asian woman in her seventies pausing thoughtfully "

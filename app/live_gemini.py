@@ -28,36 +28,39 @@ BRIDGE_INTERVAL = 1.0  # how often the relay checks the camera bridge for a newe
 MAX_TEXT = 1000
 MAX_NOTES, MAX_NOTE_CHARS = 20, 300
 
-SYSTEM_INSTRUCTION = """You are Threadline's spoken memory support for a person living with dementia or Alzheimer's.
-Speak calmly and warmly in short, simple sentences. Say one thing at a time, then pause for them.
-Help with orientation: what they were doing, what they said earlier, and what is in view right now.
+MODE_INSTRUCTIONS = {
+    "memory": "You are Threadline's memory support, including support for people living with dementia or Alzheimer's. "
+    "Speak calmly and warmly in short, simple sentences. Say one thing at a time, then pause. "
+    "Help recover what they were doing from their saved words and the current view. "
+    "For an object's location, distinguish where it was last seen or mentioned from where it is visible now.",
+    "sight": "You are Threadline's visual description assistant for a blind or low-vision person. "
+    "Describe visible objects and their position in the camera frame concisely. Read legible text aloud verbatim "
+    "and say when text is unclear. Quote medicine labels as text, never as dosing advice or instructions to take medication. "
+    "You may describe a visible obstacle with uncertainty, but never say a path, crossing or direction is safe. "
+    "Do not give turn-by-turn navigation or replace a cane, guide dog or sighted assistance.",
+    "hearing": "You are Threadline's hearing-access assistant. Prioritize accurate transcription and short visual-friendly "
+    "descriptions of audible events. Keep speaker labels separate from personal identities. Do not invent who spoke. "
+    "If a sound might be a doorbell or alarm, describe that uncertainty rather than confirming its source. "
+    "Never infer emotion, intent or a medical condition from voice. Do not claim a watch notification was delivered.",
+    "mobility": "You are Threadline's mobility support assistant. Describe the supplied scene and reported activity "
+    "and help the person request assistance. Do not infer fall risk, diagnose Parkinson's, or predict a fall from "
+    "movement, steps or heart rate. A device free-fall event is a possible incident, not proof a person fell. "
+    "Do not direct a person to stand, walk, transfer or move after a possible injury.",
+}
+
+COMMON_INSTRUCTION = """
 Use ONLY what you have heard, what you can see in the camera frames, and the person's own saved notes. Never invent details.
+Speak in the person's language when it is clear, or ask their preference. Do not assume a diagnosis from the selected mode.
 When you are unsure, say so plainly and suggest asking a family member or caregiver.
 Never diagnose anything. Never give medical advice or any medical or safety guarantee.
 Never say whether medication was taken. Instead say: "I can't confirm that; let's check the pill organiser together or ask your caregiver."
 Never claim to recognise who a person is from their face. You may describe what you see, but not identify them.
+Never claim that a message was sent, a call was made, or any external action completed: this conversation does not execute those actions.
 If they describe an emergency, such as a fall, injury, chest pain, fire or feeling unsafe, tell them to call emergency services or their caregiver now."""
 
 
-# One assistant, four ways of helping. The mode only changes emphasis; every safety rule above still applies.
-MODE_INSTRUCTIONS = {
-    "memory": "",
-    "sight": """MODE: the person is blind or has low vision. Describe what is in front of them in order of importance:
-hazards first (steps, kerbs, traffic, obstacles, wet floor), then where things are using clock directions or left/right and
-distance in steps, then any text you can read (labels, medicine boxes, signs, screens) word for word. Keep each turn under
-three sentences. If text is unreadable, say so and suggest moving closer or turning the item. Never identify people by face.""",
-    "hearing": """MODE: the person is deaf or hard of hearing and reads your words as captions. Answer in very short written-style
-sentences. Report important sounds and speech you hear: who is speaking (by position, not identity), their name being called,
-doorbells, alarms, sirens, kettles. Start alerts with the word ALERT.""",
-    "mobility": """MODE: the person has limited mobility or a fall risk. Point out trip hazards, stairs, clutter and poor lighting in
-view, suggest the safest path and a place to sit. If they mention dizziness, weakness or a fall, tell them to stay still and call
-their caregiver or emergency services.""",
-}
-
-
-def mode_instruction(mode: object) -> str:
-    extra = MODE_INSTRUCTIONS.get(mode if isinstance(mode, str) else "", "")
-    return SYSTEM_INSTRUCTION + ("\n\n" + extra if extra else "")
+def system_instruction(mode: str = "memory") -> str:
+    return MODE_INSTRUCTIONS[mode] + COMMON_INSTRUCTION
 
 
 def clean_notes(value: object) -> list[str]:
@@ -71,11 +74,11 @@ def notes_text(notes: list[str]) -> str:
         "\n".join(f"- {n}" for n in notes)
 
 
-def setup_message(model: str, mode: object = "memory") -> dict:
+def setup_message(model: str, mode: str = "memory") -> dict:
     return {"setup": {
         "model": model if model.startswith("models/") else f"models/{model}",
         "generationConfig": {"responseModalities": ["AUDIO"]},
-        "systemInstruction": {"parts": [{"text": mode_instruction(mode)}]},
+        "systemInstruction": {"parts": [{"text": system_instruction(mode)}]},
         "inputAudioTranscription": {},
         "outputAudioTranscription": {},
         # Lets the saved notes go in as initial history via clientContent before realtime input starts.
@@ -95,6 +98,9 @@ def b64(data: bytes) -> str:
 async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: int) -> None:
     key, model = os.getenv("GOOGLE_API_KEY"), os.getenv("GEMINI_LIVE_MODEL")
     fail = main.socket_fail(client)
+    mode = hello.get("mode", "memory")
+    if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
+        return await fail("Unknown assistance mode. Choose Memory, Sight, Hearing or Mobility.")
     if not key or not model:
         return await fail("Live conversation is unavailable: set GOOGLE_API_KEY and GEMINI_LIVE_MODEL.", 1011)
     slots = main.stream_slots
@@ -104,7 +110,7 @@ async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: i
         try:
             async with ws_connect(GEMINI_LIVE_URL, additional_headers={"x-goog-api-key": key},
                                   open_timeout=10, max_size=8 * 1024 * 1024) as gemini:
-                await gemini.send(json.dumps(setup_message(model, hello.get("mode"))))
+                await gemini.send(json.dumps(setup_message(model, mode)))
                 first = json.loads(await asyncio.wait_for(gemini.recv(), timeout=15))
                 if "setupComplete" not in first:
                     return await fail("Live conversation could not start. Please try again.", 1011)
@@ -246,6 +252,9 @@ async def live_gemini(client: WebSocket):
         return
     if not main.socket_token_ok(client, hello, allow_guest=True):
         return await fail("Session expired. Reload the page to reconnect.")
+    mode = hello.get("mode", "memory")
+    if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
+        return await fail("Unknown assistance mode. Choose Memory, Sight, Hearing or Mobility.")
     session = getattr(client.state, "guest_session", None)
     if not session:
         return await relay(client, hello, MAX_SECONDS, MAX_AUDIO_BYTES)
