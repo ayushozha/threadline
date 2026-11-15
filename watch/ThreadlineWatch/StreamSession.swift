@@ -28,7 +28,7 @@ final class StreamSession: ObservableObject {
     var wristRaised: Bool?
 
     let sensors = Sensors()
-    @Published private(set) var server = URL(string: "https://threadline.ayushojha.com")!
+    @Published private(set) var server = URL(string: AppConfig.defaultServer)!
     private var code = ""
     private var watchKey = ""  // only for codes the watch started itself; kept in memory only
     private let device = WKInterfaceDevice.current().name

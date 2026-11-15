@@ -4,7 +4,7 @@ import SwiftUI
 struct DeviceCodeView: View {
     @EnvironmentObject var session: StreamSession
     @StateObject private var pairing = DevicePairing()
-    @AppStorage("server") private var server = "https://threadline.ayushojha.com"
+    @AppStorage("server") private var server = AppConfig.defaultServer
     @State private var openStream = false
     @State private var startedFor = ""
 
@@ -53,7 +53,7 @@ struct DeviceCodeView: View {
 
 /// The server the watch talks to.
 struct ServerView: View {
-    @AppStorage("server") private var server = "https://threadline.ayushojha.com"
+    @AppStorage("server") private var server = AppConfig.defaultServer
 
     var body: some View {
         Form {
@@ -68,7 +68,7 @@ struct ServerView: View {
 /// Fallback: server address and a 6-digit code created on the Threadline website.
 struct PairView: View {
     @EnvironmentObject var session: StreamSession
-    @AppStorage("server") private var server = "https://threadline.ayushojha.com"
+    @AppStorage("server") private var server = AppConfig.defaultServer
     @AppStorage("code") private var code = ""
 
     private var codeIsValid: Bool { code.count == 6 && code.allSatisfy(\.isNumber) }
