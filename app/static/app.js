@@ -2966,8 +2966,9 @@ async function assistantActionRun(a) {
   }
   if (a.type === "log_energy") {
     const at = new Date().toISOString();
-    life.energy = { state: a.state, at, text: `Said by voice: “${a.word}”`, word: a.word };
-    (life.energyLog ||= []).push({ at, state: a.state, word: a.word });
+    // Energy is derived from saved statements, so keep the voice report as one (it survives reloads and shows on every screen).
+    sessions.reflection.notes.push({ id: newId("n"), text: `I feel ${a.word}.`, at, source: "voice", context: "Energy said to Threadline", energySignal: { state: a.state, quote: a.word } });
+    try { rebuildWordRecords(); } catch { life.energy = { state: a.state, at, text: a.word, word: a.word }; }
     saveThread(); renderEnergy(); renderToday(); renderDays(); drawDashboard();
     return `Energy logged: ${a.state} (“${a.word}”)`;
   }
