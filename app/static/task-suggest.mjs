@@ -60,7 +60,7 @@ export function suggestTasks({ scenarios = [], careHistory = [], routine = [], h
     const title = SCENE_TASKS[s.id] || (v.caregiver_note ? `Follow up: ${s.title}` : "");
     if (!title) continue;
     push({ id: `scene-${s.id}`, title, due: urgency === "routine" ? addDays(day, 1) : day,
-      why: `${s.title}: ${v.caregiver_note || v.say_now || ""}`, source: "Scenario library" });
+      why: `${s.title}: ${v.caregiver_note || v.say_now || ""}`, source: "Example scenario", sample: true, mode: s.mode });
   }
   return out.slice(0, limit);
 }

@@ -16,7 +16,7 @@ const hm = (v) => v == null ? "—" : `${Math.floor(v)}h ${String(Math.round((v 
 const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const AGI = ["none", "mild", "moderate", "severe"];
 
-export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHistory = [], transcripts = [], tasks = [], accessMode = "memory", synthetic = false, now = new Date() }) {
+export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHistory = [], transcripts = [], notes = [], drafts = [], tasks = [], accessMode = "memory", synthetic = false, now = new Date() }) {
   const keys = [...Array(30)].map((_, i) => { const d = new Date(now); d.setDate(d.getDate() - (29 - i)); return dayKey(d); });
   const H = keys.map((k) => health[k] || {}), M = keys.map((k) => mood.days.find((d) => d.date === k) || {});
   const series = (f) => H.map((x) => x[f] ?? null);
@@ -45,11 +45,13 @@ export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHi
   if (healthDays) insights.push({ big: String(healthDays), text: synthetic ? "days include example chart values" : "days with supplied Health measurements" });
   const latest = careHistory.at(-1);
   if (latest) insights.push({ big: String(careHistory.length), text: "Care assessments in this session · review their evidence" });
-  const actions = tasks.filter(t => !t.done).map(t => ({ who: "Caregiver", level: "low", text: `${t.sample || t.source === "fictional" ? "Fictional task: " : "Saved task: "}${t.title}` }));
+  const facts = notes.slice(-3).map(n => ({ text: n.text, source: n.sample ? `${n.persona || n.speaker || 'Example'} · Example` : n.speaker || 'Saved statement', id: n.id }));
+  const actions = tasks.filter(t => !t.done).map(t => ({ who: "Caregiver", level: "low", text: `${t.sample || t.source === "fictional" ? "Example task: " : "Saved task: "}${t.title}` }));
+  actions.push(...drafts.slice(0, 4).map(d => ({ who: "Review", level: "low", text: `${d.sample ? "Example suggestion" : "Draft suggestion"}: ${d.title} · ${d.suggested?.source || "Saved words"}` })));
   if (latest?.next_step) actions.unshift({ who: "Caregiver", level: "low", text: `Latest agent suggestion: ${latest.next_step}` });
   const status = ["ok", "needs_attention", "urgent"].includes(latest?.status) ? latest.status : "unknown";
 
-  return { accessMode, synthetic, keys, H, M, tiles, insights, actions, status, csdd, weeks: mood.weeks, sleep, steps, rhr, hrv, spo2, moodAvg, agit, rep };
+  return { accessMode, synthetic, keys, H, M, tiles, insights, actions, facts, status, csdd, weeks: mood.weeks, sleep, steps, rhr, hrv, spo2, moodAvg, agit, rep };
 }
 
 /* ---------- charts ---------- */
@@ -138,6 +140,7 @@ export function renderDashboard(root, input) {
       t.delta != null ? h("span", { className: `delta ${t.good ? "good" : "bad"}`, textContent: `${t.delta >= 0 ? "▲" : "▼"} ${fmt(Math.abs(t.delta) * 100)}%` }) : null,
       spark(t.spark, t.good === false ? "bad" : "")))),
     h("section", { className: "dash-insights" }, ...m.insights.map((i) => h("div", {}, h("b", { textContent: i.big }), h("span", { textContent: i.text })))),
+    ...(m.facts.length ? [h("section", {className:"dash-insights"}, ...m.facts.map(f => h("div", {}, h("small", {textContent:f.source}), h("a", {href:`#note-${f.id}`,textContent:`“${f.text}”` }))))] : []),
     h("section", { className: "dash-charts" },
       has(m.sleep) ? frame("Sleep", input.synthetic ? "includes example values · 14 days" : "hours · 30 days", barsLine(m.sleep, [])) : null,
       has(m.steps) ? frame("Daily steps", "30 days", barsLine(m.steps, m.moodAvg, { barCls: "b3", lineCls: "l3" })) : null,
@@ -148,7 +151,7 @@ export function renderDashboard(root, input) {
       has(m.H.map(d=>d.active_energy_kcal ?? null)) ? frame("Active energy", "kcal · 30 days", barsLine(m.H.map(d=>d.active_energy_kcal ?? null), [], { barCls: "b2" })) : null,
       has(m.rep) ? frame("Repeated questions", "per day", barsLine(m.rep, [], { barCls: "b2" })) : null),
     h("section", { className: "dash-two" },
-      h("div", { className: "dash-actions" }, h("h3", { textContent: "Action items" }),
+      h("div", { className: "dash-actions" }, h("h3", { textContent: "Tasks and suggestions" }),
         h("ol", {}, ...(m.actions.length ? m.actions.map((a) => h("li", { className: `lv-${a.level}` }, h("span", { className: `who w-${a.who.toLowerCase()}`, textContent: a.who }), h("span", { textContent: a.text }))) : [h("li", { textContent: "No saved tasks or agent suggestions yet." })]))),
       h("div", { className: "dash-reports" }, h("h3", { textContent: "Prepare a report" }),
         reportCard(m, "Caregiver", "🧡", "Today's plan and what to watch", who),

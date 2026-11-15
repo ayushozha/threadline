@@ -36,7 +36,7 @@ const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return 
 const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", fictional: "Example", seeded: "Example" };
 
 const MODES = {
-  reflection: { description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Cycle timing is optional self-reported context — never a cause, diagnosis, or judgment." },
+  reflection: { description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Only explicit statements are used — never an inferred cause, diagnosis, or judgment." },
   routine: { description: "Resume a routine: recover your stated intention and the last thing you recorded. A recorded action is not proof it happened — Threadline asks when progress is unknown." },
 };
 const day = tomorrow();
@@ -73,11 +73,11 @@ function loadThread(key) {
   threadLoaded = true;
   if (!isFictionalDemo()) {
     for (const m of ["reflection", "routine"]) sessions[m].notes = sessions[m].notes.filter(n => !n.sample || n.seeded);
-    for (const field of ["tasks", "taskDrafts", "energyLog", "actions"]) life[field] = life[field].filter(x => !x.sample);
+    for (const field of ["tasks", "taskDrafts", "energyLog", "actions"]) life[field] = life[field].filter(x => !x.sample || x.userAdded);
     if (life.energy?.sample) life.energy = null;
     for (const [day, rec] of Object.entries(life.days)) if (rec.sample) delete life.days[day];
     saveArchive(loadArchive().filter(x => !x.sample || x.seeded));
-    if (!saved?.seedVersion) {
+    if ((saved?.seedVersion || 0) < appSeed().version) {
       const seed = appSeed();
       for (const m of ["reflection", "routine"]) {
         const ids = new Set(sessions[m].notes.map(n => n.id));
@@ -212,7 +212,7 @@ function drawDashboard() {
   try {
     const health = chartHealth();
     renderDashboard($("dashboard"), { health, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
-      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: Object.values(health).some(d => d.sample) });
+      transcripts: loadArchive(), notes: contextNotes(), drafts: (life.taskDrafts || []).filter(d => !d.exampleMode || d.exampleMode === accessMode), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: Object.values(health).some(d => d.sample) });
     const count = $("memory-count"); if (count) count.textContent = `${sessions.reflection.notes.length} notes · ${loadArchive().length} conversations`;
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
@@ -1239,7 +1239,7 @@ function render() {
   if ($("mode-description")) $("mode-description").textContent = MODES[mode].description;
   $("question").value = sessions[mode].question;
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations(); renderToday(); renderSampleBanner();
+  renderTimeline(); renderPrefs(); renderSupport(); renderCalendar(); setRecUI(); renderArchive(); renderDays(); renderEnergy(); renderTasks(); renderIntegrations(); renderToday(); renderSampleBanner(); drawDashboard();
 }
 
 /* ---------- Band signals ---------- */
@@ -1561,9 +1561,9 @@ function renderDays() {
   const rows = [];
   // Columns come from the data: every metric found in the Health history gets its own column automatically.
   const DAYS = 30, keys = [...Array(DAYS)].map((_, i) => todayKey(new Date(Date.now() - i * DAY_MS)));
-  const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) if (!["menstrual_flow", "cycle", "period_starts", "sample", "source", "provenance"].includes(m)) present.add(m);
+  const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) if (!["menstrual_flow", "cycle", "period_starts", "sample", "seeded", "source", "provenance"].includes(m)) present.add(m);
   const cols = HEALTH_COLS.filter(([m]) => present.has(m));
-  for (const m of present) if (!["date", "workout_types", "workout_count", "sample", "source", "provenance"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
+  for (const m of present) if (!["date", "workout_types", "workout_count", "sample", "seeded", "source", "provenance"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
   // Direction: +1 higher is better, -1 lower is better, 0 neutral. Groups give the table its section headers.
   const DIR = { steps: 1, distance_km: 1, active_energy_kcal: 1, exercise_min: 1, flights_climbed: 1, stand_hours: 1, stand_min: 1, sleep_hours: 1, hrv_sdnn: 1, walking_steadiness: 1, walking_speed_kmh: 1, mindful_min: 1, oxygen_saturation: 1, resting_heart_rate: -1, audio_exposure_db: -1, heart_rate: 0, respiratory_rate: 0, wrist_temp_c: 0, workouts: 1, mood: 1 };
   const GROUP = { sleep_hours: "Sleep", resting_heart_rate: "Heart", heart_rate: "Heart", hrv_sdnn: "Heart", oxygen_saturation: "Breathing", respiratory_rate: "Breathing", wrist_temp_c: "Breathing",
@@ -1574,7 +1574,8 @@ function renderDays() {
   const stats = Object.fromEntries(cols.map(([m]) => { const v = keys.map((k) => hDay(k)?.[m]).filter((x) => typeof x === "number"); const mean = v.reduce((a, b) => a + b, 0) / (v.length || 1);
     const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length || 1)) || 1; return [m, { mean, sd, min: Math.min(...v), max: Math.max(...v), n: v.length, series: keys.slice().reverse().map((k) => hDay(k)?.[m] ?? null) }]; }));
   const tone = (m, v) => { const st = stats[m], d = DIR[m] ?? 0; if (v == null || !st || !d || st.n < 5) return ""; const z = ((v - st.mean) / st.sd) * d; return z > 0.8 ? "t-great" : z > 0.25 ? "t-good" : z < -0.8 ? "t-low" : z < -0.25 ? "t-watch" : "t-mid"; };
-  const hasConv = keys.some((k) => life.days[k]?.others || life.days[k]?.mine), hasMood = keys.some((k) => moodOf(k));
+  const archiveDays = loadArchive().reduce((days, a) => { (days[todayKey(new Date(a.startedAt))] ||= []).push(a); return days; }, {});
+  const hasConv = keys.some((k) => archiveDays[k]?.length || life.days[k]?.others || life.days[k]?.mine), hasMood = keys.some((k) => moodOf(k));
   // Summary cards: the headline metrics with a 30-day sparkline.
   const sparkSvg = (series) => { const v = series.map((x) => x ?? null), real = v.filter((x) => x != null); const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 100 30"); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("class", "dl-spark");
     if (real.length > 1) { const lo = Math.min(...real), hi = Math.max(...real), sp = hi - lo || 1; const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); pl.setAttribute("points", v.map((d, i) => d == null ? null : `${(i / (v.length - 1)) * 100},${28 - ((d - lo) / sp) * 26}`).filter(Boolean).join(" ")); svg.append(pl); } return svg; };
@@ -1598,7 +1599,7 @@ function renderDays() {
     const fmt = (m, f) => { if (m === "steps" && r?.watchSteps != null) return `${r.watchSteps.toLocaleString()}`; if (m === "heart_rate" && r?.hrN) return `${Math.round(r.hrSum / r.hrN)}`; const v = h[m]; return v == null ? "—" : f(v, h); };
     const weekend = [0, 6].includes(d.getDay());
     rows.push(el("tr", { className: `${i === 0 ? "dl-today" : ""}${weekend ? " dl-weekend" : ""}` }, el("th", { scope: "row", textContent: label }),
-      hasConv ? el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)} lines` : "—" }) : null,
+      hasConv ? el("td", { textContent: archiveDays[key]?.length ? `${archiveDays[key].reduce((n, a) => n + a.lines.length, 0)} lines${archiveDays[key].every(a => a.sample) ? " · Example" : ""}` : r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)} lines` : "—" }) : null,
       ...(hasMood ? [el("td", { textContent: moodOf(key) ? `${moodOf(key).morningLabel} / ${moodOf(key).eveningLabel}` : "—" }), el("td", { textContent: moodOf(key) ? ["none", "mild", "moderate", "severe"][moodOf(key).agitation] : "—" }), el("td", { textContent: moodOf(key) ? String(moodOf(key).repeats) : "—" })] : []),
       ...cols.map(([m, , f]) => el("td", { className: tone(m, h[m]), textContent: fmt(m, f), title: h.sample ? "Example value — not a device reading" : "Recorded Health value" })),
       present.has("workout_types") ? el("td", { className: "dl-wrap", textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)}m`).join(", ") : "—" }) : null));
@@ -1779,7 +1780,7 @@ function draftControls(draft) {
     if (!(life.taskDrafts || []).some(d => d.id === draft.id)) return;
     const value = title.value.trim(); if (!value) return title.focus();
     if (!(life.tasks || []).some(t => t.title.toLocaleLowerCase() === value.toLocaleLowerCase() && !t.done)) {
-      (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: Boolean(draft.big), done: false, note: draft.suggested ? `From ${draft.suggested.source}: ${draft.suggested.why}` : `From your confirmed words: ${draft.statement.text}`, ...(draft.sample ? { sample: true } : {}) });
+      (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: Boolean(draft.big), done: false, note: draft.suggested ? `From ${draft.suggested.source}: ${draft.suggested.why}` : `From your confirmed words: ${draft.statement.text}`, ...(draft.sample ? { sample: true, userAdded: true, exampleMode: draft.exampleMode, source: "seeded" } : {}) });
       logAction(`Saved task: ${value}`);
     }
     if (draft.suggested) suggestSeen(draft.suggested.id);
@@ -1867,8 +1868,8 @@ function renderEnergy() {
   $("energy-now").dataset.energy = state;
   const hlx = hLatest() || {}, sleepH = hlx.sleep_hours;
   const fromHealth = !e && sleepH != null ? (sleepH < 6 ? "Low" : sleepH < 7 ? "Steady" : "Rested") : null;
-  $("energy-label").textContent = e ? { low: "Low", positive: "Positive", steady: "Steady" }[state] || "Steady" : fromHealth || "Steady";
-  $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : sleepH != null ? `${Math.floor(sleepH)} h ${Math.round((sleepH % 1) * 60)} m sleep · ${Math.round(hlx.steps || 0).toLocaleString()} steps` : "from today's readings";
+  $("energy-label").textContent = e ? { low: "Low", positive: "Positive", steady: "Steady" }[state] || "Steady" : fromHealth || "No check-in";
+  $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : sleepH != null ? `${Math.floor(sleepH)} h ${Math.round((sleepH % 1) * 60)} m sleep · ${Math.round(hlx.steps || 0).toLocaleString()} steps` : "add your own check-in";
   if (!e && fromHealth) $("energy-now").dataset.energy = fromHealth === "Low" ? "low" : fromHealth === "Rested" ? "positive" : "steady";
   $("energy-why").textContent = e ? `Your self-report: “${e.text}”.` : "Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.";
   $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
@@ -1901,7 +1902,7 @@ const gcalLink = (title, details, date) => { const d = (date || todayKey()).repl
 function renderTasks() {
   if (!$("tasks-today")) return;
   const tasks = life.tasks || [], today = todayKey();
-  const drafts = life.taskDrafts || [];
+  const drafts = (life.taskDrafts || []).filter(d => !d.exampleMode || d.exampleMode === accessMode);
   $("task-banner").replaceChildren(...(drafts.length ? drafts.map(d => el("div", { className: "task-draft" }, el("p", { className: "caption", textContent: d.suggested ? `From: ${d.suggested.source} · ${d.suggested.why}` : `From: “${d.statement.text}”${d.statement.speaker_confirmed ? "" : " · confirm this was you before saving"}` }), draftControls(d))) : [el("p", { className: "caption", textContent: "No pending suggestions. Ask for a reminder while speaking and it will appear here." })]));
   if (!drafts.length) fillTaskSuggestions();
   const lists = { today: [], later: [], held: [] };
@@ -1928,18 +1929,18 @@ async function fillTaskSuggestions() {
   const scope = threadKey;
   try {
     scenarioCache ||= await fetch("/static/scenarios/scenarios.json").then(r => r.ok ? r.json() : { scenarios: [] }).then(d => d.scenarios || []).catch(() => []);
-    if (scope !== threadKey || (life.taskDrafts || []).length) return;
+    if (scope !== threadKey || (life.taskDrafts || []).some(d => !d.exampleMode || d.exampleMode === accessMode)) return;
     const seen = suggestSeenSet();
     let careHistory = [], routine = [];
     try { careHistory = care.history || []; routine = careRoutine(); } catch { /* Care not initialised yet */ }
     const list = suggestTasks({ scenarios: scenarioCache, careHistory, routine, healthLatest: hLatest(),
-      existingTitles: (life.tasks || []).map(t => t.title), today: todayKey(), mode: accessMode, limit: 20 }).filter(s => !seen.has(s.id)).slice(0, 8);
+      existingTitles: (life.tasks || []).map(t => t.title), today: todayKey(), mode: accessMode, limit: 20 }).filter(s => !seen.has(s.id) && (!s.mode || s.mode === accessMode)).slice(0, 8);
     if (!list.length) return;
     const sample = isFictionalDemo();
-    life.taskDrafts = list.map(s => ({ id: newId("draft"), title: s.title, due: s.due, big: s.big, suggested: { id: s.id, source: s.source, why: s.why },
-      statement: { id: `suggest:${s.id}`, text: s.why, speaker_confirmed: true }, ...(sample ? { sample: true } : {}) }));
-    renderTasks();
-  } finally { suggestBusy = false; }
+    life.taskDrafts = [...(life.taskDrafts || []).filter(d => d.exampleMode && d.exampleMode !== accessMode), ...list.map(s => ({ id: newId("draft"), title: s.title, due: s.due, big: s.big, suggested: { id: s.id, source: s.source, why: s.why }, exampleMode: s.mode || accessMode,
+      statement: { id: `suggest:${s.id}`, text: s.why, speaker_confirmed: true }, ...((sample || s.sample) ? { sample: true } : {}) }))];
+    renderTasks(); drawDashboard();
+  } finally { suggestBusy = false; if (scope !== threadKey) fillTaskSuggestions(); }
 }
 function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy " : ""}day`; renderTasks(); logAction(`Held “${t.title}” until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short" })}`); }
 $("task-form").addEventListener("submit", (e) => {
@@ -1999,8 +2000,18 @@ function renderToday() {
   const marked = loadArchive().filter((e) => todayKey(new Date(e.startedAt)) === key).flatMap((e) => e.lines.filter((l) => l.marked));
   $("day-moments").replaceChildren(...[...events.map((e) => el("span", { className: `moment m-${e.state}`, textContent: `${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${e.word}”` })),
     ...marked.slice(-6).map((l) => el("span", { className: "moment m-mark", textContent: `★ ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${l.text.slice(0, 40)}${l.text.length > 40 ? "…" : ""}”` }))]);
+  const notes = contextNotes(sessions.reflection.notes).filter(n => todayKey(new Date(n.at)) === key);
+  const archive = loadArchive().filter(a => !a.sample || a.exampleMode === accessMode);
+  const todays = archive.filter(a => todayKey(new Date(a.startedAt)) === key);
+  if (!events.length && notes.length) {
+    $("arc-caption").textContent = `${notes.length} saved statements today${notes.every(n => n.sample) ? " · Example" : ""}`;
+    $("day-moments").replaceChildren(...notes.slice(-4).map(n => el("a", { className: "moment", href: `#note-${n.id}`, textContent: `${new Date(n.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})} “${n.text.slice(0,75)}”` })));
+  }
+  if (notes.length && !$("today-summary-out").querySelector('.provenance')) for (const id of ["today-summary-out", "day-summary-out"])
+    $(id).replaceChildren(el("p", {className:"caption",textContent:"Latest saved statements · select a source to read it"}), ...notes.slice(-3).map(n => el("p", {}, el("a", {href:`#note-${n.id}`,textContent:`${n.sample ? 'Example · ' : ''}${n.speaker || 'You'}: “${n.text}”`}))));
   const r = life.days[key] || {}, w = sensorsWithHealth(), h = hDay(key) || hLatest() || {};
-  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null]].filter(([, v]) => v != null);
+  $("measured-h").textContent = h.sample ? "Today’s context · includes examples" : "Measured today";
+  const m = [["Conversations today", todays.length || null], ["Saved statements", notes.length || null], ["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], [h.sample ? "Steps · Example" : "Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null]].filter(([, v]) => v != null);
   $("measured").replaceChildren(...(m.length ? m.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })]) : [el("dt", { className: "empty", textContent: "Nothing measured yet today." })]));
   const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
@@ -2541,6 +2552,11 @@ function careSaveRoutine(items) { try { localStorage.setItem(careRoutineKey(), J
 function renderCareRoutine() {
   care.routineKey = careRoutineKey();
   const items = careRoutine();
+  if (!items.length) {
+    const example = demoSeed();
+    $("care-routine").replaceChildren(...example.routine.map(text => el("li", {}, el("span", {className:"caption",textContent:`${example.persona} · Example preference`}), el("p", {textContent:text.replace(/^Fictional [^:]+ preference: /, '')}))));
+    return;
+  }
   $("care-routine").replaceChildren(...(items.length ? items.map((text, i) => {
     const input = el("input", { type: "text", value: text, maxLength: 120, "aria-label": `Routine item ${i + 1}` });
     input.addEventListener("change", () => { const all = careRoutine(); const t = input.value.trim(); if (t) all[i] = t; else all.splice(i, 1); careSaveRoutine(all); renderCareRoutine(); });

@@ -45,3 +45,14 @@ test('one missing mood observation stays missing and agitation uses logged denom
   assert.equal(model.moodAvg.at(-1), null);
   assert.equal(model.tiles.find(t => t.label === 'Agitated evenings').value, '1 / 1');
 });
+
+
+test('dashboard surfaces sourced example notes and draft suggestions without claiming completed actions', () => {
+  const model = buildModel({ now, notes: [{id:'example-1',sample:true,persona:'Evelyn',text:'I like tea in the blue mug.'}],
+    drafts: [{sample:true,title:'Pick a place for glasses',suggested:{source:'Example scenario'}}] });
+  assert.deepEqual(model.facts, [{id:'example-1',source:'Evelyn · Example',text:'I like tea in the blue mug.'}]);
+  assert.equal(model.actions[0].who, 'Review');
+  assert.match(model.actions[0].text, /Example suggestion.*Example scenario/);
+  assert.equal(model.status, 'unknown');
+  assert.equal(model.csdd, null);
+});
