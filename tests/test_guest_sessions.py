@@ -238,6 +238,65 @@ def test_guest_stream_concurrency_and_bytes_are_enforced(guest_client, monkeypat
         assert "limit" in ws.receive_json()["message"]
 
 
+def test_pcm_stream_uses_separate_byte_budget_and_charges_received_audio(guest_client, monkeypatch):
+    session = issue(guest_client)
+    audio = b"\x00\x00" * 16000
+
+    async def relay(source, receive, send, fail, **limits):
+        assert source == "vexo_pcm"
+        assert limits["max_bytes"] == main.GUEST_STREAM_PCM_BYTES
+        assert await receive() == audio
+        return len(audio)
+
+    monkeypatch.setattr(main, "relay_audio", relay)
+    with guest_client.websocket_connect("wss://threadline.example/api/live-transcribe", headers=SAME_ORIGIN) as ws:
+        ws.send_json({"source": "vexo_pcm"})
+        ws.send_bytes(audio)
+        assert ws.receive_json() == {"type": "closed", "bytes": len(audio)}
+    assert session.stream_pcm_bytes == len(audio)
+    assert session.stream_bytes == 0
+    assert not session.streaming and main.guest_active_streams == 0
+
+
+@pytest.mark.parametrize("source", ["vexo_pcm", "pcm16"])
+def test_eleven_minutes_of_pcm_can_continue_beyond_raw_audio_budget(guest_client, source):
+    session = issue(guest_client)
+    session.stream_pcm_bytes = 11 * 60 * 16000 * 2
+    session.stream_seconds = 11 * 60
+    assert session.stream_pcm_bytes > main.GUEST_STREAM_BYTES
+    seconds, available = main.start_guest_stream(session, source)
+    assert 0 < seconds <= main.GUEST_STREAM_SECONDS - 11 * 60
+    assert available == main.GUEST_STREAM_PCM_BYTES - session.stream_pcm_bytes
+    main.end_guest_stream(session, main.time.monotonic())
+    # Compressed/browser audio retains its original independent allowance.
+    _, available = main.start_guest_stream(session, "browser")
+    assert available == main.GUEST_STREAM_BYTES
+    main.end_guest_stream(session, main.time.monotonic())
+
+
+def test_pcm_byte_cap_and_duration_and_concurrency_remain_finite(guest_client):
+    session = issue(guest_client)
+    assert main.GUEST_STREAM_PCM_BYTES == 2 * 3600 * 16000 * 2
+    for changes in (
+        {"stream_pcm_bytes": main.GUEST_STREAM_PCM_BYTES},
+        {"stream_seconds": main.GUEST_STREAM_SECONDS},
+        {"streaming": True},
+        {"stream_starts": main.GUEST_STREAM_START_LIMIT},
+    ):
+        for field, value in changes.items():
+            setattr(session, field, value)
+        with pytest.raises(main.HTTPException) as error:
+            main.start_guest_stream(session, "vexo_pcm")
+        assert error.value.status_code == 429
+        for field in changes:
+            setattr(session, field, False if field == "streaming" else 0)
+    main.guest_active_streams = main.GUEST_MAX_ACTIVE_STREAMS
+    with pytest.raises(main.HTTPException) as error:
+        main.start_guest_stream(session, "vexo_pcm")
+    assert error.value.status_code == 429
+    main.guest_active_streams = 0
+
+
 def test_relay_deadline_closes_an_idle_provider(monkeypatch):
     monkeypatch.setenv("DEEPGRAM_API_KEY", "test-only-key")
     monkeypatch.setenv("DEEPGRAM_MODEL", "test-model")

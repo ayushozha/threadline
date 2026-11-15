@@ -540,6 +540,7 @@ function attachBand(band) {
   attachSignals(band);
   band.on("audio", (a) => {
     if (!capture.active || capture.stopping) return;
+    capture.bandPackets = (capture.bandPackets || 0) + 1;
     capture.lastPacketAt = Date.now();
     capture.decoder?.push(a);
     if (capture.warnedSilent) { capture.warnedSilent = false; recState("Band audio is arriving again."); $("rec-takeback").hidden = true; }
@@ -551,6 +552,7 @@ function attachBand(band) {
 function flushBandAudio() {
   const ws = capture.ws;
   if (!ws?.providerReady || ws.readyState !== 1 || !capture.active || capture.stopping) return;
+  if (ws.audioFormat !== (capture.vexo ? (capture.pcm ? "vexo_pcm" : "vexo") : "browser")) return;
   while (capture.audioQueue.length && ws.bufferedAmount < 128 * 1024) {
     const packet = capture.audioQueue.shift();
     if (!ws.hasAudio) { ws.offset = Math.max(0, (packet.time - capture.startedAt.getTime()) / 1000); ws.hasAudio = true; }
@@ -608,8 +610,9 @@ $("rec-start").addEventListener("click", async () => {
   capture.solo = $("capture-identity").value === "solo"; utterances.reset();
   if (vexo && await kit.canDecodeAudio()) capture.decoder = new kit.BandAudio((samples) => {
     if (!capture.active || capture.stopping) return;
+    capture.lastDecodedAt = Date.now();
     capture.pcmChunks.push(samples.slice());
-    if (capture.pcm) {  // stream decoded 16 kHz PCM16 to Deepgram — raw band Opus produced no transcripts on nova-3
+    if (capture.pcm) {  // Send the official decoder's 16 kHz PCM16 to the matching Deepgram connection.
       const pcm = new Int16Array(kit.toInt16(samples));
       capture.audioQueue.push({ opus: new Uint8Array(pcm.buffer), time: Date.now() });
       if (capture.audioQueue.length > 400) { capture.audioQueue.shift(); capture.droppedPackets += 1; }
@@ -621,8 +624,9 @@ $("rec-start").addEventListener("click", async () => {
     if (capture.rmsDb > -42) capture.lastSpeechAt = Date.now();
     signals.level = Math.max(0, Math.min(1, (capture.rmsDb + 60) / 40));
     $("sig-loud").style.width = `${Math.round(signals.level * 100)}%`; pushWave(signals.level);
-  }, { rate: 16000, onError: () => { capture.pcm = false; $("speech-status").textContent = "Audio quality check unavailable in this browser."; } });
+  }, { rate: 16000, onError: () => switchToBandOpus("Audio decoder stopped") });
   capture.pcm = Boolean(capture.decoder);
+  capture.bandPackets = 0; capture.lastDecodedAt = Date.now();
   $("rec-takeback").hidden = true;
   $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
   if (camera) startVideo(stream);
@@ -641,9 +645,10 @@ function tick() {
   $("live-timer").textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   $("live-source").textContent = `${capture.sourceLabel || ""} · ${count} ${capture.vexo ? "packets" : "chunks"}${capture.reconnects ? ` · ${capture.reconnects} reconnect${capture.reconnects > 1 ? "s" : ""}` : ""}${capture.droppedPackets ? ` · ${capture.droppedPackets} packets missed while offline` : ""}`;
   if (capture.vexo) flushBandAudio();
+  if (capture.vexo && capture.pcm && Date.now() - capture.lastDecodedAt > 5000 && Date.now() - capture.lastPacketAt < 1000) switchToBandOpus("Band packets arrived but decoding stalled");
   if (capture.vexo && capture.packets) {
     const age = Math.round((Date.now() - capture.lastTextAt) / 1000);
-    $("speech-status").textContent = `${capture.interimCount} speech updates · ${capture.finals.length} finished lines${capture.firstTextMs != null ? ` · first text ${(capture.firstTextMs / 1000).toFixed(1)}s after stream start` : ""}${capture.rmsDb != null ? ` · mic ${Math.round(capture.rmsDb)} dBFS` : ""}${age > 10 ? ` · last text ${age}s ago` : ""}`;
+    $("speech-status").textContent = `${capture.bandPackets || 0} received · ${capture.packets} sent as ${capture.ws?.audioFormat === "vexo_pcm" ? "PCM16" : "Opus"} · ${capture.interimCount} speech updates · ${capture.finals.length} finished lines${capture.firstTextMs != null ? ` · first text ${(capture.firstTextMs / 1000).toFixed(1)}s after stream start` : ""}${capture.rmsDb != null ? ` · mic ${Math.round(capture.rmsDb)} dBFS` : ""}${age > 10 ? ` · last text ${age}s ago` : ""}`;
     if (!capture.fallbackBusy && capture.decoder && capture.lastSpeechAt > capture.lastTextAt && Date.now() - capture.lastTextAt > 8000 && Date.now() - capture.lastFallbackAt > 8000) recoverSpeech();
   }
   if (capture.vexo && capture.ws?.providerReady && Date.now() - (capture.lastPacketAt || capture.audioStarted) > 5000 && !capture.warnedSilent && !capture.band?.reconnecting) {
@@ -652,11 +657,19 @@ function tick() {
     if (capture.vexo) $("rec-takeback").hidden = false;
   }
 }
+function switchToBandOpus(reason) {
+  if (!capture.active || capture.stopping || !capture.pcm) return;
+  capture.pcm = false; capture.decoder?.close(); capture.decoder = null; capture.audioQueue = [];
+  $("speech-status").textContent = `${reason}. Reconnecting with the band's original Opus audio…`;
+  // Each connection has one encoding for its lifetime; close before routing different bytes.
+  capture.ws?.close(4000, "audio format changed");
+}
 function openSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
+  ws.audioFormat = capture.vexo ? (capture.pcm ? "vexo_pcm" : "vexo") : "browser";
   ws.binaryType = "arraybuffer"; capture.ws = ws;
   const opened = Date.now();
-  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? (capture.pcm ? "vexo_pcm" : "vexo") : "browser", ...(publishKey() ? { publish_key: publishKey() } : {}) }));
+  ws.onopen = () => ws.send(JSON.stringify({ source: ws.audioFormat, ...(publishKey() ? { publish_key: publishKey() } : {}) }));
   ws.onmessage = async (event) => {
     if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
@@ -1804,6 +1817,7 @@ try { if (localStorage.getItem(CONSENT_KEY) === "yes") $("rec-consent").checked 
 $("rec-consent").addEventListener("change", () => {
   try { $("rec-consent").checked ? localStorage.setItem(CONSENT_KEY, "yes") : localStorage.removeItem(CONSENT_KEY); } catch { /* storage off */ }
   if ($("rec-consent").checked) { autoRec.userStopped = false; maybeAutoStart(); }
+  else { autoRec.userStopped = true; stopLive("Recording permission removed. Stopping the band's microphone."); }
 });
 function canAutoRecord() { return $("rec-consent").checked && !autoRec.userStopped && !capture.active && !busy && capture.band && !capture.band.reconnecting && $("source").value === "vexo"; }
 function maybeAutoStart() {
@@ -1860,10 +1874,13 @@ function floatToPcm16(f, fromRate = 16000) {  // float samples at fromRate → P
 }
 async function liveBandAudio(onPcm) {  // the band's microphone → PCM16 16 kHz; returns a cleanup function
   kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
+  const band = capture.band;
+  if (!band) throw new Error("Connect your Vexo band first.");
   let ba = new kit.BandAudio((samples) => onPcm(kit.toInt16(samples)), { rate: 16000 });
-  const off = capture.band.on("audio", (a) => ba?.push(a));
-  try { if (!capture.active) await capture.band.configure({ audio: true }); } catch (e) { off?.(); try { ba.close(); } catch { /* */ } throw e; }
-  return () => { off?.(); try { ba?.close(); } catch { /* */ } ba = null; if (capture.band && !capture.active) capture.band.configure({ audio: false }).catch(() => {}); };
+  const off = band.on("audio", (a) => ba?.push(a));
+  const offRestart = band.on("reconnected", () => ba?.restart());
+  try { if (!capture.active) await claimBandAudio(band); } catch (e) { off?.(); offRestart?.(); try { ba.close(); } catch { /* */ } throw e; }
+  return () => { off?.(); offRestart?.(); try { ba?.close(); } catch { /* */ } ba = null; if (capture.band === band && !capture.active) band.configure({ audio: false }).catch(() => {}); };
 }
 function lhPlay(buf) { livePlayPcm24(lh, buf); }
 function lhInterrupt() { liveInterrupt(lh); }

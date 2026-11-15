@@ -58,6 +58,7 @@ GUEST_GLOBAL_HOUR_LIMIT = 2000
 GUEST_STREAM_START_LIMIT = 30
 GUEST_STREAM_SECONDS = 2 * 3600
 GUEST_STREAM_BYTES = 20 * 1024 * 1024
+GUEST_STREAM_PCM_BYTES = GUEST_STREAM_SECONDS * 16000 * 2  # 16 kHz mono PCM16 for the same two hours
 GUEST_MAX_ACTIVE_STREAMS = 2
 
 
@@ -80,6 +81,7 @@ class GuestSession:
     stream_starts: int = 0
     stream_seconds: float = 0
     stream_bytes: int = 0
+    stream_pcm_bytes: int = 0
     streaming: bool = False
 
 
@@ -154,12 +156,13 @@ def charge_guest(session: GuestSession) -> None:
         guest_requests_hour.count += 1
 
 
-def start_guest_stream(session: GuestSession) -> tuple[float, int]:
+def start_guest_stream(session: GuestSession, source: str = "vexo") -> tuple[float, int]:
     global guest_active_streams
     with guest_lock:
         now = time.monotonic()
         remaining = min(GUEST_STREAM_SECONDS - session.stream_seconds, session.expires - now)
-        remaining_bytes = GUEST_STREAM_BYTES - session.stream_bytes
+        remaining_bytes = (GUEST_STREAM_PCM_BYTES - session.stream_pcm_bytes
+                           if source in {"vexo_pcm", "pcm16"} else GUEST_STREAM_BYTES - session.stream_bytes)
         if (remaining <= 0 or remaining_bytes <= 0 or session.streaming
                 or session.stream_starts >= GUEST_STREAM_START_LIMIT
                 or guest_active_streams >= GUEST_MAX_ACTIVE_STREAMS):
@@ -738,7 +741,7 @@ async def transcribe_session(client: WebSocket, source: str, send: Send,
     if not session:
         return await close_cleanly(client, await relay_audio(source, socket_receiver(client), send, fail, **extra))
     try:
-        max_seconds, max_bytes = start_guest_stream(session)
+        max_seconds, max_bytes = start_guest_stream(session, source)
     except HTTPException as exc:
         return await fail(exc.detail, 1013)
     started = time.monotonic()
@@ -747,7 +750,10 @@ async def transcribe_session(client: WebSocket, source: str, send: Send,
     async def guest_receive():
         data = await receive()
         if isinstance(data, bytes):
-            session.stream_bytes += len(data)
+            if source in {"vexo_pcm", "pcm16"}:
+                session.stream_pcm_bytes += len(data)
+            else:
+                session.stream_bytes += len(data)
         return data
 
     try:
