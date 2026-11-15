@@ -1924,7 +1924,7 @@ async function fillTaskSuggestions() {
     const seen = suggestSeenSet();
     let careHistory = [], routine = [];
     try { careHistory = care.history || []; routine = careRoutine(); } catch { /* Care not initialised yet */ }
-    const list = suggestTasks({ scenarios: scenarioCache, careHistory, routine, healthLatest: hLatest() || hDay(todayKey()),
+    const list = suggestTasks({ scenarios: scenarioCache, careHistory, routine, healthLatest: hLatest(),
       existingTitles: (life.tasks || []).map(t => t.title), today: todayKey(), mode: accessMode, limit: 20 }).filter(s => !seen.has(s.id)).slice(0, 8);
     if (!list.length) return;
     const sample = isFictionalDemo();
