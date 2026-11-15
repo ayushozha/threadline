@@ -5,7 +5,7 @@ import { createVisionController } from './vision.mjs';
 import { sampleSeed, DEMO_QUESTION } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
-import { MODES, MODE_KEYS, currentMode, setMode, modeScenes } from './modes.mjs';
+import { MODES as HELP_MODES, MODE_KEYS, currentMode, setMode, modeScenes } from './modes.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -116,11 +116,11 @@ const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
 function renderModeSwitch() {
   const box = $("mode-switch"); if (!box) return;
-  const cur = currentMode(), m = MODES[cur];
+  const cur = currentMode(), m = HELP_MODES[cur];
   box.replaceChildren(
     el("div", { className: "mode-chips", role: "tablist" }, ...MODE_KEYS.map((k) => { const b = el("button", { type: "button", role: "tab", className: `mode-chip${k === cur ? " on" : ""}`, "aria-selected": String(k === cur) },
-      el("span", { className: "mode-ic", textContent: MODES[k].icon }), el("b", { textContent: MODES[k].label }), el("small", { textContent: MODES[k].who }));
-      b.addEventListener("click", () => { setMode(k); renderModeSwitch(); if (care.ws || lh.ws) message(`${MODES[k].label} mode is set. Restart live guidance to use it.`); }); return b; })),
+      el("span", { className: "mode-ic", textContent: HELP_MODES[k].icon }), el("b", { textContent: HELP_MODES[k].label }), el("small", { textContent: HELP_MODES[k].who }));
+      b.addEventListener("click", () => { setMode(k); renderModeSwitch(); if (care.ws || lh.ws) message(`${HELP_MODES[k].label} mode is set. Restart live guidance to use it.`); }); return b; })),
     el("div", { className: `mode-card m-${cur}` }, el("div", {}, el("p", { className: "mode-line", textContent: m.line }),
       el("ul", { className: "mode-does" }, ...m.does.map((d) => el("li", { textContent: d })))),
       el("div", { className: "mode-side" }, ...m.signals.map((x) => el("span", { className: "mode-sig", textContent: x })),
