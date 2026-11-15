@@ -22,6 +22,7 @@
       <div class="nav-list">
         <a href="#dashboard" class="nav-item" data-view-link="dashboard"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="12" width="7" height="9" rx="1.5"></rect><rect x="3" y="16" width="7" height="5" rx="1.5"></rect></svg><span>Dashboard</span></a>
         <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Your band</span><span class="nav-live" id="nav-live" hidden></span></a>
+        <a href="#library" class="nav-item" data-view-link="library"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M10 9.5v5l4.5-2.5z"></path></svg><span>Library</span></a>
         <a href="#care" class="nav-item" data-view-link="care"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path></svg><span>Care</span></a>
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
@@ -222,6 +223,10 @@
           <div class="access-buttons" role="group" aria-label="Assistance mode"><button data-access-mode="memory" aria-pressed="true">Memory</button><button data-access-mode="sight" aria-pressed="false">Sight</button><button data-access-mode="hearing" aria-pressed="false">Hearing</button><button data-access-mode="mobility" aria-pressed="false">Mobility</button></div>
           <p id="access-description" class="caption"></p><a class="text-button" href="#care">Open selected mode</a><a class="text-button" href="/accessibility/">Watch the four-mode concept</a>
         </section><div id="dashboard" class="dash"><p class="caption">Loading the dashboard…</p></div></section>
+      <section class="view" data-view="library" hidden>
+        <div class="lib-intro"><h2>Scenario library</h2><p class="caption">Real recordings and generated scenes of people facing everyday problems. Gemini watches each video, the Gemini Decisions API picks one action, and you can run live guidance on any of them.</p></div>
+        <div id="library" class="lib"></div>
+      </section>
       <section class="view" data-view="care" hidden>
         <div class="care-grid">
           <div class="stack">

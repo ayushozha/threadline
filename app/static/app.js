@@ -6,6 +6,7 @@ import { sampleSeed, DEMO_QUESTIONS } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
 import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
+import { mountLibrary } from './library.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -196,7 +197,21 @@ function drawDashboard() {
       transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: isFictionalDemo() });
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
-window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); });
+window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); });
+let library = null;
+function openLibrary() {
+  if (library || !$("library")) return;
+  library = mountLibrary($("library"), {
+    request,
+    onSpeak: (text) => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 0.95; speechSynthesis.speak(u); } catch { /* no speech */ } },
+    onRunLive: (sc) => {
+      selectAccessMode(sc.mode);
+      careRevokeFiles(); care.files = [{ url: sc.video, name: sc.title, size: 0 }]; care.idx = 0;
+      location.hash = "care"; careSetSource("file"); carePlayIndex(0);
+      careLiveStatus(`${sc.title} loaded in ${ACCESS_MODES[sc.mode]?.label || sc.mode} mode. Tick consent, then press Start live guidance.`);
+    },
+  });
+}
 function renderMood() {
   if (!$("mood-chart")) return;
   if (!ownerMood.days.length) {
@@ -1565,7 +1580,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
+const VIEW_TITLES = { library: "Library", dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
@@ -2666,6 +2681,7 @@ careSetSource("file");
 render();
 renderAccessMode();
 showView(location.hash.slice(1) || "dashboard");
+if (location.hash === "#library") openLibrary();
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
 loadOwnerHealth(); renderSampleBanner();

@@ -1,0 +1,555 @@
+{
+ "generated_at": "2026-11-15T01:35:53.870199+00:00",
+ "scenarios": [
+  {
+   "id": "sight-stairs-indoor",
+   "mode": "sight",
+   "title": "Stairs down to a closed door",
+   "problem": "A person with low vision heads down indoor stairs.",
+   "source": "Recorded by the Threadline team",
+   "video": "/static/scenarios/sight-stairs-indoor.mp4",
+   "poster": "/static/scenarios/sight-stairs-indoor.jpg",
+   "analysis": {
+    "mode": "sight",
+    "vision": {
+     "seen": "Stairs with a white handrail lead down past wall signs to a closed white door with a dark rectangular mat in front of it.",
+     "hazards": [
+      "steps going down",
+      "floor mat",
+      "closed door ahead"
+     ],
+     "read_text": [
+      "Ground F",
+      "Founder",
+      "er Green Room"
+     ],
+     "say_now": "Watch for the steps going down and the dark mat on the floor. A closed white door is about one step ahead with the handle on your left.",
+     "summary": "Descended stairs to a closed white door with a floor mat.",
+     "caregiver_note": "Walking down stairs toward a closed door past a Green Room sign.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.781,
+     "urgency": "now",
+     "urgency_confidence": 0.823
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:35:53.870199+00:00"
+   }
+  },
+  {
+   "id": "sight-steps-night",
+   "mode": "sight",
+   "title": "Steps up to a door at night",
+   "problem": "Climbing outdoor steps in poor light.",
+   "source": "Recorded by the Threadline team",
+   "video": "/static/scenarios/sight-steps-night.mp4",
+   "poster": "/static/scenarios/sight-steps-night.jpg",
+   "analysis": {
+    "mode": "sight",
+    "vision": {
+     "seen": "A dimly lit flight of about six steps leads straight ahead up to a closed wooden door with a small dark object on the top landing to the right.",
+     "hazards": [
+      "Dimly lit flight of steps going up",
+      "Small dark object on the top landing to the right"
+     ],
+     "read_text": [],
+     "say_now": "Careful, there is a dimly lit flight of about six steps right in front of you at twelve o'clock. A closed door is straight ahead at the top.",
+     "summary": "Facing dimly lit steps leading up to a closed door.",
+     "caregiver_note": "User is at a dimly lit staircase leading up to a closed door at night.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.866,
+     "urgency": "now",
+     "urgency_confidence": 0.652
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:35:50.724612+00:00"
+   }
+  },
+  {
+   "id": "mobility-steps-street",
+   "mode": "mobility",
+   "title": "Night steps down to the street",
+   "problem": "Fall risk: wide steps, a handrail and parked cars below.",
+   "source": "Recorded by the Threadline team",
+   "video": "/static/scenarios/mobility-steps-street.mp4",
+   "poster": "/static/scenarios/mobility-steps-street.jpg",
+   "analysis": {
+    "mode": "mobility",
+    "vision": {
+     "seen": "Dim concrete steps with a handrail lead down to a flat sidewalk facing a curb, parked cars, and a street at night.",
+     "hazards": [
+      "stairs going down",
+      "dim lighting on steps",
+      "curb edge",
+      "parked cars and street traffic"
+     ],
+     "read_text": [],
+     "say_now": "Hold the handrail on your right as you take these dim steps slowly. Stop on the flat sidewalk at the bottom before the curb.",
+     "summary": "Walking down dim outdoor steps with a handrail toward a sidewalk and street.",
+     "caregiver_note": "Navigating dim outdoor steps at night toward a street curb; no seating visible in view.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.623,
+     "urgency": "now",
+     "urgency_confidence": 0.927
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:35:48.110197+00:00"
+   }
+  },
+  {
+   "id": "memory-glasses",
+   "mode": "memory",
+   "title": "Where are my glasses?",
+   "problem": "Grandpa can't find his glasses for the third time today.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/memory-glasses.mp4",
+   "poster": "/static/scenarios/memory-glasses.jpg",
+   "analysis": {
+    "mode": "memory",
+    "vision": {
+     "seen": "A person's hands are on a wooden kitchen table beside a blue mug and a pair of round glasses.",
+     "hazards": [],
+     "read_text": [],
+     "say_now": "You are in the kitchen by the wooden table. Your glasses are right there next to the blue mug.",
+     "summary": "Hands on a wooden kitchen table next to a blue mug and round glasses.",
+     "caregiver_note": "",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "speak_guidance",
+     "confidence": 0.403,
+     "urgency": "routine",
+     "urgency_confidence": 0.639
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:35:53.870069+00:00"
+   }
+  },
+  {
+   "id": "memory-pills",
+   "mode": "memory",
+   "title": "Did I take my pills?",
+   "problem": "Unsure whether this morning's tablets were taken.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/memory-pills.mp4",
+   "poster": "/static/scenarios/memory-pills.jpg",
+   "analysis": {
+    "mode": "memory",
+    "vision": {
+     "seen": "A person's hand is touching a colourful pill organiser on a wooden table next to a glass of water and a plate.",
+     "hazards": [],
+     "read_text": [],
+     "say_now": "You are at the table with your pill organiser and water. I can't confirm that; let's check the pill organiser together or ask your caregiver.",
+     "summary": "Person at the table checking a colourful pill organiser next to a glass of water.",
+     "caregiver_note": "Seen handling the pill organiser at the table; may need help confirming medication.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "routine_reminder",
+     "confidence": 0.57,
+     "urgency": "soon",
+     "urgency_confidence": 0.601
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:35:59.637427+00:00"
+   }
+  },
+  {
+   "id": "memory-door-confused",
+   "mode": "memory",
+   "title": "Which key is it?",
+   "problem": "A grandfather stands at his own front door, unsure of the key.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/memory-door-confused.mp4",
+   "poster": "/static/scenarios/memory-door-confused.jpg",
+   "analysis": {
+    "mode": "memory",
+    "vision": {
+     "seen": "An older man in a knit cardigan is standing in a hallway near a wooden door, looking down at a set of keys in his hands.",
+     "hazards": [],
+     "read_text": [],
+     "say_now": "You are standing by the hallway door with your keys in your hands. I am not sure which key goes to this door, so we can ask your caregiver if you would like help.",
+     "summary": "Standing in the hallway holding a set of keys and looking unsure.",
+     "caregiver_note": "He appeared uncertain about which key to use near the hallway door.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "speak_guidance",
+     "confidence": 0.621,
+     "urgency": "soon",
+     "urgency_confidence": 0.62
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:00.159602+00:00"
+   }
+  },
+  {
+   "id": "memory-stove",
+   "mode": "memory",
+   "title": "Stove left on",
+   "problem": "A pan is left on a lit burner while she sits down.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/memory-stove.mp4",
+   "poster": "/static/scenarios/memory-stove.jpg",
+   "analysis": {
+    "mode": "memory",
+    "vision": {
+     "seen": "An older person walks from the kitchen to sit on a living room sofa while a pan sits over a lit stove flame behind them.",
+     "hazards": [
+      "Lit stove burner left unattended"
+     ],
+     "read_text": [],
+     "say_now": "You just sat down on the sofa. The stove in the kitchen is still on, so let's turn it off.",
+     "summary": "Person sat on the sofa and left a lit stove burner unattended in the kitchen.",
+     "caregiver_note": "A lit stove burner with a pan on it was left unattended after they walked to the sofa.",
+     "needs_help": true
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "alert_caregiver",
+     "confidence": 0.771,
+     "urgency": "now",
+     "urgency_confidence": 0.934
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:00.689879+00:00"
+   }
+  },
+  {
+   "id": "sight-cane-crossing",
+   "mode": "sight",
+   "title": "Waiting at a crossing",
+   "problem": "A blind woman with a cane waits to cross a busy street.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/sight-cane-crossing.mp4",
+   "poster": "/static/scenarios/sight-cane-crossing.jpg",
+   "analysis": {
+    "mode": "sight",
+    "vision": {
+     "seen": "A woman holding a white cane is standing on a pedestrian crosswalk with moving cars and a bus behind her.",
+     "hazards": [
+      "Moving traffic ahead",
+      "Busy street crossing"
+     ],
+     "read_text": [],
+     "say_now": "There is moving traffic ahead from left to right. At 12 o'clock, a few steps in front of you, a person with a white cane is standing on a crosswalk.",
+     "summary": "Facing a busy street crossing with moving traffic and a person holding a white cane ahead.",
+     "caregiver_note": "User is near a busy crosswalk with active vehicle traffic.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.818,
+     "urgency": "now",
+     "urgency_confidence": 0.731
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:10.123055+00:00"
+   }
+  },
+  {
+   "id": "sight-shelf",
+   "mode": "sight",
+   "title": "Reading medicine labels",
+   "problem": "Finding the right box on a pharmacy shelf without sight.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/sight-shelf.mp4",
+   "poster": "/static/scenarios/sight-shelf.jpg",
+   "analysis": {
+    "mode": "sight",
+    "vision": {
+     "seen": "A pharmacy shelf is in front of you, focusing on two pink boxes on the top end shelf.",
+     "hazards": [
+      "shelf corner directly ahead"
+     ],
+     "read_text": [],
+     "say_now": "A shelf corner is right ahead at twelve o'clock with two pink boxes on top. The labels are too blurry to read, so please move closer or turn a box.",
+     "summary": "Viewing two pink boxes on a store shelf; label text is unreadable.",
+     "caregiver_note": "Looking at boxes on a pharmacy shelf; labels were too blurry to read.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.535,
+     "urgency": "soon",
+     "urgency_confidence": 0.411
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:07.500021+00:00"
+   }
+  },
+  {
+   "id": "hearing-doorbell",
+   "mode": "hearing",
+   "title": "Doorbell at night",
+   "problem": "Someone is at the door and the bell can't be heard.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/hearing-doorbell.mp4",
+   "poster": "/static/scenarios/hearing-doorbell.jpg",
+   "analysis": {
+    "mode": "hearing",
+    "vision": {
+     "seen": "In a dimly lit living room at dusk, a woman wearing light blue scrubs is standing outside the glass door holding a brown box and waving.",
+     "hazards": [],
+     "read_text": [],
+     "say_now": "Someone in light blue scrubs is at the glass door holding a box. She is smiling and waving.",
+     "summary": "A person in scrubs holding a box is waving outside the glass door at night.",
+     "caregiver_note": "Someone in scrubs holding a package is at the door waving; I cannot confirm their identity or whether a doorbell rang.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "speak_guidance",
+     "confidence": 0.426,
+     "urgency": "soon",
+     "urgency_confidence": 0.673
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:05.928770+00:00"
+   }
+  },
+  {
+   "id": "hearing-missed-call",
+   "mode": "hearing",
+   "title": "Kettle boiling over",
+   "problem": "Working with headphones, missing the kettle and alarm.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/hearing-missed-call.mp4",
+   "poster": "/static/scenarios/hearing-missed-call.jpg",
+   "analysis": {
+    "mode": "hearing",
+    "vision": {
+     "seen": "A person sits at a wooden table using a laptop while a kettle and pot steam heavily on the stove behind them and a device on the counter glows red.",
+     "hazards": [
+      "Heavy steam from kettle and pot on stove",
+      "Stove unattended while facing away"
+     ],
+     "read_text": [],
+     "say_now": "ALERT: The stove behind you is steaming heavily. Please check the kettle and pot now.",
+     "summary": "Person at laptop with kettle and pot steaming heavily on stove behind them.",
+     "caregiver_note": "Kettle and pot were steaming heavily on the stove behind the person while they used a laptop.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "alert_caregiver",
+     "confidence": 0.549,
+     "urgency": "now",
+     "urgency_confidence": 0.945
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:19.155502+00:00"
+   }
+  },
+  {
+   "id": "mobility-hallway",
+   "mode": "mobility",
+   "title": "Cluttered hallway",
+   "problem": "A wheelchair user meets a folded rug and shoes on the floor.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/mobility-hallway.mp4",
+   "poster": "/static/scenarios/mobility-hallway.jpg",
+   "analysis": {
+    "mode": "mobility",
+    "vision": {
+     "seen": "A dimly lit hallway shows a person in a wheelchair turning left over a rug that is bunching up, with a pair of shoes on the floor to the right.",
+     "hazards": [
+      "Bunched-up rug on the floor",
+      "Shoes along the right wall",
+      "Dim lighting in the hallway"
+     ],
+     "read_text": [],
+     "say_now": "There is a bunched-up rug ahead and shoes along the right wall. Please stay seated safely and take the clear floor space slowly.",
+     "summary": "Dim hallway with a bunched-up rug catching a wheelchair wheel and shoes on the floor.",
+     "caregiver_note": "Secure or remove the loose rug at the end of the hallway, clear the shoes, and improve hallway lighting.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.826,
+     "urgency": "now",
+     "urgency_confidence": 0.8
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:13.793188+00:00"
+   }
+  },
+  {
+   "id": "mobility-curb",
+   "mode": "mobility",
+   "title": "No ramp at the kerb",
+   "problem": "A wheelchair user looks for a lowered kerb.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/mobility-curb.mp4",
+   "poster": "/static/scenarios/mobility-curb.jpg",
+   "analysis": {
+    "mode": "mobility",
+    "vision": {
+     "seen": "A person in a wheelchair is stopped on a shaded city pavement next to a raised concrete barrier and a kerb with no ramp, with an A-frame sign ahead.",
+     "hazards": [
+      "raised concrete barrier",
+      "kerb with no ramp",
+      "A-frame sign on the pavement",
+      "shaded lighting"
+     ],
+     "read_text": [],
+     "say_now": "There is a raised kerb right in front of you with no ramp. Stay on the flat pavement to your left and pause if you need help finding a crossing.",
+     "summary": "Wheelchair user stopped by a raised concrete kerb without a ramp on a shaded pavement.",
+     "caregiver_note": "Stopped at a raised kerb with no ramp while navigating the pavement.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "haptic_warning",
+     "confidence": 0.827,
+     "urgency": "now",
+     "urgency_confidence": 0.593
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:15.894470+00:00"
+   }
+  },
+  {
+   "id": "mobility-fall",
+   "mode": "mobility",
+   "title": "On the floor by the armchair",
+   "problem": "An older man has lost his balance and sits on the floor.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/mobility-fall.mp4",
+   "poster": "/static/scenarios/mobility-fall.jpg",
+   "analysis": {
+    "mode": "mobility",
+    "vision": {
+     "seen": "An older man is sitting on the carpeted floor beside a large armchair in a dimly lit living room.",
+     "hazards": [
+      "dim lighting",
+      "person on the floor"
+     ],
+     "read_text": [],
+     "say_now": "Please stay still right where you are. Let's call your caregiver or emergency services for help now.",
+     "summary": "Person is on the floor beside the armchair and appears to need help.",
+     "caregiver_note": "He is sitting on the floor next to the armchair and may have fallen.",
+     "needs_help": true
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "alert_caregiver",
+     "confidence": 0.979,
+     "urgency": "now",
+     "urgency_confidence": 0.953
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:19.563246+00:00"
+   }
+  },
+  {
+   "id": "parkinsons-tea",
+   "mode": "mobility",
+   "title": "Pouring tea with a tremor",
+   "problem": "Hand tremor while pouring a hot drink.",
+   "source": "Generated with MiniMax Hailuo-02",
+   "video": "/static/scenarios/parkinsons-tea.mp4",
+   "poster": "/static/scenarios/parkinsons-tea.jpg",
+   "analysis": {
+    "mode": "mobility",
+    "vision": {
+     "seen": "Hands are pouring tea from a teapot into a teacup and saucer on a wooden kitchen table.",
+     "hazards": [
+      "hot tea being poured"
+     ],
+     "read_text": [],
+     "say_now": "You are pouring a cup of tea at the table. Take your time, and sit down comfortably when you are ready.",
+     "summary": "Pouring tea from a teapot into a cup at the kitchen table.",
+     "caregiver_note": "Pouring hot tea at the kitchen table without any visible spills.",
+     "needs_help": false
+    },
+    "decision": {
+     "engine": "gemini-decisions",
+     "action": "speak_guidance",
+     "confidence": 0.626,
+     "urgency": "routine",
+     "urgency_confidence": 0.598
+    },
+    "models": {
+     "vision": "gemini-4-hydrogen",
+     "decision": "gemini-decision-1"
+    },
+    "frames": 4,
+    "at": "2026-11-15T01:36:23.624901+00:00"
+   }
+  }
+ ]
+}

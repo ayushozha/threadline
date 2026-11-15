@@ -1327,6 +1327,7 @@ from app import vision_bridge  # noqa: E402  (GoPro camera bridge, latest frame 
 app.include_router(vision_bridge.router)
 from app import care_agent; app.include_router(care_agent.router)  # noqa: E402,E702  (caregiver assessment)
 from app import health_import; app.include_router(health_import.router)  # noqa: E402,E702  (Apple Health import)
+from app import scenario_agent; app.include_router(scenario_agent.router)  # noqa: E402,E702  (scenario video reasoning)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")
 demo_assets = ROOT.parent / "assets" / "demo" / "dementia"
 if demo_assets.is_dir():
