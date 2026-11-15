@@ -556,3 +556,10 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .as-acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.as-act{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#e3f1e6;color:#2f6b45}
 .as-chips{display:flex;flex-wrap:wrap;gap:6px}.as-chips .lib-chip{background:rgba(255,255,255,.1);color:#fffdf7;border-color:rgba(255,255,255,.25);cursor:pointer}
 .as-form{display:flex;gap:6px}.as-form input{flex:1;margin:0;border-radius:20px;border:0;padding:10px 14px}
+
+.ess-wallet{border-top:1px dashed var(--line);padding-top:10px}.ess-wallet p{margin:4px 0 8px}
+.as-card{height:560px;grid-template-rows:auto auto minmax(0,1fr) auto auto;overflow:hidden}
+.as-log{max-height:none;height:100%;min-height:0;overflow-y:auto;scroll-behavior:smooth;padding-right:4px;align-content:start}
+.as-log li{word-break:break-word}.as-meta{display:flex;gap:6px;align-items:center}.as-lang{font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;background:#f2c94c;color:#262921;letter-spacing:.04em;text-transform:uppercase}
+.as-me .as-lang{background:rgba(255,255,255,.2);color:#fffdf7}.as-text{font-size:15px}.as-en{font-size:12px;font-style:italic;opacity:.75;border-top:1px dashed rgba(0,0,0,.15);padding-top:3px}
+.as-me .as-en{border-top-color:rgba(255,255,255,.25)}.as-chips{max-height:76px;overflow:auto}

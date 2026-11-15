@@ -10,10 +10,13 @@ const SUGGEST = [
 ];
 const money = (c) => `$${(c / 100).toFixed(2)}`;
 export function mountEssentials(root, { el, request, contactName, onLog }) {
-  let items = [], stripe = false, test = false; const cart = new Map();
+  let items = [], stripe = false, test = false, wallet = null; const cart = new Map();
   const params = new URLSearchParams(location.search);
   async function load() {
     try { const d = await (await fetch("/api/essentials/catalog")).json(); items = d.items; stripe = d.stripe; test = d.test_mode; } catch { items = []; }
+    const sid = params.get("setup");
+    if (sid) { try { await request("/api/essentials/setup/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sid }) }); onLog?.("Card saved for voice orders"); } catch { /* shown below */ } history.replaceState(null, "", `${location.pathname}#essentials`); }
+    try { wallet = await request("/api/essentials/wallet"); } catch { wallet = null; }
     render();
   }
   const byId = (id) => items.find((x) => x.id === id);
@@ -52,6 +55,9 @@ export function mountEssentials(root, { el, request, contactName, onLog }) {
       el("label", { className: "ess-approve" }, el("span", { textContent: "Approved by" }), approver),
       el("label", { className: "check" }, ok, el("span", { textContent: "I'm the caregiver and I approve this order" })),
       pay, el("p", { className: "caption", textContent: `${stripe ? (test ? "Stripe test mode · no real charge" : "Stripe") : "Stripe checkout"} · card details are entered on Stripe's page, never in Threadline.` }), msg,
+      el("div", { className: "ess-wallet" }, el("b", { textContent: "Voice orders" }),
+        el("p", { className: "caption", textContent: wallet?.saved ? `Card saved: ${wallet.brand || "card"} •••• ${wallet.last4}. Say “buy …” to Threadline, then “yes” to confirm. Limit $${wallet.limit_usd} per order.` : "Save a card once (on Stripe's page) so Threadline can place small orders when you confirm out loud." }),
+        wallet?.saved ? null : el("button", { type: "button", className: "dash-btn", textContent: "Save a card with Stripe", onclick: async (ev) => { ev.target.disabled = true; try { const d = await request("/api/essentials/setup", { method: "POST" }); location.href = d.url; } catch (err) { msg.textContent = err.message; ev.target.disabled = false; } } })),
       el("div", { className: "ess-rx" }, el("b", { textContent: "Prescription medicines" }),
         el("p", { className: "caption", textContent: "Threadline does not sell prescription medicine. You can prepare a message to your pharmacy." }),
         el("a", { className: "dash-btn", href: `sms:?&body=${encodeURIComponent("Hello, please prepare a repeat prescription refill for my mother. Thank you.")}`, textContent: "Draft a refill request" })));
@@ -62,7 +68,13 @@ export function mountEssentials(root, { el, request, contactName, onLog }) {
   return {
     add: (id, n = 1) => { if (!byId(id)) return null; add(id, n); return `${byId(id).name} × ${cart.get(id) || 0} in the cart`; },
     remove: (id) => { cart.delete(id); render(); return "Removed from the cart"; },
-    summary: () => ({ items: [...cart].map(([id, q]) => ({ id, name: byId(id)?.name, qty: q })), total_usd: total() / 100, stripe_ready: stripe }),
+    summary: () => ({ items: [...cart].map(([id, q]) => ({ id, name: byId(id)?.name, qty: q })), total_usd: total() / 100, stripe_ready: stripe, wallet: wallet ? { saved: wallet.saved, limit_usd: wallet.limit_usd } : null }),
+    walletSaved: () => Boolean(wallet?.saved),
+    snapshot: () => [...cart].map(([id, qty]) => ({ id, qty })),
+    async buy(lines, approver) {
+      const d = await request("/api/essentials/buy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: lines, confirmed: true, approved_by: approver }) });
+      cart.clear(); render(); onLog?.(`Voice order paid: $${d.amount_usd.toFixed(2)} on ${d.card}`); return d;
+    },
     totalText: () => money(total()),
   };
 }

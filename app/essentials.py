@@ -74,3 +74,111 @@ async def checkout(body: CheckoutRequest, request: Request):
         raise HTTPException(502, "Stripe could not start checkout.")
     data = r.json()
     return {"url": data.get("url"), "id": data.get("id"), "test_mode": key.startswith("sk_test_")}
+
+
+# ---------- Voice orders: a card saved once by the caregiver, then purchases confirmed out loud ----------
+VOICE_LIMIT_CENTS = int(float(os.environ.get("ESSENTIALS_VOICE_LIMIT_USD", "100")) * 100)
+WALLET_SQL = "CREATE TABLE IF NOT EXISTS wallets (owner TEXT PRIMARY KEY, customer TEXT NOT NULL, pm TEXT NOT NULL, brand TEXT, last4 TEXT)"
+
+
+def _db():
+    from app import store
+    s = store.get()
+    if s is None:
+        raise HTTPException(503, "Storage is not available on this server.")
+    with s.lock:
+        s.db.execute(WALLET_SQL)
+    return s
+
+
+def _owner(request: Request) -> str:
+    from app.videos import owner_of
+    return owner_of(request)
+
+
+def _key() -> str:
+    key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not key:
+        raise HTTPException(503, "Stripe isn't set up on this server yet (STRIPE_SECRET_KEY).")
+    return key
+
+
+async def _stripe(method: str, path: str, data: dict | None = None) -> dict:
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.request(method, f"https://api.stripe.com/v1/{path}", data=data, auth=(_key(), ""))
+    if r.status_code >= 400:
+        msg = (r.json().get("error") or {}).get("message", "") if r.headers.get("content-type", "").startswith("application/json") else ""
+        raise HTTPException(402 if r.status_code == 402 else 502, f"Stripe: {msg or 'request failed'}"[:200])
+    return r.json()
+
+
+@router.get("/api/essentials/wallet", dependencies=[Depends(authorize)])
+def wallet(request: Request):
+    s = _db()
+    with s.lock:
+        row = s.db.execute("SELECT brand, last4 FROM wallets WHERE owner = ?", (_owner(request),)).fetchone()
+    return {"saved": bool(row), "brand": row[0] if row else None, "last4": row[1] if row else None,
+            "limit_usd": VOICE_LIMIT_CENTS / 100, "stripe": bool(os.environ.get("STRIPE_SECRET_KEY"))}
+
+
+@router.post("/api/essentials/setup", dependencies=[Depends(authorize)])
+async def setup(request: Request):
+    _key()
+    origin = os.environ.get("APP_PUBLIC_ORIGIN") or str(request.base_url).rstrip("/")
+    cus = await _stripe("POST", "customers", {"description": "Threadline essentials (caregiver)"})
+    sess = await _stripe("POST", "checkout/sessions", {"mode": "setup", "customer": cus["id"], "currency": "usd",
+                                                      "payment_method_types[0]": "card",
+                                                      "success_url": f"{origin}/?setup={{CHECKOUT_SESSION_ID}}#essentials",
+                                                      "cancel_url": f"{origin}/#essentials"})
+    return {"url": sess["url"]}
+
+
+class SetupDone(BaseModel):
+    session_id: str = Field(pattern=r"^cs_[A-Za-z0-9_]{6,200}$")
+
+
+@router.post("/api/essentials/setup/complete", dependencies=[Depends(authorize)])
+async def setup_complete(body: SetupDone, request: Request):
+    sess = await _stripe("GET", f"checkout/sessions/{body.session_id}?expand[]=setup_intent")
+    si = sess.get("setup_intent") or {}
+    pm_id, cus = si.get("payment_method"), sess.get("customer")
+    if not pm_id or not cus:
+        raise HTTPException(400, "The card wasn't saved.")
+    pm = await _stripe("GET", f"payment_methods/{pm_id}")
+    card = pm.get("card") or {}
+    s = _db()
+    with s.lock:
+        s.db.execute("INSERT OR REPLACE INTO wallets (owner, customer, pm, brand, last4) VALUES (?, ?, ?, ?, ?)",
+                     (_owner(request), cus, pm_id, card.get("brand"), card.get("last4")))
+    return {"saved": True, "brand": card.get("brand"), "last4": card.get("last4")}
+
+
+class BuyRequest(BaseModel):
+    items: list[Line] = Field(min_length=1, max_length=30)
+    confirmed: bool
+    approved_by: str = Field(min_length=1, max_length=60)
+
+
+@router.post("/api/essentials/buy", dependencies=[Depends(authorize)])
+async def buy(body: BuyRequest, request: Request):
+    if not body.confirmed:
+        raise HTTPException(400, "The order must be confirmed first.")
+    total, names = 0, []
+    for line in body.items:
+        item = BY_ID.get(line.id)
+        if not item:
+            raise HTTPException(400, f"Unknown item {line.id!r}.")
+        total += item["cents"] * line.qty
+        names.append(f"{item['name']} x{line.qty}")
+    if total > VOICE_LIMIT_CENTS:
+        raise HTTPException(400, f"Voice orders are limited to ${VOICE_LIMIT_CENTS / 100:.0f}. Use checkout for bigger orders.")
+    s = _db()
+    with s.lock:
+        row = s.db.execute("SELECT customer, pm, brand, last4 FROM wallets WHERE owner = ?", (_owner(request),)).fetchone()
+    if not row:
+        raise HTTPException(409, "No card saved for voice orders yet. Save one on Essentials first.")
+    pi = await _stripe("POST", "payment_intents", {"amount": str(total), "currency": "usd", "customer": row[0], "payment_method": row[1],
+                                                   "off_session": "true", "confirm": "true", "description": "; ".join(names)[:400],
+                                                   "metadata[approved_by]": body.approved_by[:60], "metadata[channel]": "voice"})
+    return {"status": pi.get("status"), "id": pi.get("id"), "amount_usd": total / 100, "card": f"{row[2] or 'card'} •••• {row[3] or ''}".strip(),
+            "test_mode": _key().startswith("sk_test_")}

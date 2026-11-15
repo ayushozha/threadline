@@ -23,21 +23,25 @@ router = APIRouter()
 SLOTS = asyncio.Semaphore(4)
 VIEWS = {"dashboard", "care", "library", "essentials", "tasks", "energy", "days", "graph", "today", "live", "transcripts"}
 MODES = {"memory", "sight", "hearing", "mobility"}
-ACTION_TYPES = {"add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
+ACTION_TYPES = {"buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
 
 SYSTEM = """You are Threadline, a warm, calm voice companion for an older adult or a person with a disability, and for their caregiver.
 You are speaking out loud through a wearable, so answer in at most two short, natural sentences. Use the person's language if they speak one other than English.
 You can see a snapshot of their dashboard in CONTEXT (real Apple Health numbers, the latest care check, tasks, the shopping cart, emergency contact, recent camera scenarios). Use it to answer questions about how they are doing; quote real numbers. Never invent numbers that are not in CONTEXT.
 You can act by adding actions:
 - add_to_cart {id, qty}: only ids from CONTEXT.catalog. remove_from_cart {id}.
-- checkout {}: opens the order for the caregiver to approve and pay with Stripe. Say the total and that the caregiver approves it. Never claim an order is paid.
+- checkout {}: opens the order for the caregiver to approve and pay with Stripe Checkout.
+- buy {}: when they ask you to buy/order/purchase and CONTEXT.cart.wallet.saved is true, add the items and then add buy: say the items and the total and ASK "Shall I buy it?". The page waits for them to say yes; never claim it is paid. If no card is saved, use checkout and say the caregiver needs to save a card once.
 - open_view {view}: one of dashboard, care, library, essentials, tasks, energy (wellbeing), days (daily log), graph (memory map), today, live, transcripts.
 - add_task {title}: a short task for today.
 - care_check {}: run the caregiver agent now.
 - set_mode {mode}: memory, sight, hearing or mobility.
 - emergency {reason}: ONLY if they say they fell, are hurt, can't breathe, have chest pain, or ask for emergency help. Then tell them help is being called and to stay still.
 Rules: never diagnose; never say medication was taken (suggest checking the pill organiser with the caregiver); never identify people by face; if unsure, ask one short question.
-Reply with ONE JSON object only: {"say": "...", "actions": [{"type": "...", ...}]}"""
+Reply in the SAME language they spoke (for example Nepali, Hindi, Spanish). Reply with ONE JSON object only:
+{"heard_language": "language they spoke, in English, e.g. Nepali", "heard_en": "English translation of what they said (same text if English)",
+ "language": "language of your reply, in English", "say": "your reply in their language", "say_en": "English translation of your reply",
+ "actions": [{"type": "...", ...}]}"""
 
 
 def authorize(request: Request, x_app_token: str = Header(default="")) -> None:
@@ -79,7 +83,7 @@ def clean_actions(raw) -> list[dict]:
             out.append({"type": t, "title": re.sub(r"\s+", " ", a["title"]).strip()[:120]})
         elif t == "emergency":
             out.append({"type": t, "reason": str(a.get("reason") or "Help requested")[:120]})
-        elif t in ("checkout", "care_check"):
+        elif t in ("checkout", "care_check", "buy"):
             out.append({"type": t})
     return out[:6]
 
@@ -110,7 +114,10 @@ async def turn(body: TurnRequest):
     say = re.sub(r"\s+", " ", str(data.get("say") or "")).strip()[:400] or "Sorry, could you say that again?"
     if re.search(r"\b(you (already )?took|has taken|have taken) (your )?(pills|medication|tablets)\b", say, re.I):
         say = "I can't confirm your medication. Let's check the pill organiser together, or ask your caregiver."
-    return {"say": say, "actions": clean_actions(data.get("actions"))}
+    short = lambda v, n=400: re.sub(r"\s+", " ", str(v or "")).strip()[:n]  # noqa: E731
+    return {"say": say, "actions": clean_actions(data.get("actions")), "language": short(data.get("language"), 40) or "English",
+            "say_en": short(data.get("say_en")) or say, "heard_language": short(data.get("heard_language"), 40) or "English",
+            "heard_en": short(data.get("heard_en"), 800) or body.text}
 
 
 @router.post("/api/assistant/speak", dependencies=[Depends(authorize)])
@@ -122,7 +129,7 @@ async def speak(body: SpeakRequest):
     async with SLOTS, httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_64",
                               headers={"xi-api-key": key},
-                              json={"text": body.text, "model_id": os.environ.get("ELEVENLABS_MODEL") or "eleven_flash_v2_5",
+                              json={"text": body.text, "model_id": "eleven_v3" if re.search(r"[^\x00-\x7F]", body.text) else (os.environ.get("ELEVENLABS_MODEL") or "eleven_flash_v2_5"),
                                     "voice_settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.25}})
     if r.status_code != 200:
         raise HTTPException(502, "The voice service didn't answer.")

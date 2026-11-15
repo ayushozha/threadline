@@ -2815,6 +2815,12 @@ function assistantContext() {
 async function assistantAction(a) {
   if (a.type === "add_to_cart") { openEssentials(); return shop?.add(a.id, a.qty || 1); }
   if (a.type === "remove_from_cart") { openEssentials(); return shop?.remove(a.id); }
+  if (a.type === "buy") {
+    openEssentials(); const lines = shop?.snapshot() || [];
+    if (!lines.length) return null;
+    if (!shop.walletSaved()) { location.hash = "essentials"; return "No saved card yet: order opened for caregiver checkout"; }
+    pendingBuy = { lines, at: Date.now() }; return `Waiting for your OK · ${shop.totalText()}`;
+  }
   if (a.type === "checkout") { openEssentials(); location.hash = "essentials"; return `Order ready for caregiver approval · ${shop?.totalText() || ""}`; }
   if (a.type === "open_view") { location.hash = a.view; return `Opened ${VIEW_TITLES[a.view] || a.view}`; }
   if (a.type === "add_task") { (life.tasks ||= []).push({ id: newId("t"), title: a.title, due: todayKey(), big: false, done: false, note: "From Talk to Threadline" }); renderTasks(); logAction(`Task added by voice: ${a.title}`); return `Task added: ${a.title}`; }
@@ -2823,7 +2829,19 @@ async function assistantAction(a) {
   if (a.type === "emergency") { emergency.trigger({ reason: a.reason || "Help requested by voice", note: "Asked for help out loud." }); return "Emergency alert started"; }
   return null;
 }
-const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, bandOn: () => Boolean(capture.band && capture.active) }) : null;
+let pendingBuy = null;
+async function assistantIntercept(text) {
+  if (!pendingBuy || Date.now() - pendingBuy.at > 120000) { pendingBuy = null; return null; }
+  if (/^\s*(no|cancel|stop|don'?t|wait)\b/i.test(text)) { pendingBuy = null; return { say: "Okay, I won't buy it. The items are still in your cart.", done: "Order not placed" }; }
+  if (!/\b(yes|yeah|yep|sure|confirm|buy it|go ahead|do it|please do|ok(ay)?)\b|हो|हुन्छ|किन्नुहोस्/i.test(text)) return null;
+  const lines = pendingBuy.lines; pendingBuy = null;
+  try {
+    const who = loadContacts().name, d = await shop.buy(lines, who || "Caregiver (voice)");
+    return { say: `Done. I paid $${d.amount_usd.toFixed(2)} on the ${d.card}.${who ? ` ${who.split(" ")[0]} will see the receipt.` : ""}`, done: `Paid $${d.amount_usd.toFixed(2)} · ${d.card}${d.test_mode ? " · test mode" : ""}` };
+  } catch (e) { return { say: `I couldn't place the order: ${e.message}`, done: null }; }
+}
+const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active),
+  ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
