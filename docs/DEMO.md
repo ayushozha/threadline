@@ -1,23 +1,31 @@
-# Demo script (live, real data only)
+# Threadline Care: 3-minute demo
 
-The app starts empty. Everything shown is captured or typed during the demo.
+Open `/#care` in Chrome or Edge. Tell people nearby that the band's microphone is streaming to Deepgram.
 
 ## Before you start
-- Server running with `DEEPGRAM_API_KEY`, `GEMINI_MODEL` and `GOOGLE_API_KEY` set.
-- Close the Vexo dashboard tab. Open `/?band=73` in Chrome or Edge.
-- Tell everyone nearby that the band's microphone is about to stream to Deepgram.
+- Server has `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_LIVE_MODEL` and `DEEPGRAM_API_KEY` set.
+- Vexo dashboard tab closed; band 73 connected on **Your band** and the live transcript moving.
+- Apple Watch paired (for the haptic tap). Kitchen clip uploaded, or GoPro bridge running.
 
-## Story
-1. **Pair the band** the Vexo way: double-tap the band (blinking blue), press **Connect**, pick **Vexo-HACK-73** in the browser's list (or **Connect by USB cable** → "Vexo Open band"). The band flashes white.
-2. **Save a preference** in your own words, e.g. "When I say I'm overloaded, offer to make space in my schedule" with the words *overloaded, exhausted*.
-3. **Capture**: tick consent, **Start live capture** (or double-tap the band). Talk. The transcript streams live; tap the band once to mark a moment. Watch loudness, movement, steps and battery.
-4. **Stop** (or double-tap). In review, choose which speaker is you; other voices are dropped. Save.
-5. If you said one of your words, the **support card** shows why: your statement, your preference, your earlier statements.
-6. **Schedule**: add tomorrow's real busy times, **Find a time**, approve. Add a busy time over the proposal and approve again to show the re-check and recovery. Download the **.ics**.
-7. **Graph**: switch to Gemini. It rebuilds from your saved statements; click a node to see the exact lines.
-8. **Transcripts**: the full session is stored for this band; export it as .txt.
+## Script
 
-## Say honestly
-- Signals are the band's sound level and movement — not emotions.
-- Speaker labels separate voices; you confirm which one is you.
-- Data stays in this browser; the server stores nothing. Audio goes to Deepgram, and saved statements go to Gemini only when you choose Gemini.
+**0:00 Problem.** "A caregiver can't watch someone all day. The same question every few minutes, lost glasses, worry about pills, and falls nobody sees. Threadline Care listens, watches, answers calmly, and tells the family only what matters."
+
+**0:25 Inputs.** Point to the three sources on `/#care`:
+- Vexo band 73 connected, live transcript streaming as you speak (Deepgram nova-3).
+- **What Threadline is watching**: the looped kitchen clip, or the GoPro LIT HERO via the bridge.
+- Health card: real Apple Health history from the iPhone app. Say plainly: "This is my own data, standing in for the person being cared for."
+
+**1:05 Gemini Live.** Press **Start live guidance**. Ask "Where are my glasses?" It answers out loud from what the camera sees. Ask "Did I take my pills?" It will not confirm; it suggests checking the organiser together.
+
+**1:45 Care agent.** Ask "Where is my wife?" three times. Press **Check now**. Status turns amber (**needs attention**) with one next step and a note for the family; reasons cite the repeated question.
+
+**2:20 Urgent.** Say "Help, I've fallen" (or press **Simulate fall (demo)**). Press **Check now** if it doesn't update. Status turns red (**urgent**), the watch taps, and **Text family** opens a pre-filled message.
+
+**2:45 Safety.** "Urgent only on a real fall or a help phrase. It never diagnoses, never claims medication was taken, never identifies faces, and every reason cites an input. If Gemini is down, local rules give the same safe answer." Close.
+
+## Backup plan
+- **Band won't connect:** use the laptop microphone as the transcript source; same Deepgram relay.
+- **GoPro/bridge fails:** switch to **Upload videos** and loop the kitchen clip.
+- **Gemini down or slow:** the caregiver agent falls back to local rules automatically (the card says so); skip Gemini Live and show the agent.
+- **Watch not paired:** show the red status and the **Text family** link; mention the tap.
