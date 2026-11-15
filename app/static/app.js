@@ -244,12 +244,41 @@ const moodLogKey = () => `threadline.moodlog.v1.${threadKey}`;
 function loadMoodLog() { try { return JSON.parse(localStorage.getItem(moodLogKey()) || "{}") || {}; } catch { return {}; } }
 function rebuildMood() {
   const log = loadMoodLog(), keys = Object.keys(log).sort().slice(-30), label = (v) => (MOOD_FACES.reduce((b, f) => Math.abs(f[1] - v) < Math.abs(b[1] - v) ? f : b)[2]);
-  const days = keys.filter((k) => log[k].morning != null || log[k].evening != null).map((k) => { const e = log[k], m = e.morning ?? e.evening, ev = e.evening ?? e.morning;
-    return { date: k, morning: m, evening: ev, morningLabel: label(m), eveningLabel: label(ev), agitation: e.agitation ?? 0, repeats: e.repeats ?? 0 }; });
+  const days = keys.map((k) => { const e = log[k], m = e.morning ?? e.evening ?? null, ev = e.evening ?? e.morning ?? null;
+    return { date: k, morning: m, evening: ev, morningLabel: m == null ? "not logged" : label(m), eveningLabel: ev == null ? "not logged" : label(ev), agitation: e.agitation ?? 0, repeats: e.repeats ?? 0, by: e.by || "caregiver" }; });
   const weeks = keys.filter((k) => Number.isFinite(log[k].csdd)).map((k) => ({ weekEnding: k, score: log[k].csdd, band: log[k].csdd >= 18 ? "Definite major depression range — talk to the GP soon" : log[k].csdd >= 11 ? "Probable major depression range — talk to the GP" : log[k].csdd >= 6 ? "Mild symptoms — keep watching" : "No significant depressive symptoms" }));
   ownerMood = { days, weeks };
 }
 const moodForm = { morning: null, evening: null, agitation: null };
+function renderWellbeingToday() {
+  const box = $("wb-today"); if (!box) return;
+  const h = hLatest() || {}, m = moodOf(todayKey()) || {}, e = life.energy, week = ownerMood.days.slice(-7);
+  const avg = (f) => { const v = week.map((d) => d[f]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const wk = avg("morning") != null && avg("evening") != null ? (avg("morning") + avg("evening")) / 2 : avg("morning") ?? avg("evening");
+  const tile = (label, value, sub, tone = "") => el("article", { className: `wb-tile ${tone}` }, el("small", { textContent: label }), el("b", { textContent: value }), sub ? el("span", { textContent: sub }) : null);
+  box.replaceChildren(
+    tile("Mood today", m.morningLabel && m.morningLabel !== "not logged" ? `${m.morningLabel} → ${m.eveningLabel}` : "Say how you feel", m.by === "voice" ? "logged by voice" : m.by === "demo seed" ? "demo seed" : "", m.morning != null && m.morning < -0.2 ? "low" : "good"),
+    tile("Energy", e ? ({ low: "Low", positive: "Positive", steady: "Steady" }[e.state] || "Steady") : "—", e ? `“${e.word || ""}”` : "tell Threadline", e?.state === "low" ? "low" : ""),
+    tile("Agitation tonight", ["none", "mild", "moderate", "severe"][m.agitation ?? 0], `${m.repeats ?? 0} repeated questions`, (m.agitation ?? 0) >= 2 ? "low" : ""),
+    tile("Sleep", h.sleep_hours != null ? `${Math.floor(h.sleep_hours)} h ${Math.round((h.sleep_hours % 1) * 60)} m` : "—", "last night · Apple Health", h.sleep_hours != null && h.sleep_hours < 6 ? "low" : "good"),
+    tile("Steps", h.steps != null ? Math.round(h.steps).toLocaleString() : "—", "today · Apple Health"),
+    tile("7-day mood", wk == null ? "—" : `${wk > 0 ? "+" : ""}${wk.toFixed(2)}`, `${week.length} check-ins`, wk != null && wk < -0.2 ? "low" : "good"));
+}
+function seedMissingCheckins() {
+  if (isFictionalDemo()) return;
+  const log = loadMoodLog(); let added = 0;
+  for (let i = 1; i <= 30; i++) {
+    const k = todayKey(new Date(Date.now() - i * DAY_MS)); if (log[k]) continue;
+    const h = hDay(k) || {}, seed = Number(k.replaceAll("-", "")), r = (n) => { const x = Math.sin(seed + n) * 10000; return x - Math.floor(x); };
+    const sleep = h.sleep_hours ?? 6.5, steps = h.steps ?? 5000;
+    const base = Math.max(-0.8, Math.min(0.8, 0.15 * (sleep - 6.8) + 0.08 * (Math.min(steps, 12000) / 6000 - 1) + (r(1) - 0.5) * 0.5));
+    const snap = (v) => [-0.8, -0.4, 0, 0.4, 0.8].reduce((b, f) => Math.abs(f - v) < Math.abs(b - v) ? f : b);
+    const agitation = Math.max(0, Math.min(3, Math.round(1 + (sleep < 6 ? 1 : 0) - (steps > 8500 ? 1 : 0) + (r(2) - 0.5))));
+    log[k] = { morning: snap(base), evening: snap(base - 0.15 * agitation + (r(3) - 0.5) * 0.3), agitation, repeats: Math.round(2 + agitation * 2 + r(4) * 2), at: `${k}T20:00:00`, by: "demo seed" };
+    added += 1;
+  }
+  if (added) { try { localStorage.setItem(moodLogKey(), JSON.stringify(log)); } catch { /* storage off */ } }
+}
 function renderMoodForm() {
   const today = loadMoodLog()[todayKey()] || {};
   for (const f of ["morning", "evening"]) { if (moodForm[f] == null) moodForm[f] = today[f] ?? null;
@@ -271,6 +300,7 @@ $("mood-checkin")?.addEventListener("submit", (e) => {
 });
 function renderMood() {
   if (!$("mood-chart")) return;
+  try { if (ownerHealth.days) seedMissingCheckins(); } catch { /* */ }
   rebuildMood(); renderMoodForm();
   if (!ownerMood.days.length) {
     $("mood-today").textContent = "";
@@ -280,12 +310,13 @@ function renderMood() {
   for (const id of ["mood-chart", "mood-weeks"]) $(id).hidden = false;
   document.querySelectorAll(".mood-card .mood-legend, .mood-card h3").forEach((n) => { n.hidden = false; });
   $("mood-weeks").hidden = !ownerMood.weeks.length; document.querySelectorAll(".mood-card h3").forEach((n) => { n.hidden = !ownerMood.weeks.length; });
+  renderWellbeingToday();
   const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => days.length < 2 ? W / 2 : 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
   $("mood-today").replaceChildren(...(t ? [["This morning", `${t.morningLabel} · ${moodWord(t.morning)} (${t.morning > 0 ? "+" : ""}${t.morning})`], ["This evening", `${t.eveningLabel} · ${moodWord(t.evening)} (${t.evening > 0 ? "+" : ""}${t.evening})`], ["Evening agitation", `${["none", "mild", "moderate", "severe"][t.agitation]} (NPI-Q ${t.agitation})`], ["Repeated questions", String(t.repeats)]].map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v }))) : []));
   const svg = $("mood-chart"), mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
   const kids = [mk("line", { x1: 0, x2: W, y1: H / 2, y2: H / 2, class: "zero" })];
   days.forEach((d, i) => { if (d.agitation) kids.push(mk("rect", { x: x(i) - 5, y: H - d.agitation * 14, width: 10, height: d.agitation * 14, class: "ag" })); });
-  for (const [f, cls] of [["morning", "am"], ["evening", "pm"]]) kids.push(mk("polyline", { points: days.map((d, i) => `${x(i)},${y(d[f])}`).join(" "), class: cls }));
+  for (const [f, cls] of [["morning", "am"], ["evening", "pm"]]) kids.push(mk("polyline", { points: days.map((d, i) => d[f] == null ? null : `${x(i)},${y(d[f])}`).filter(Boolean).join(" "), class: cls }));
   svg.replaceChildren(...kids);
   $("mood-weeks").replaceChildren(...ownerMood.weeks.slice().reverse().map((w) => el("li", { className: w.score >= 11 ? "high" : w.score >= 6 ? "mid" : "low" },
     el("b", { textContent: `${w.score}` }), el("span", { textContent: ` week ending ${parseDay(w.weekEnding).toLocaleDateString([], { month: "short", day: "numeric" })} · ${w.band}` }))));
@@ -317,6 +348,7 @@ async function loadOwnerHealth() {
     const keys = Object.keys(ownerHealth.byDay).sort();
     ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
     ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
+    try { seedMissingCheckins(); rebuildMood(); } catch { /* */ }
     drawDashboard(); drawGraph();
     renderEnergy(); renderToday(); renderDays(); renderIntegrations();
   } catch { /* offline: screens keep live readings only */ }
@@ -1634,7 +1666,7 @@ function renderDays() {
     const byDay = {};
     for (const a of life.actions || []) (byDay[todayKey(new Date(a.at))] ||= []).push(a);
     const mlog = loadMoodLog();
-    for (const [d, e] of Object.entries(mlog)) (byDay[d] ||= []).push({ at: e.at || `${d}T20:00:00`, text: `Check-in${e.by === "voice" ? " by voice" : ""}: ${[e.morning != null ? `morning ${moodWord(e.morning)}` : "", e.evening != null ? `evening ${moodWord(e.evening)}` : "", e.agitation != null ? `agitation ${["none", "mild", "moderate", "severe"][e.agitation]}` : "", e.repeats ? `${e.repeats} repeated questions` : ""].filter(Boolean).join(" · ")}` });
+    for (const [d, e] of Object.entries(mlog)) (byDay[d] ||= []).push({ at: e.at || `${d}T20:00:00`, text: `Check-in${e.by === "voice" ? " by voice" : e.by === "demo seed" ? " (demo seed)" : ""}: ${[e.morning != null ? `morning ${moodWord(e.morning)}` : "", e.evening != null ? `evening ${moodWord(e.evening)}` : "", e.agitation != null ? `agitation ${["none", "mild", "moderate", "severe"][e.agitation]}` : "", e.repeats ? `${e.repeats} repeated questions` : ""].filter(Boolean).join(" · ")}` });
     const daysSorted = Object.keys(byDay).sort().reverse().slice(0, 14);
     $("days-actions").replaceChildren(...(daysSorted.length ? daysSorted.map((d) => el("details", { className: "dl-day", open: d === todayKey() },
       el("summary", {}, el("b", { textContent: d === todayKey() ? "Today" : parseDay(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) }), el("span", { className: "caption", textContent: ` · ${byDay[d].length} entries` })),
@@ -2986,6 +3018,19 @@ const bandPcm = {  // decoded band PCM for the OpenAI Realtime engine (band only
   on: () => Boolean(capture.band && capture.active && capture.decoder),
   attach(push) { realtimeBandPush = push; return () => { if (realtimeBandPush === push) realtimeBandPush = null; }; },
 };
+/* Every Talk to Threadline exchange is kept: a daily "Talk to Threadline" transcript, and what the person said becomes a memory. */
+function saveTalkTurn({ role, text, lang, english }) {
+  const t = String(text || "").trim(); if (!t) return;
+  const now = new Date(), day = todayKey(now), id = `talk-${day}`;
+  const list = loadArchive(); let sess = list.find((x) => x.id === id);
+  if (!sess) { sess = { id, startedAt: now.toISOString(), endedAt: now.toISOString(), source: "voice", device: capture.band ? `${bandLabel()} · Talk to Threadline` : "Talk to Threadline", title: "Talk to Threadline", marks: 0, lines: [] }; list.unshift(sess); }
+  sess.lines.push({ at: now.toISOString(), offset: (now - new Date(sess.startedAt)) / 1000, speakers: [role === "user" ? 0 : 1], text: english && english !== t ? `${t} (${english})` : t, provider: "assistant", activity: "", hr: null, marked: false, ...(lang ? { language: lang } : {}) });
+  sess.endedAt = now.toISOString(); saveArchive([sess, ...list.filter((x) => x.id !== id)]); try { renderArchive(); } catch { /* */ }
+  if (role === "user" && t.split(/\s+/).length >= 3) {
+    sessions.reflection.notes.push({ id: newId("n"), text: english && english !== t ? `${t} (${english})` : t, at: now.toISOString(), source: "voice", context: "Said to Threadline" });
+    saveThread(); try { renderTimeline(); scheduleGraph(4000); } catch { /* */ }
+  }
+}
 let pendingBuy = null;
 async function assistantIntercept(text) {
   if (!pendingBuy || Date.now() - pendingBuy.at > 120000) { pendingBuy = null; return null; }
@@ -3000,7 +3045,7 @@ async function assistantIntercept(text) {
     return { say: d.test_mode ? "The test payment succeeded. No real charge was made." : `Payment of $${d.amount_usd.toFixed(2)} succeeded on the ${d.card}.`, done: `${d.test_mode ? 'Test payment' : 'Payment'} succeeded · $${d.amount_usd.toFixed(2)}` };
   } catch (e) { return { say: `Payment could not be confirmed: ${e.message}. Say yes to retry the same request, or no to cancel.`, done: null }; }
 }
-const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
+const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, onTurn: saveTalkTurn, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
 $("assistant-fab")?.addEventListener("click", () => { const open = document.body.classList.toggle("as-open"); $("assistant-fab").setAttribute("aria-expanded", String(open)); $("assistant-fab").textContent = open ? "✕ Close" : "🎙 Talk to Threadline"; });
 placeAssistant((location.hash || "#dashboard").slice(1));

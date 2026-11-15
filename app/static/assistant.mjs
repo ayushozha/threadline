@@ -12,7 +12,7 @@ const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "ge
 import { speak as speakNatural } from './voice.mjs';
 const WAKE = /^\s*(hey\s+)?(thread\s*line|threadline)[,.!\s]*/i;
 
-export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm }) {
+export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm, onTurn }) {
   const st = { engine: loadEngine(), rt: null, rtBand: null, rtDetach: null, rtActs: [], listening: false, ws: null, rec: null, stream: null, speaking: false, busy: false, history: [], buffer: "", interim: "" };
   const orb = el("div", { className: "as-orb", "aria-hidden": "true" });
   const status = el("p", { className: "as-status", textContent: "Listens through the Vexo band. Tap Talk or double-tap the band, then speak." });
@@ -74,6 +74,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
       const d = await request("/api/assistant/turn", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, history: st.history.slice(-10), context: getContext() }) });
       st.history.push({ role: "user", text }, { role: "model", text: d.say });
+      try { onTurn?.({ role: "user", text, lang: d.heard_language, english: d.heard_en }); onTurn?.({ role: "model", text: d.say, lang: d.language, english: d.say_en }); } catch { /* */ }
       const done = [];
       for (const a of d.actions || []) { try { const r = await runAction(a); if (r) done.push(r); } catch { /* skip */ } }
       if (d.heard_language) { mine.querySelector(".as-meta").append(el("span", { className: "as-lang", textContent: d.heard_language }));
@@ -110,6 +111,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
         muteWhileSpeaking: (v) => { bs.muted = v; },  // the band mic would otherwise hear the speakers
         onAction: (r) => st.rtActs.push(r),
         onTranscript: ({ role, text }) => {
+          try { onTurn?.({ role: role === "user" ? "user" : "model", text }); } catch { /* */ }
           if (role === "user") { add("me", text); return; }
           const done = st.rtActs.splice(0);
           add("ai", text, done.length ? el("div", { className: "as-acts" }, ...done.map((x) => el("span", { className: "as-act", textContent: `✓ ${x}` }))) : null);

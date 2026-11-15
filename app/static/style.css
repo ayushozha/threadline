@@ -828,3 +828,13 @@ li.flash{animation:taskflash 2.2s ease-out}@keyframes taskflash{0%{background:#f
 .as-head-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch}
 .as-sos{border:2px solid #ffb3a3;border-radius:30px;padding:10px 16px;font-weight:800;font-size:14px;background:#7d1d10;color:#fff;cursor:pointer}
 .as-sos:hover{background:#9d2e1c}
+
+/* ---------- Wellbeing upgrade ---------- */
+.wb-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:12px}.wb-title{margin:2px 0 4px;font:600 30px/1.15 Georgia,serif}
+.wb-today{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.wb-tile{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:16px 16px 14px;box-shadow:0 6px 18px rgba(22,22,26,.05);border-top:5px solid #8fd1a9;display:grid;gap:4px}
+.wb-tile.low{border-top-color:#e8452c}.wb-tile.good{border-top-color:#5b9a7f}.wb-tile small{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.wb-tile b{font:700 22px/1.2 ui-sans-serif,system-ui;letter-spacing:-.3px}.wb-tile span{font-size:12px;color:var(--muted)}
+.mood-card{border-radius:20px}.mood-chart{height:220px!important;border-radius:14px}.mood-today div{border-radius:14px}
+.mood-checkin{border-radius:16px;background:linear-gradient(135deg,#fffaf0,#f7efe0)}.mc-face{transition:transform .12s}.mc-face:hover{transform:scale(1.12)}
+.energy-top{gap:16px}.sig-card{border-radius:18px}
