@@ -1311,4 +1311,6 @@ from app import live_gemini  # noqa: E402  (Gemini Live relay; imports this modu
 app.include_router(live_gemini.router)
 from app import vision_bridge  # noqa: E402  (GoPro camera bridge, latest frame in memory only)
 app.include_router(vision_bridge.router)
+from app import care_agent; app.include_router(care_agent.router)  # noqa: E402,E702  (caregiver assessment)
+from app import health_import; app.include_router(health_import.router)  # noqa: E402,E702  (Apple Health import)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")

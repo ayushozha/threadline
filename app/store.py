@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS demo_lines (
     text TEXT NOT NULL, source TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS demo_readings (
     id INTEGER PRIMARY KEY, at TEXT NOT NULL, device TEXT, json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS health_daily (
+    date TEXT NOT NULL, metric TEXT NOT NULL, value REAL, count INTEGER NOT NULL DEFAULT 0, min REAL, max REAL,
+    PRIMARY KEY (date, metric));
+CREATE TABLE IF NOT EXISTS health_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
 
@@ -68,6 +72,43 @@ class Store:
             rows = self.db.execute("SELECT at, device, json FROM demo_readings ORDER BY id DESC LIMIT ?",
                                    (limit,)).fetchall()
         return [{"at": at, "device": device, "frame": json.loads(raw)} for at, device, raw in reversed(rows)]
+
+    def replace_health(self, rows: list[tuple], imported_at: str | None = None) -> None:
+        """Replace the demo owner's daily Apple Health aggregates with rows of (date, metric, value, count, min, max)."""
+        with self.lock:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                self.db.execute("DELETE FROM health_daily")
+                self.db.executemany("INSERT INTO health_daily (date, metric, value, count, min, max) "
+                                    "VALUES (?, ?, ?, ?, ?, ?)", rows)
+                self.db.execute("INSERT OR REPLACE INTO health_meta (key, value) VALUES ('imported_at', ?)",
+                                (imported_at or now_iso(),))
+                self.db.execute("COMMIT")
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
+
+    def health_rows(self, since: str | None = None) -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT date, metric, value, count, min, max FROM health_daily WHERE date >= ? "
+                                   "ORDER BY date, metric", (since or "",)).fetchall()
+        return [{"date": d, "metric": m, "value": v, "count": c, "min": lo, "max": hi} for d, m, v, c, lo, hi in rows]
+
+    def health_range(self) -> list[str] | None:
+        with self.lock:
+            first, last = self.db.execute("SELECT MIN(date), MAX(date) FROM health_daily").fetchone()
+        return [first, last] if first else None
+
+    def health_imported_at(self) -> str | None:
+        with self.lock:
+            row = self.db.execute("SELECT value FROM health_meta WHERE key = 'imported_at'").fetchone()
+        return row[0] if row else None
+
+    def clear_health(self) -> int:
+        with self.lock:
+            n = self.db.execute("DELETE FROM health_daily").rowcount
+            self.db.execute("DELETE FROM health_meta WHERE key = 'imported_at'")
+        return n
 
     def close(self) -> None:
         with self.lock:
