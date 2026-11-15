@@ -43,10 +43,27 @@ def watch_gate(pairing, key: object) -> tuple[int, str] | None:
     return None
 
 
+def touch(pairing) -> None:
+    """Activity on a claimed watch-started pairing keeps it alive for CLAIMED_TTL from now."""
+    if watch_key(pairing) and claimed(pairing):
+        pairing.expires = max(pairing.expires, time.monotonic() + main.CLAIMED_TTL)
+
+
 def require_watch(code: str, key: str):
     pairing = main.find_pairing(code)
     if problem := watch_gate(pairing, key):
         raise HTTPException(*problem)
+    touch(pairing)
+    return pairing
+
+
+def known_watch(code: str, key: str):
+    """The watch-started pairing for this code and key, or 404."""
+    pairing = main.find_pairing(code)
+    if (not pairing or not watch_key(pairing) or pairing.expires < time.monotonic()
+            or not secrets.compare_digest(key.encode(), watch_key(pairing).encode())):
+        raise HTTPException(404, "Unknown or expired code. Get a new one.")
+    touch(pairing)
     return pairing
 
 
@@ -85,10 +102,14 @@ async def watch_start(body: WatchStart, request: Request):
 
 @router.get("/api/watch/status")
 async def watch_status(x_watch_code: str = Header(default=""), x_watch_key: str = Header(default="")):
-    pairing = main.find_pairing(x_watch_code)
-    if (not pairing or not watch_key(pairing) or pairing.expires < time.monotonic()
-            or not secrets.compare_digest(x_watch_key.encode(), watch_key(pairing).encode())):
-        raise HTTPException(404, "Unknown or expired code. Get a new one.")
+    pairing = known_watch(x_watch_code, x_watch_key)
+    return {"claimed": claimed(pairing), "expires_in": max(0, int(pairing.expires - time.monotonic()))}
+
+
+@router.post("/api/watch/resume")
+async def watch_resume(x_watch_code: str = Header(default=""), x_watch_key: str = Header(default="")):
+    """Called by the watch on relaunch with its saved code and key. 404 means: start a fresh code."""
+    pairing = known_watch(x_watch_code, x_watch_key)
     return {"claimed": claimed(pairing), "expires_in": max(0, int(pairing.expires - time.monotonic()))}
 
 
@@ -98,5 +119,5 @@ async def watch_claim(body: WatchClaim):
     if not pairing or not watch_key(pairing) or claimed(pairing) or pairing.expires < time.monotonic():
         raise HTTPException(404, NO_WATCH)
     pairing.claimed = True
-    pairing.expires = time.monotonic() + main.ATTACHED_TTL  # like a watch attaching
+    pairing.expires = time.monotonic() + main.CLAIMED_TTL
     return {"ok": True, "device": pairing.device or "Apple Watch"}

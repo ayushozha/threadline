@@ -732,6 +732,7 @@ async def live_transcribe(client: WebSocket):
 
 PAIR_TTL = 600  # an unused code expires after 10 min
 ATTACHED_TTL = 2 * 3600  # once a watch has attached, it may reconnect for 2 h
+CLAIMED_TTL = 7 * 24 * 3600  # a claimed watch-started pairing lives 7 days past its last activity
 MAX_PAIRINGS = 20
 WATCH_IDLE_SECONDS = 15  # HTTP fallback: finalize when the watch stops posting audio
 WATCH_CHUNK_MAX = 1024 * 1024
@@ -785,7 +786,7 @@ def watch_hooks(pairing: Pairing, device: str):
         attached["on"] = True
         pairing.watches += 1
         pairing.device = device
-        pairing.expires = time.monotonic() + ATTACHED_TTL
+        pairing.expires = max(pairing.expires, time.monotonic() + ATTACHED_TTL)
         await fanout(pairing, {"type": "watch_connected", "device": device})
 
     def on_end():
@@ -833,6 +834,7 @@ async def watch_feed(client: WebSocket):
         return await fail("Enter the project access token to use live providers.")
     if not pairing or not watch_claim.claimed(pairing):
         return await fail("Unknown or expired pairing code. Create a new one.")
+    watch_claim.touch(pairing)
     try:
         await client.send_json({"type": "waiting"})
         pairing.feeds.add(client)
@@ -1068,6 +1070,7 @@ async def watch_stream(client: WebSocket):
     pairing = find_pairing(hello.get("code"))
     if problem := watch_claim.watch_gate(pairing, hello.get("watch_key")):
         return await fail(problem[1])
+    watch_claim.touch(pairing)
     source = hello.get("format", "pcm16")
     if source not in {"pcm16", "sensors"}:
         return await fail('Use format "sensors" or "pcm16" (16 kHz mono linear16 PCM).')

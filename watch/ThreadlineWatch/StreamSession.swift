@@ -22,6 +22,7 @@ final class StreamSession: ObservableObject {
     @Published var hapticReason: String?
     @Published var moodRequest: MoodRequest?  // shown as "Save this mood to Apple Health?"
     @Published var moodNote: String?
+    @Published var pairingLost = false  // the server no longer knows this code (e.g. after a redeploy)
     private var health: [String: Any] = [:]  // slow-changing Health values, refreshed once a minute
     private var healthTick = 0
     private var cycleSent = false
@@ -55,6 +56,7 @@ final class StreamSession: ObservableObject {
         if let url = URL(string: server.trimmingCharacters(in: .whitespaces)) { self.server = url }
         self.code = code
         self.watchKey = watchKey
+        pairingLost = false
     }
 
     func toggle() {
@@ -374,7 +376,7 @@ final class StreamSession: ObservableObject {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode
-            if statusCode == 401 { status = "Code expired. Pair again."; return }
+            if statusCode == 401 { status = "Code expired. Pair again."; if !watchKey.isEmpty { pairingLost = true }; return }
             if statusCode == 403 { status = "Not claimed yet. Enter the code on the website."; return }
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             for message in json?["messages"] as? [[String: Any]] ?? [] { handle(message) }
@@ -415,6 +417,7 @@ final class StreamSession: ObservableObject {
         case "error":
             status = message["message"] as? String ?? "Server error"
             if !everReady { rejected = true }
+            if !watchKey.isEmpty, status.hasPrefix("Unknown or expired") { pairingLost = true }
         case "closed":
             if !isStreaming { status = "Stopped"; closeSocket() }
         default:
@@ -425,30 +428,52 @@ final class StreamSession: ObservableObject {
 
 
 /// Device-code pairing: the watch asks the server for a code (`POST /api/watch/start`), shows it, and polls
-/// `GET /api/watch/status` every 2 s until the code is entered on the website. The code and watch key live in
-/// memory only, so relaunching the app shows a fresh code.
+/// `GET /api/watch/status` every 2 s until the code is entered on the website. After a claim the code, watch key
+/// and server are saved, and a relaunch resumes with `POST /api/watch/resume` instead of showing a new code.
+/// A 404 there (unknown or expired, e.g. after a server redeploy) clears it and starts a fresh code.
 @MainActor
 final class DevicePairing: ObservableObject {
     @Published private(set) var code = ""
     @Published private(set) var claimed = false
+    @Published private(set) var resumed = false  // claimed from a saved pairing, not a fresh claim
     @Published private(set) var note: String?
     private(set) var watchKey = ""
-    private(set) var server = ""
+    let server = AppConfig.defaultServer
     private var task: Task<Void, Never>?
     private let device = WKInterfaceDevice.current().name
+    private static let savedKey = "pairing"
 
     /// "482913" -> "482 913"
     var spacedCode: String { code.count == 6 ? "\(code.prefix(3)) \(code.suffix(3))" : code }
+    var host: String { URL(string: server)?.host ?? server }
 
-    func begin(server: String) {
+    /// On launch: resume a saved pairing when there is one, otherwise get a new code.
+    func begin() {
         task?.cancel()
-        self.server = server.trimmingCharacters(in: .whitespaces)
-        code = ""; watchKey = ""; claimed = false; note = nil
+        code = ""; watchKey = ""; claimed = false; resumed = false; note = nil
         task = Task { await run() }
+    }
+
+    /// Forget the saved pairing and show a new code.
+    func unpair() {
+        Self.clearSaved()
+        begin()
     }
 
     func cancel() {
         task?.cancel(); task = nil
+    }
+
+    private static func loadSaved() -> [String: String]? {
+        UserDefaults.standard.dictionary(forKey: savedKey) as? [String: String]
+    }
+
+    private func save() {
+        UserDefaults.standard.set(["code": code, "watch_key": watchKey, "server": server], forKey: Self.savedKey)
+    }
+
+    static func clearSaved() {
+        UserDefaults.standard.removeObject(forKey: savedKey)
     }
 
     private func url(_ path: String) -> URL? {
@@ -459,6 +484,27 @@ final class DevicePairing: ObservableObject {
     }
 
     private func run() async {
+        if let saved = Self.loadSaved(), saved["server"] == server,
+           let savedCode = saved["code"], let savedKey = saved["watch_key"] {
+            code = savedCode; watchKey = savedKey
+            while !Task.isCancelled {
+                switch await check("/api/watch/resume", method: "POST") {
+                case .claimed:
+                    claimed = true; resumed = true; note = nil
+                    return
+                case .offline:
+                    try? await Task.sleep(for: .seconds(5)); continue
+                case .waiting, .gone:
+                    break
+                }
+                break
+            }
+            guard !Task.isCancelled else { return }
+            Self.clearSaved()
+            code = ""; watchKey = ""
+        } else {
+            Self.clearSaved()
+        }
         while !Task.isCancelled {
             guard let started = await start() else {
                 try? await Task.sleep(for: .seconds(5)); continue
@@ -468,8 +514,9 @@ final class DevicePairing: ObservableObject {
             while !Task.isCancelled, Date() < expiry {
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
-                switch await poll() {
+                switch await check("/api/watch/status", method: "GET") {
                 case .claimed:
+                    save()
                     claimed = true
                     WKInterfaceDevice.current().play(.success)
                     return
@@ -484,7 +531,7 @@ final class DevicePairing: ObservableObject {
     }
 
     private func start() async -> (code: String, key: String, expiresIn: Int)? {
-        guard let url = url("/api/watch/start") else { note = "Check the server address"; return nil }
+        guard let url = url("/api/watch/start") else { note = "Server address is not set"; return nil }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -499,21 +546,24 @@ final class DevicePairing: ObservableObject {
             }
             return (code, key, json?["expires_in"] as? Int ?? 600)
         } catch {
-            note = "Cannot reach \(URL(string: server)?.host ?? server). Retrying…"
+            note = "Cannot reach \(host). Retrying…"
             return nil
         }
     }
 
-    private enum Poll { case waiting, claimed, gone, offline }
+    private enum Check { case waiting, claimed, gone, offline }
 
-    private func poll() async -> Poll {
-        guard let url = url("/api/watch/status") else { return .gone }
+    private func check(_ path: String, method: String) async -> Check {
+        guard let url = url(path) else { return .gone }
         var request = URLRequest(url: url)
+        request.httpMethod = method
         request.setValue(code, forHTTPHeaderField: "X-Watch-Code")
         request.setValue(watchKey, forHTTPHeaderField: "X-Watch-Key")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if (response as? HTTPURLResponse)?.statusCode == 404 { return .gone }
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            if statusCode == 404 { return .gone }
+            guard statusCode == 200 else { note = "Server error. Retrying…"; return .offline }
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             note = nil
             return json?["claimed"] as? Bool == true ? .claimed : .waiting

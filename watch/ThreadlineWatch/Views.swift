@@ -1,14 +1,12 @@
 import SwiftUI
 
 /// Start screen: the watch gets its own code and shows it; you enter it on the Threadline website.
+/// A saved pairing is resumed on launch and goes straight to the sensors screen.
 struct DeviceCodeView: View {
     @EnvironmentObject var session: StreamSession
     @StateObject private var pairing = DevicePairing()
-    @AppStorage("server") private var server = AppConfig.defaultServer
     @State private var openStream = false
-    @State private var startedFor = ""
-
-    private var host: String { URL(string: server)?.host ?? server }
+    @State private var started = false
 
     var body: some View {
         ScrollView {
@@ -16,77 +14,67 @@ struct DeviceCodeView: View {
                 if pairing.claimed {
                     Text("Paired ✓").font(.title2.bold()).foregroundStyle(.green)
                     Button("Open sensors") { openStream = true }.tint(.green)
-                    Button("Pair again") { pairing.begin(server: server); startedFor = server }
+                    Button("Unpair", role: .destructive) { pairing.unpair() }
+                } else if pairing.code.isEmpty {
+                    ProgressView()
+                    Text(pairing.note ?? "Connecting…").font(.caption2).foregroundStyle(.secondary)
                 } else {
                     Text("Pair on the website").font(.headline)
-                    if pairing.code.isEmpty {
-                        ProgressView()
-                    } else {
-                        Text(pairing.spacedCode)
-                            .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                            .minimumScaleFactor(0.6).lineLimit(1)
-                        Text("Enter \(pairing.spacedCode) at \(host)")
-                            .font(.footnote).multilineTextAlignment(.center)
-                    }
+                    Text(pairing.spacedCode)
+                        .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
+                        .minimumScaleFactor(0.6).lineLimit(1)
+                    Text("Enter \(pairing.spacedCode) at \(pairing.host)")
+                        .font(.footnote).multilineTextAlignment(.center)
                     Text(pairing.note ?? "Waiting…").font(.caption2).foregroundStyle(.secondary)
                 }
-                NavigationLink("Enter a code from the website instead") { PairView() }
-                    .font(.footnote)
-                NavigationLink("Server") { ServerView() }.font(.footnote)
+                Text("Connected to \(pairing.host)").font(.caption2).foregroundStyle(.secondary)
+                if !pairing.claimed {
+                    NavigationLink("Enter a code from the website instead") { PairView() }
+                        .font(.footnote)
+                }
             }
         }
         .navigationTitle("Threadline")
         .navigationDestination(isPresented: $openStream) {
-            StreamView(autoStart: true)
+            StreamView(autoStart: true, onUnpair: unpair)
                 .onAppear { session.configure(server: pairing.server, code: pairing.code, watchKey: pairing.watchKey) }
         }
         .onAppear {
-            // First launch, or the server setting changed: get a fresh code.
-            if startedFor != server { startedFor = server; pairing.begin(server: server) }
+            if !started { started = true; pairing.begin() }
         }
         .onChange(of: pairing.claimed) { _, claimed in
             guard claimed else { return }
+            if pairing.resumed { openStream = true; return }
             Task { try? await Task.sleep(for: .seconds(1)); if pairing.claimed { openStream = true } }
         }
-    }
-}
-
-/// The server the watch talks to.
-struct ServerView: View {
-    @AppStorage("server") private var server = AppConfig.defaultServer
-
-    var body: some View {
-        Form {
-            Section("Server") {
-                TextField("https://…", text: $server).textContentType(.URL)
-            }
+        .onChange(of: session.pairingLost) { _, lost in
+            if lost { unpair() }  // the server forgot this pairing: show a fresh code
         }
-        .navigationTitle("Server")
+    }
+
+    private func unpair() {
+        openStream = false
+        pairing.unpair()
     }
 }
 
-/// Fallback: server address and a 6-digit code created on the Threadline website.
+/// Fallback: a 6-digit code created on the Threadline website.
 struct PairView: View {
     @EnvironmentObject var session: StreamSession
-    @AppStorage("server") private var server = AppConfig.defaultServer
     @AppStorage("code") private var code = ""
 
     private var codeIsValid: Bool { code.count == 6 && code.allSatisfy(\.isNumber) }
 
     var body: some View {
         Form {
-            Section("Server") {
-                TextField("https://…", text: $server)
-                    .textContentType(.URL)
-            }
             Section("Pairing code") {
                 TextField("123456", text: $code)
             }
             NavigationLink("Continue") {
                 StreamView()
-                    .onAppear { session.configure(server: server, code: code) }
+                    .onAppear { session.configure(server: AppConfig.defaultServer, code: code) }
             }
-            .disabled(!codeIsValid || URL(string: server)?.host == nil)
+            .disabled(!codeIsValid)
         }
         .navigationTitle("Threadline")
     }
@@ -121,9 +109,10 @@ struct StreamView: View {
     @EnvironmentObject var session: StreamSession
     @Environment(\.isLuminanceReduced) private var screenDimmed
     var autoStart = false
+    var onUnpair: (() -> Void)?
 
     var body: some View {
-        StreamContent(session: session, sensors: session.sensors)
+        StreamContent(session: session, sensors: session.sensors, onUnpair: onUnpair)
             .onChange(of: screenDimmed, initial: true) { _, dimmed in session.wristRaised = !dimmed }
             .task {
                 // After a device-code pairing, start right away (permission prompts still appear as usual).
@@ -139,6 +128,7 @@ struct StreamView: View {
 private struct StreamContent: View {
     @ObservedObject var session: StreamSession
     @ObservedObject var sensors: Sensors
+    var onUnpair: (() -> Void)?
 
     var body: some View {
         ScrollView {
@@ -179,6 +169,14 @@ private struct StreamContent: View {
                     .font(.caption2).foregroundStyle(.secondary)
 
                 Text(sharingText).font(.caption2).foregroundStyle(.secondary)
+
+                if let onUnpair {
+                    Button("Unpair", role: .destructive) {
+                        if session.isStreaming { session.toggle() }
+                        onUnpair()
+                    }
+                    Text("Connected to \(session.host)").font(.caption2).foregroundStyle(.secondary)
+                }
 
                 if session.recordAudio {
                     VStack(alignment: .leading, spacing: 4) {

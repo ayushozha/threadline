@@ -16,7 +16,7 @@ struct ThreadlineWatchApp: App {
 
 
 /// Default Threadline server. Set the THREADLINE_SERVER build setting (e.g. a Mac's LAN address
-/// for local testing); otherwise the deployed site is used. Users can still change it on the watch.
+/// for local testing); otherwise the deployed site is used. The watch has no server setting.
 enum AppConfig {
     static let defaultServer: String = {
         let configured = (Bundle.main.object(forInfoDictionaryKey: "ThreadlineDefaultServer") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
