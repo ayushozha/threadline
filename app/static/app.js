@@ -2863,7 +2863,7 @@ async function assistantActionRun(a) {
   }
   if (a.type === "recall") { const found = memorySearch(a.query); return { chip: found.length ? `Found ${found.length} memories` : null, data: { query: a.query, results: found } }; }
   if (a.type === "get_calendar") {
-    try { const d = await request(`/api/calendar/events?days=${Math.max(1, Math.min(30, a.days || 7))}${a.query ? `&q=${encodeURIComponent(a.query)}` : ""}`);
+    try { const d = await request(`/api/calendar/events?days=${Math.max(1, Math.min(30, a.days || 7))}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}${a.query ? `&q=${encodeURIComponent(a.query)}` : ""}`);
       return { chip: `Checked calendar · ${d.events?.length || 0} events`, data: { events: (d.events || []).slice(0, 25), calendars: d.calendars } }; }
     catch (e) { return { data: { error: /Not Found|404/.test(e.message) ? "No calendar connected yet. Connect one on the Dashboard (Your calendar)." : e.message } }; }
   }
