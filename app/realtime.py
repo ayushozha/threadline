@@ -101,9 +101,7 @@ def session_config() -> dict:
         "instructions": INSTRUCTIONS,
         "audio": {
             "input": {"transcription": {"model": transcription},
-                      "noise_reduction": {"type": "near_field"},
-                      "turn_detection": {"type": "server_vad", "threshold": 0.6, "prefix_padding_ms": 300, "silence_duration_ms": 700,
-                                         "create_response": True, "interrupt_response": False}},
+                      "turn_detection": {"type": "server_vad"}},
             "output": {"voice": os.environ.get("OPENAI_REALTIME_VOICE") or "marin"},
         },
         "tools": TOOLS,

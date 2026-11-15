@@ -80,7 +80,6 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
       case "response.done": {
         const calls = functionCalls(ev).filter((c) => !done.has(c.call_id));
         if (!calls.length) break;
-        const alreadySpoke = (ev.response.output || []).some((o) => o?.type === "message");
         for (const c of calls) {
           done.add(c.call_id);
           let result = null;
@@ -92,8 +91,7 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
             : { ok: Boolean(result) && !String(result).startsWith("Failed"), result: result || "Not available" };
           send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: c.call_id, output: JSON.stringify(payload).slice(0, 12000) } });
         }
-        // Ask for a follow-up only when the model hasn't spoken yet (it needs the tool result to answer); otherwise it would talk twice.
-        if (!alreadySpoke) send({ type: "response.create" });
+        send({ type: "response.create" });  // let the model answer with the tool results (dashboard, memory, calendar…)
         break;
       }
       case "error": onState("error", ev.error?.message || "Realtime error"); break;
