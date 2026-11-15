@@ -7,6 +7,7 @@ import { renderDashboard } from './dashboard.mjs';
 import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 import { mountLibrary } from './library.mjs';
+import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -1742,7 +1743,7 @@ function actOnDecision(d, statement) {
 }
 function draftControls(draft) {
   const title = el("input", { type: "text", value: draft.title, maxLength: 200, "aria-label": "Task from your words" });
-  const save = el("button", { type: "button", className: "secondary", textContent: "Save task" });
+  const save = el("button", { type: "button", className: "secondary", textContent: draft.suggested ? "Add" : "Save task" });
   const dismiss = el("button", { type: "button", className: "text-button", textContent: "Dismiss" });
   const box = el("div", { "data-draft": draft.id }, title, el("div", { className: "row tight" }, save, dismiss));
   title.addEventListener("input", () => { draft.title = title.value; saveThread(); });
@@ -1750,12 +1751,13 @@ function draftControls(draft) {
     if (!(life.taskDrafts || []).some(d => d.id === draft.id)) return;
     const value = title.value.trim(); if (!value) return title.focus();
     if (!(life.tasks || []).some(t => t.title.toLocaleLowerCase() === value.toLocaleLowerCase() && !t.done)) {
-      (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: false, done: false, note: `From your confirmed words: ${draft.statement.text}` });
+      (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: Boolean(draft.big), done: false, note: draft.suggested ? `From ${draft.suggested.source}: ${draft.suggested.why}` : `From your confirmed words: ${draft.statement.text}`, ...(draft.sample ? { sample: true } : {}) });
       logAction(`Saved task: ${value}`);
     }
+    if (draft.suggested) suggestSeen(draft.suggested.id);
     removeDraft(draft.id, "Task saved.");
   });
-  dismiss.addEventListener("click", () => removeDraft(draft.id, "Suggestion dismissed."));
+  dismiss.addEventListener("click", () => { if (draft.suggested) suggestSeen(draft.suggested.id); removeDraft(draft.id, "Suggestion dismissed."); });
   return box;
 }
 function removeDraft(id, message) {
@@ -1869,7 +1871,8 @@ function renderTasks() {
   if (!$("tasks-today")) return;
   const tasks = life.tasks || [], today = todayKey();
   const drafts = life.taskDrafts || [];
-  $("task-banner").replaceChildren(...(drafts.length ? drafts.map(d => el("div", { className: "task-draft" }, el("p", { className: "caption", textContent: `From: “${d.statement.text}”${d.statement.speaker_confirmed ? "" : " · confirm this was you before saving"}` }), draftControls(d))) : [el("p", { className: "caption", textContent: "No pending suggestions. Ask for a reminder while speaking and it will appear here." })]));
+  $("task-banner").replaceChildren(...(drafts.length ? drafts.map(d => el("div", { className: "task-draft" }, el("p", { className: "caption", textContent: d.suggested ? `From: ${d.suggested.source} · ${d.suggested.why}` : `From: “${d.statement.text}”${d.statement.speaker_confirmed ? "" : " · confirm this was you before saving"}` }), draftControls(d))) : [el("p", { className: "caption", textContent: "No pending suggestions. Ask for a reminder while speaking and it will appear here." })]));
+  if (!drafts.length) fillTaskSuggestions();
   const lists = { today: [], later: [], held: [] };
   for (const t of tasks.filter((x) => !x.done)) (t.heldUntil && t.heldUntil > today ? lists.held : t.due && t.due <= today ? lists.today : lists.later).push(t);
   const item = (t) => {
@@ -1883,6 +1886,27 @@ function renderTasks() {
   };
   for (const k of ["today", "later", "held"]) $(`tasks-${k}`).replaceChildren(...(lists[k].length ? lists[k].map(item) : [el("li", { className: "empty", textContent: k === "held" ? "Nothing held." : "Nothing here." })]));
   saveThread();
+}
+/* Suggestions from data the app already has (scenario library, Care, Apple Health). Shown as drafts; nothing becomes a task until Add. */
+let scenarioCache = null, suggestBusy = false;
+const suggestSeenKey = () => `threadline.task-suggest.seen.v1.${threadKey}`;
+const suggestSeenSet = () => { try { return new Set(JSON.parse(localStorage.getItem(suggestSeenKey()) || "[]")); } catch { return new Set(); } };
+function suggestSeen(id) { const s = suggestSeenSet(); s.add(id); try { localStorage.setItem(suggestSeenKey(), JSON.stringify([...s].slice(-200))); } catch { /* storage off */ } }
+async function fillTaskSuggestions() {
+  if (suggestBusy) return; suggestBusy = true;
+  const scope = threadKey;
+  try {
+    scenarioCache ||= await fetch("/static/scenarios/scenarios.json").then(r => r.ok ? r.json() : { scenarios: [] }).then(d => d.scenarios || []).catch(() => []);
+    if (scope !== threadKey || (life.taskDrafts || []).length) return;
+    const seen = suggestSeenSet();
+    const list = suggestTasks({ scenarios: scenarioCache, careHistory: care.history || [], routine: careRoutine(), healthLatest: hLatest() || hDay(todayKey()),
+      existingTitles: (life.tasks || []).map(t => t.title), today: todayKey(), mode: accessMode, limit: 20 }).filter(s => !seen.has(s.id)).slice(0, 8);
+    if (!list.length) return;
+    const sample = isFictionalDemo();
+    life.taskDrafts = list.map(s => ({ id: newId("draft"), title: s.title, due: s.due, big: s.big, suggested: { id: s.id, source: s.source, why: s.why },
+      statement: { id: `suggest:${s.id}`, text: s.why, speaker_confirmed: true }, ...(sample ? { sample: true } : {}) }));
+    renderTasks();
+  } finally { suggestBusy = false; }
 }
 function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy " : ""}day`; renderTasks(); logAction(`Held “${t.title}” until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short" })}`); }
 $("task-form").addEventListener("submit", (e) => {
