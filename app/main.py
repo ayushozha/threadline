@@ -1332,6 +1332,7 @@ from app import essentials; app.include_router(essentials.router)  # noqa: E402,
 from app import assistant; app.include_router(assistant.router)  # noqa: E402,E702  (Talk to Threadline)
 from app import realtime; app.include_router(realtime.router)  # noqa: E402,E702  (Talk to Threadline over OpenAI Realtime)
 from app import videos; app.include_router(videos.router)  # noqa: E402,E702  (recorded videos + chat)
+from app import calendars; app.include_router(calendars.router)  # noqa: E402,E702  (iCal calendar links)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")
 demo_assets = ROOT.parent / "assets" / "demo" / "dementia"
 if demo_assets.is_dir():

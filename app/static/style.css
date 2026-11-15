@@ -572,3 +572,10 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .dl-day{border-top:1px solid #eeeadf;padding:8px 0}.dl-day summary{cursor:pointer}.dl-day ol{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;font-size:13px}
 .dl-day li{display:grid;grid-template-columns:72px 1fr;gap:8px}.dl-day time{color:var(--muted)}
 .as-engine-row{display:flex;align-items:center;gap:8px;font-size:12px;opacity:.85}.as-engine{border-radius:10px;border:1px solid rgba(255,253,247,.35);background:rgba(255,253,247,.1);color:inherit;padding:4px 8px;font:inherit}.as-engine option{color:#262921}
+/* Your calendar (calendar.mjs) */
+.cal-card h2{margin:0 0 10px}.cal-how{margin:8px 0 14px;padding-left:18px;font-size:14px;line-height:1.5}.cal-how li{margin:4px 0}
+.cal-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}.cal-form input[type=text]{flex:1 1 220px;margin:0}.cal-form .caption{flex-basis:100%;margin:4px 0 0}
+.cal-agenda{display:grid;gap:14px}.cal-day h3{font-size:17px;margin:0 0 6px}.cal-events{list-style:none;margin:0;padding:0}.cal-events li{display:flex;gap:14px;padding:8px 0;border-top:1px solid var(--line)}
+.cal-time{flex:0 0 120px;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}.cal-what{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}.cal-what small{color:var(--muted)}
+.cal-manage,.cal-add{margin-top:14px}.cal-manage summary,.cal-add summary{cursor:pointer;color:var(--muted);font-size:13px}.cal-list{list-style:none;padding:0;margin:8px 0}.cal-list li{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;padding:4px 0}.cal-list .text-button{margin-left:auto}
+@media (max-width:560px){.cal-events li{flex-direction:column;gap:2px}.cal-time{flex:none}}

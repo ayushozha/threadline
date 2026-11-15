@@ -10,6 +10,7 @@ import { mountLibrary } from './library.mjs';
 import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
 import { mountEssentials, purchaseReply } from './essentials.mjs';
 import { mountAssistant } from './assistant.mjs';
+import { mountCalendar } from './calendar.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -2943,6 +2944,7 @@ async function assistantIntercept(text) {
 }
 const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
+if ($("calendar-card")) mountCalendar($("calendar-card"), { el, request });
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
