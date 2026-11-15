@@ -147,6 +147,7 @@ A local video preview is not proof of remote streaming or AI analysis. See the [
 | Configuration | Purpose |
 | --- | --- |
 | `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_DECISION_MODEL`, `GEMINI_LIVE_MODEL` | Google credentials and environment-selected models. |
+| `OPENAI_API_KEY`, `OPENAI_REALTIME_MODEL` (default `gpt-realtime`), `OPENAI_REALTIME_VOICE` (default `marin`) | Optional OpenAI Realtime engine for Talk to Threadline; the server exchanges the WebRTC SDP at `/api/realtime/sdp`. |
 | `DEEPGRAM_API_KEY`, `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE` | Streaming transcription configuration. |
 | `APP_ACCESS_TOKEN`, `APP_GUEST_SESSIONS`, `APP_PUBLIC_ORIGIN` | Server access and bounded browser sessions. |
 | `VEXO_BAND_NUMBER` | Assigned band filter; 73 for this project. |

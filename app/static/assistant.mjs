@@ -2,10 +2,17 @@
 // Hears through the Vexo band (lines that start with "Threadline") or this computer's microphone (every sentence),
 // sends each sentence + a dashboard snapshot to /api/assistant/turn, speaks the reply (ElevenLabs, browser voice as
 // fallback) and runs the returned actions through the page.
+// Engine switch: "OpenAI Realtime" runs speech to speech over WebRTC (realtime.mjs) with the Vexo band as the only
+// voice input (decoded band PCM via bandPcm.attach); the Gemini + ElevenLabs path below is unchanged.
+import { bandStream, startRealtime } from './realtime.mjs';
+const ENGINE_KEY = "threadline.assistantEngine";
+const NO_BAND = "Connect the Vexo band (Your band → Connect) to talk.";
+const ENGINES = { gemini: "Gemini + ElevenLabs", realtime: "OpenAI Realtime" };
+const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "realtime" ? "realtime" : "gemini"; } catch { return "gemini"; } };
 const WAKE = /^\s*(hey\s+)?(thread\s*line|threadline)[,.!\s]*/i;
 
-export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept }) {
-  const st = { listening: false, ws: null, rec: null, stream: null, speaking: false, busy: false, history: [], buffer: "", interim: "" };
+export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm }) {
+  const st = { engine: loadEngine(), rt: null, rtBand: null, rtDetach: null, rtActs: [], listening: false, ws: null, rec: null, stream: null, speaking: false, busy: false, history: [], buffer: "", interim: "" };
   const orb = el("div", { className: "as-orb", "aria-hidden": "true" });
   const status = el("p", { className: "as-status", textContent: "Listens through the Vexo band. Tap Talk or double-tap the band, then speak." });
   const live = el("p", { className: "as-live" });
@@ -15,10 +22,25 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   const form = el("form", { className: "as-form" }, input, el("button", { type: "submit", className: "dash-btn primary", textContent: "Send" }));
   const chips = el("div", { className: "as-chips" }, ...["How am I doing today?", "Order milk, bread and a pill organiser", "Check out", "Remind me to call Lily at 5", "Is everything okay at home?", "I've fallen, help", "I'm feeling tired today, mood is low", "He asked about lunch 4 times, a bit restless this evening", "मलाई आज कस्तो छ?"].map((q) =>
     el("button", { type: "button", className: "lib-chip", textContent: q, onclick: () => turn(q) })));
+  const label = el("small", { textContent: `Live · ${ENGINES[st.engine]}` });
+  const engine = el("select", { className: "as-engine", "aria-label": "Voice engine" },
+    ...Object.entries(ENGINES).map(([value, text]) => el("option", { value, textContent: text, selected: value === st.engine })));
+  engine.value = st.engine;
+  engine.addEventListener("change", () => {
+    if (st.listening) stop();
+    st.engine = engine.value === "realtime" ? "realtime" : "gemini";
+    try { localStorage.setItem(ENGINE_KEY, st.engine); } catch { /* private mode */ }
+    label.textContent = `Live · ${ENGINES[st.engine]}`;
+    status.textContent = st.engine === "realtime" ? (bandPcmOn() ? "Tap Talk and speak through the Vexo band." : NO_BAND) : "Tap Talk, then speak.";
+  });
   root.replaceChildren(el("section", { className: "as-card" },
-    el("div", { className: "as-head" }, orb, el("div", {}, el("small", { textContent: "Live · Gemini + ElevenLabs" }), el("h2", { textContent: "Talk to Threadline" }), status), talk),
+    el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", { textContent: "Talk to Threadline" }), status), talk),
+    el("label", { className: "as-engine-row" }, el("span", { textContent: "Voice engine" }), engine),
     live, log, chips, form));
-  form.addEventListener("submit", (e) => { e.preventDefault(); const t = input.value.trim(); input.value = ""; if (t) turn(t); });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault(); const t = input.value.trim(); input.value = ""; if (!t) return;
+    if (st.rt) { add("me", t); st.rt.sendText(t); } else turn(t);
+  });
   talk.addEventListener("click", () => (st.listening ? stop() : start()));
   const setState = (s) => { root.querySelector(".as-card").dataset.state = s; };
 
@@ -67,18 +89,47 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   }
   // Band lines arrive from the page's live transcript; only lines addressed to Threadline become turns.
   function feedBand(text) {
-    if (!bandOn() || st.speaking) return;
+    if (st.engine === "realtime" || !bandOn() || st.speaking) return;
     const m = text.match(WAKE), open = st.listening || Date.now() < (st.windowUntil || 0);
     if (!m && !open) return;
     const rest = (m ? text.slice(m[0].length) : text).trim(); if (!rest) return;
     st.windowUntil = 0; turn(rest);
   }
   function openWindow() {  // band double-tap: the next sentence goes to Threadline without the wake word
+    if (st.engine === "realtime") { if (!st.listening) start(); return; }
     st.windowUntil = Date.now() + 8000; setState("listening");
     status.textContent = "Double-tap heard. I'm listening through the band…";
     setTimeout(() => { if (Date.now() >= st.windowUntil && !st.busy) setState(st.listening ? "listening" : "idle"); }, 8200);
   }
+  const bandPcmOn = () => Boolean(bandPcm?.on?.());
+  async function startRt() {
+    if (!bandPcmOn()) { status.textContent = NO_BAND; setState("idle"); return; }
+    st.listening = true; talk.textContent = "■ Stop"; setState("thinking"); status.textContent = "Connecting to OpenAI Realtime…";
+    try {
+      const bs = bandStream(); st.rtBand = bs; await bs.resume();
+      st.rtDetach = bandPcm.attach((samples) => bs.push(samples));
+      st.rt = await startRealtime({
+        getContext, runAction, inputStream: bs.stream,
+        muteWhileSpeaking: (v) => { bs.muted = v; },  // the band mic would otherwise hear the speakers
+        onAction: (r) => st.rtActs.push(r),
+        onTranscript: ({ role, text }) => {
+          if (role === "user") { add("me", text); return; }
+          const done = st.rtActs.splice(0);
+          add("ai", text, done.length ? el("div", { className: "as-acts" }, ...done.map((x) => el("span", { className: "as-act", textContent: `✓ ${x}` }))) : null);
+        },
+        onState: (s, msg) => {
+          if (!st.rt && s !== "listening") return;
+          if (s === "closed") { if (st.listening) { stop(); status.textContent = "Realtime call ended. Tap Talk to start again."; } return; }
+          if (s === "error") { status.textContent = msg; return; }
+          setState(s === "hearing" ? "listening" : s);
+          status.textContent = s === "speaking" ? "Threadline is speaking…" : s === "thinking" ? "Thinking…" : "Listening through the Vexo band… just talk.";
+        },
+      });
+      if (!st.listening) st.rt.stop();
+    } catch (e) { stop(); status.textContent = `OpenAI Realtime couldn't start: ${e.message}`; }
+  }
   async function start() {  // voice comes only from the Vexo band
+    if (st.engine === "realtime") return startRt();
     if (!bandOn()) {
       const ok = await ensureBand?.();
       if (!ok) { status.textContent = "Connect the Vexo band and allow recording on Your band, then tap Talk. Threadline listens only through the band."; return; }
@@ -89,6 +140,8 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   function flush() { const t = st.buffer.trim(); st.buffer = ""; live.textContent = ""; if (t) turn(t.replace(WAKE, "") || t); }
   function stop() {
     st.listening = false; talk.textContent = "🎙 Talk"; setState("idle"); status.textContent = "Tap Talk or double-tap the band, then speak.";
+    const rt = st.rt; st.rt = null; rt?.stop();
+    st.rtDetach?.(); st.rtDetach = null; st.rtBand?.close(); st.rtBand = null; st.rtActs = [];
   }
   return { feedBand, turn, openWindow };
 }

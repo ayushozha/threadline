@@ -870,6 +870,7 @@ $("rec-start").addEventListener("click", async () => {
   capture.solo = $("capture-identity").value === "solo"; utterances.reset();
   if (vexo && await kit.canDecodeAudio()) capture.decoder = new kit.BandAudio((samples) => {
     if (!capture.active || capture.stopping) return;
+    realtimeBandPush?.(samples);  // Talk to Threadline (OpenAI Realtime) hears the band's decoded 16 kHz audio
     capture.lastDecodedAt = Date.now();
     capture.pcmChunks.push(samples.slice());
     if (capture.pcm) {  // Send the official decoder's 16 kHz PCM16 to the matching Deepgram connection.
@@ -2853,6 +2854,10 @@ async function assistantActionRun(a) {
     openEssentials(); const lines = shop?.snapshot() || [];
     if (!lines.length) return null;
     if (!shop.walletSaved()) { location.hash = "essentials"; return "No saved card yet: order opened for caregiver checkout"; }
+    if (a.confirmed === true) {  // OpenAI Realtime: the model calls buy only after the person said yes out loud
+      const who = loadContacts().name, d = await shop.buy(lines, who || "Caregiver (voice)");
+      return `Paid $${d.amount_usd.toFixed(2)} · ${d.card}${d.test_mode ? " · test mode" : ""}`;
+    }
     pendingBuy = { lines, at: Date.now() }; return `Waiting for your OK · ${shop.totalText()}`;
   }
   if (a.type === "checkout") { openEssentials(); location.hash = "essentials"; return `Order ready for caregiver approval · ${shop?.totalText() || ""}`; }
@@ -2863,6 +2868,11 @@ async function assistantActionRun(a) {
   if (a.type === "emergency") { emergency.trigger({ reason: a.reason || "Help requested by voice", note: "Asked for help out loud." }); return "Emergency alert started"; }
   return null;
 }
+let realtimeBandPush = null;
+const bandPcm = {  // decoded band PCM for the OpenAI Realtime engine (band only; the computer mic is never used there)
+  on: () => Boolean(capture.band && capture.active && capture.decoder),
+  attach(push) { realtimeBandPush = push; return () => { if (realtimeBandPush === push) realtimeBandPush = null; }; },
+};
 let pendingBuy = null;
 async function assistantIntercept(text) {
   if (!pendingBuy || Date.now() - pendingBuy.at > 120000) { pendingBuy = null; return null; }
@@ -2874,7 +2884,7 @@ async function assistantIntercept(text) {
     return { say: `Done. I paid $${d.amount_usd.toFixed(2)} on the ${d.card}.${who ? ` ${who.split(" ")[0]} will see the receipt.` : ""}`, done: `Paid $${d.amount_usd.toFixed(2)} · ${d.card}${d.test_mode ? " · test mode" : ""}` };
   } catch (e) { return { say: `I couldn't place the order: ${e.message}`, done: null }; }
 }
-const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active),
+const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
