@@ -820,14 +820,17 @@ async def watch_pair():
 
 @app.websocket("/api/watch/feed")
 async def watch_feed(client: WebSocket):
-    """Browser side: receive what a paired watch is transcribing. Token-checked like live-transcribe."""
+    """Browser side: receive what a paired watch sends. Operator token or a visitor session, like live-transcribe."""
     await client.accept()
     fail = socket_fail(client)
     if (hello := await socket_hello(client, fail)) is None:
         return
-    if not socket_token_ok(client, hello):
-        return await fail("Enter the project access token to use live providers.")
     pairing = find_pairing(hello.get("code"))
+    # Operators may follow any pairing. Visitors (guest sessions) may only follow a watch they paired from
+    # the watch itself (watch-started + claimed); page-started watch credentials stay operator-only.
+    visitor_ok = bool(pairing and watch_claim.watch_key(pairing) and watch_claim.claimed(pairing))
+    if not socket_token_ok(client, hello, allow_guest=visitor_ok):
+        return await fail("Enter the project access token to use live providers.")
     if not pairing or not watch_claim.claimed(pairing):
         return await fail("Unknown or expired pairing code. Create a new one.")
     try:
