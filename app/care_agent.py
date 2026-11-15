@@ -169,8 +169,8 @@ def urgent_cause(ctx: CareContext) -> bool:
 def repeated_question(ctx: CareContext) -> tuple[str, int] | None:
     counts: dict[str, int] = {}
     for u in ctx.transcript:
-        norm = re.sub(r"[^\w\s]", "", u.text.lower()).strip()
-        norm = re.sub(r"\s+", " ", norm)
+        norm = re.sub(r"[^\w\s]", "", u.text.lower().replace("’", "'").replace("'s ", " is ")).strip()
+        norm = re.sub(r"^(heard|um|uh|so|and|but|oh)\s+", "", re.sub(r"\s+", " ", norm))
         if norm and ("?" in u.text or QUESTION_START.match(norm)):
             counts[norm] = counts.get(norm, 0) + 1
     best = max(counts.items(), key=lambda kv: kv[1], default=None)

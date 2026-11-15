@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f4f1">
-  <title>Threadline — a little context, kept close</title>
+  <title>Threadline Care</title>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
@@ -257,10 +257,10 @@
               <p class="agent-eyebrow">Caregiver agent · checks every 30 s while this page is open</p>
               <div class="care-status-row">
                 <div><h2 id="care-agent-h" class="care-status-word">Not checked yet</h2><p id="care-agent-summary" class="care-summary">The agent reads the transcript, what Gemini sees, the band, the watch and the routine.</p></div>
-                <button type="button" id="care-check" class="secondary">Check now</button>
+                <div class="row tight"><button type="button" id="care-check" class="secondary">Check now</button><button type="button" id="care-sim-fall" class="text-button" title="Demo only: acts as if the band felt a fall">Simulate fall (demo)</button></div>
               </div>
               <div class="care-next"><b>Next step</b><p id="care-next">—</p></div>
-              <div class="care-note"><b>For the family</b><p id="care-note">—</p></div>
+              <div class="care-note"><b>For the family</b><p id="care-note">—</p><a id="care-text-family" class="text-button" href="sms:">Text family</a></div>
               <ul id="care-reasons" class="care-reasons"></ul>
               <p id="care-agent-state" class="caption" role="status"></p>
               <h3 class="care-sub">Earlier checks</h3>
@@ -427,10 +427,10 @@
       </section>
 
       <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
-          <div class="section-top"><h2 id="days-heading">Daily log</h2><button type="button" id="day-summary" class="secondary">Refresh summary</button></div>
-          <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>
-          <div class="table-wrap"><table class="days-table">
-            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy self-reports</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Sleep</th><th scope="col">HRV</th><th scope="col">Cycle day</th></tr></thead>
+          <div class="section-top"><h2 id="days-heading">Daily log</h2><span id="days-status" class="caption"></span><button type="button" id="day-summary" class="secondary" hidden>Refresh summary</button></div>
+          <p class="caption">Logged automatically, nothing to fill in: every Apple Health metric for each day, plus the conversations, the band and the watch. Numbers describe what happened, not how anyone feels.</p>
+          <div class="table-wrap days-wrap"><table class="days-table">
+            <thead id="days-head"></thead>
             <tbody id="days-body"></tbody>
           </table></div>
           <div id="day-summary-out" class="answer" hidden></div>
@@ -440,7 +440,7 @@
             <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
           </details>
 
-          <div class="cycle" aria-labelledby="cycle-heading">
+          <div class="cycle" aria-labelledby="cycle-heading" hidden>
             <h3 id="cycle-heading">Cycle</h3>
             <p id="cycle-estimate" class="cycle-estimate">Add the first day of your last periods, or share them from Apple Health on the watch.</p>
             <div class="row tight"><label for="cycle-date" class="visually-hidden">Period start date</label><input id="cycle-date" type="date"><button type="button" id="cycle-add" class="secondary">Add start date</button></div>

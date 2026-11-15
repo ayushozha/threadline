@@ -87,6 +87,17 @@ function clearSample() {
 }
 /* The owner's Apple Health history (uploaded from the iPhone) — shown on the default profile only. */
 const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
+const r1 = (v) => (Math.round(v * 10) / 10).toLocaleString(), r0 = (v) => Math.round(v).toLocaleString();
+const hm = (v) => `${Math.floor(v)} h ${String(Math.round((v % 1) * 60)).padStart(2, "0")} m`;
+const HEALTH_COLS = [
+  ["steps", "Steps", r0], ["distance_km", "Distance (km)", r1], ["active_energy_kcal", "Active energy (kcal)", r0], ["exercise_min", "Exercise (min)", r0],
+  ["flights_climbed", "Flights climbed", r0], ["stand_hours", "Stand hours", r0], ["stand_min", "Stand (min)", r0],
+  ["heart_rate", "Heart rate (avg)", r0], ["resting_heart_rate", "Resting HR", r0], ["hrv_sdnn", "HRV (ms)", r0], ["respiratory_rate", "Breathing (/min)", r1],
+  ["oxygen_saturation", "Blood oxygen (%)", r0], ["sleep_hours", "Sleep", hm], ["wrist_temp_c", "Wrist temp (°C)", (v) => v.toFixed(2)],
+  ["walking_speed_kmh", "Walking speed (km/h)", r1], ["walking_steadiness", "Walking steadiness (%)", r0], ["audio_exposure_db", "Noise (dB)", r0],
+  ["mindful_min", "Mindful (min)", r0], ["workouts", "Workouts", (v, h) => `${h.workout_count ?? 1} · ${Math.round(v)} min`], ["mood", "Logged mood (valence)", (v) => v.toFixed(2)],
+  ["menstrual_flow", "Period logged", () => "yes"],
+];
 function healthOn() { return isDefaultProfile() || !configuredBand; }
 function hDay(key) { return healthOn() ? ownerHealth.byDay[key] || null : null; }
 function hLatest() { return healthOn() ? ownerHealth.latest : null; }
@@ -1303,18 +1314,26 @@ function renderDays() {
   $("days-panel").hidden = mode !== "reflection";
   $("energy-words").value = life.energyWords;
   const info = cycleInfo(), rows = [];
-  for (let i = 0; i < 14; i++) {
-    const key = todayKey(new Date(Date.now() - i * DAY_MS)), r = life.days[key], h = hDay(key);
+  // Columns come from the data: every metric found in the Health history gets its own column automatically.
+  const DAYS = 30, keys = [...Array(DAYS)].map((_, i) => todayKey(new Date(Date.now() - i * DAY_MS)));
+  const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) present.add(m);
+  const cols = HEALTH_COLS.filter(([m]) => present.has(m));
+  for (const m of present) if (!["date", "workout_types", "workout_count"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
+  $("days-head").replaceChildren(el("tr", {}, el("th", { scope: "col", textContent: "Day" }), el("th", { scope: "col", textContent: "Conversation lines" }), el("th", { scope: "col", textContent: "Low-energy words" }),
+    ...cols.map(([, label]) => el("th", { scope: "col", textContent: label })), present.has("workout_types") ? el("th", { scope: "col", textContent: "Workout types" }) : null));
+  let filled = 0;
+  for (const [i, key] of keys.entries()) {
+    const r = life.days[key], h = hDay(key) || {};
+    if (Object.keys(h).length > 1) filled += 1;
     const label = i === 0 ? "Today" : i === 1 ? "Yesterday" : parseDay(key).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-    const steps = [r?.watchSteps != null ? `${r.watchSteps} watch` : "", r?.bandSteps ? `${r.bandSteps} band` : "", !r?.watchSteps && h?.steps != null ? `${Math.round(h.steps).toLocaleString()} Health` : ""].filter(Boolean).join(" · ");
-    const hr = r?.hrN ? `${Math.round(r.hrSum / r.hrN)} avg · ${r.hrMin}–${r.hrMax}` : h?.heart_rate != null ? `${Math.round(h.heart_rate)} avg${h.resting_heart_rate != null ? ` · resting ${Math.round(h.resting_heart_rate)}` : ""}` : "";
-    const sleep = h?.sleep_hours != null ? `${Math.floor(h.sleep_hours)} h ${Math.round((h.sleep_hours % 1) * 60)} m` : "";
-    const cd = info.dayOf ? info.dayOf(key) : null;
+    const fmt = (m, f) => { if (m === "steps" && r?.watchSteps != null) return `${r.watchSteps.toLocaleString()} watch`; if (m === "heart_rate" && r?.hrN) return `${Math.round(r.hrSum / r.hrN)} (${r.hrMin}–${r.hrMax})`; const v = h[m]; return v == null ? "—" : f(v, h); };
     rows.push(el("tr", {}, el("th", { scope: "row", textContent: label }),
-      el("td", { textContent: r?.energy.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
-      el("td", { textContent: r && (r.others || r.mine) ? `${r.others}` : "—" }),
-      el("td", { textContent: steps || "—" }), el("td", { textContent: hr || "—" }), el("td", { textContent: sleep || "—" }), el("td", { textContent: h?.hrv_sdnn != null ? `${Math.round(h.hrv_sdnn)} ms` : "—" }), el("td", { textContent: cd ? String(cd) : "—" })));
+      el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)}` : "—" }),
+      el("td", { textContent: r?.energy?.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
+      ...cols.map(([m, , f]) => el("td", { textContent: fmt(m, f) })),
+      present.has("workout_types") ? el("td", { textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)} min`).join(", ") : "—" }) : null));
   }
+  $("days-status").textContent = ownerHealth.days ? `${filled} of the last ${DAYS} days have Health data · ${cols.length} metrics · from ${ownerHealth.days} days imported` : "Waiting for Health data…";
   $("days-body").replaceChildren(...rows);
   // cycle
   $("cycle-dates").replaceChildren(...info.starts.slice(-8).reverse().map((d) => {
@@ -2397,6 +2416,7 @@ function careRenderAssessment(d) {
   $("care-agent-summary").textContent = d.summary || "";
   $("care-next").textContent = d.next_step || "—";
   $("care-note").textContent = d.caregiver_note || "—";
+  $("care-text-family").href = `sms:?&body=${encodeURIComponent(`Threadline Care: ${d.caregiver_note || d.summary || "please check in"}`.slice(0, 300))}`;
   $("care-reasons").replaceChildren(...[...(d.reasons || []), ...(d.observations || []).map((o) => `Seen: ${o}`)].slice(0, 12).map((r) => el("li", { textContent: String(r) })));
   const at = d.at ? new Date(d.at) : new Date();
   care.history.push({ status, summary: d.summary || CARE_STATUS_WORD[status], at });
@@ -2413,6 +2433,7 @@ function careRenderAssessment(d) {
   }
   care.lastStatus = status;
 }
+$("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {
   if (care.agentBusy) { if (manual) $("care-agent-state").textContent = "A check is already running…"; return; }
   care.agentBusy = true; $("care-check").disabled = true; $("care-agent-state").textContent = "Checking…";
@@ -2448,7 +2469,7 @@ window.addEventListener("pagehide", () => { careStop(); careStopCamera(); careRe
 careSetSource("file");
 
 render();
-showView(location.hash.slice(1) || "live");
+showView(location.hash.slice(1) || "care");
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
 loadOwnerHealth(); renderSampleBanner();
