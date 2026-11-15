@@ -121,7 +121,9 @@ function reportCard(m, audience, icon, blurb, who) {
 export function renderDashboard(root, input) {
   if (!root) return;
   const m = buildModel(input), who = input.who || "This person";
-  const statusWord = { ok: "Last check: no concern flagged", needs_attention: "Last check: needs attention", urgent: "Last check: check in now", unknown: "No assessment yet" }[m.status];
+  const statusWord = { ok: "Last check: no concern flagged", needs_attention: "Last check: needs attention", urgent: "Last check: check in now", unknown: "Today at a glance" }[m.status];
+  const has = (arr) => (arr || []).some((v) => v != null && Number.isFinite(v));
+  const tilesShown = m.tiles.filter((t) => t.value && t.value !== "—" && !String(t.value).startsWith("—"));
   const today = m.H.at(-1) || {}, tm = m.M.at(-1) || {};
   root.replaceChildren(
     ...(input.synthetic ? [h("p", {className:"demo-chart-label",textContent:"Includes example chart history. Actual recordings retain their original source; example values are not device measurements."})] : []),
@@ -129,20 +131,22 @@ export function renderDashboard(root, input) {
     h("section", { className: `dash-hero s-${m.status}` },
       h("div", {}, h("small", { textContent: new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }) }),
         h("h2", { textContent: `${who} · ${statusWord}` }),
-        h("p", { textContent: `${hm(today.sleep_hours)} sleep · ${fmt(today.steps)} steps · mood ${tm.morningLabel || "—"} → ${tm.eveningLabel || "—"} · evening agitation ${AGI[tm.agitation] ?? "—"}` })),
-      h("div", { className: "dash-hero-gauge" }, gauge(m.csdd), h("small", { textContent: "Supplied CSDD score" }))),
-    h("section", { className: "dash-tiles" }, ...m.tiles.map((t) => h("article", { className: "dash-tile" },
+        h("p", { textContent: [today.sleep_hours != null ? `${hm(today.sleep_hours)} sleep` : "", today.steps != null ? `${fmt(today.steps)} steps` : "", today.resting_heart_rate != null ? `resting HR ${fmt(today.resting_heart_rate)}` : "", today.hrv_sdnn != null ? `HRV ${fmt(today.hrv_sdnn)} ms` : "", tm.morningLabel ? `mood ${tm.morningLabel} → ${tm.eveningLabel}` : "", tm.agitation != null ? `evening agitation ${AGI[tm.agitation]}` : ""].filter(Boolean).join(" · ") })),
+      m.csdd != null ? h("div", { className: "dash-hero-gauge" }, gauge(m.csdd), h("small", { textContent: "Weekly CSDD" })) : null),
+    h("section", { className: "dash-tiles" }, ...tilesShown.map((t) => h("article", { className: "dash-tile" },
       h("small", { textContent: t.label }), h("b", { textContent: t.value }), h("span", { className: "unit", textContent: t.unit }),
       t.delta != null ? h("span", { className: `delta ${t.good ? "good" : "bad"}`, textContent: `${t.delta >= 0 ? "▲" : "▼"} ${fmt(Math.abs(t.delta) * 100)}%` }) : null,
       spark(t.spark, t.good === false ? "bad" : "")))),
     h("section", { className: "dash-insights" }, ...m.insights.map((i) => h("div", {}, h("b", { textContent: i.big }), h("span", { textContent: i.text })))),
     h("section", { className: "dash-charts" },
-      frame("Sleep", input.synthetic ? "includes example values · 14 days" : "supplied hours · 30 days", barsLine(m.sleep, [])),
-      frame("Daily steps", "30 days", barsLine(m.steps, m.moodAvg, { barCls: "b3", lineCls: "l3" })),
-      frame("Heart", "resting HR · HRV", twoLines(m.rhr, m.hrv)),
-      frame("Mood calendar", "top: morning · bottom: evening", heat(m.M, m.keys)),
-      frame("Walking steadiness", "supplied percentages · not a fall-risk score", barsLine(m.H.map(d=>d.walking_steadiness ?? null), [])),
-      frame("Repeated questions", "per day", barsLine(m.rep, [], { barCls: "b2" }))),
+      has(m.sleep) ? frame("Sleep", input.synthetic ? "includes example values · 14 days" : "hours · 30 days", barsLine(m.sleep, [])) : null,
+      has(m.steps) ? frame("Daily steps", "30 days", barsLine(m.steps, m.moodAvg, { barCls: "b3", lineCls: "l3" })) : null,
+      has(m.rhr) || has(m.hrv) ? frame("Heart", "resting HR · HRV", twoLines(m.rhr, m.hrv)) : null,
+      has(m.moodAvg) ? frame("Mood calendar", "top: morning · bottom: evening", heat(m.M, m.keys)) : null,
+      has(m.H.map(d=>d.walking_steadiness ?? null)) ? frame("Walking steadiness", "percent · not a fall-risk score", barsLine(m.H.map(d=>d.walking_steadiness ?? null), [])) : null,
+      has(m.H.map(d=>d.oxygen_saturation ?? null)) ? frame("Blood oxygen", "percent · 30 days", barsLine(m.H.map(d=>d.oxygen_saturation ?? null), [], { barCls: "b1" })) : null,
+      has(m.H.map(d=>d.active_energy_kcal ?? null)) ? frame("Active energy", "kcal · 30 days", barsLine(m.H.map(d=>d.active_energy_kcal ?? null), [], { barCls: "b2" })) : null,
+      has(m.rep) ? frame("Repeated questions", "per day", barsLine(m.rep, [], { barCls: "b2" })) : null),
     h("section", { className: "dash-two" },
       h("div", { className: "dash-actions" }, h("h3", { textContent: "Action items" }),
         h("ol", {}, ...(m.actions.length ? m.actions.map((a) => h("li", { className: `lv-${a.level}` }, h("span", { className: `who w-${a.who.toLowerCase()}`, textContent: a.who }), h("span", { textContent: a.text }))) : [h("li", { textContent: "No saved tasks or agent suggestions yet." })]))),

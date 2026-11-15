@@ -265,9 +265,13 @@ function renderMood() {
   if (!$("mood-chart")) return;
   rebuildMood(); renderMoodForm();
   if (!ownerMood.days.length) {
-    $("mood-today").textContent = "No check-ins yet. Save today's caregiver check-in above and the 30-day mood chart starts here.";
-    $("mood-chart").replaceChildren(); $("mood-weeks").replaceChildren(); return;
+    $("mood-today").textContent = "";
+    for (const id of ["mood-chart", "mood-weeks"]) { $(id).replaceChildren(); $(id).hidden = true; }
+    document.querySelectorAll(".mood-card .mood-legend, .mood-card h3").forEach((n) => { n.hidden = true; }); return;
   }
+  for (const id of ["mood-chart", "mood-weeks"]) $(id).hidden = false;
+  document.querySelectorAll(".mood-card .mood-legend, .mood-card h3").forEach((n) => { n.hidden = false; });
+  $("mood-weeks").hidden = !ownerMood.weeks.length; document.querySelectorAll(".mood-card h3").forEach((n) => { n.hidden = !ownerMood.weeks.length; });
   const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => days.length < 2 ? W / 2 : 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
   $("mood-today").replaceChildren(...(t ? [["This morning", `${t.morningLabel} · ${moodWord(t.morning)} (${t.morning > 0 ? "+" : ""}${t.morning})`], ["This evening", `${t.eveningLabel} · ${moodWord(t.evening)} (${t.evening > 0 ? "+" : ""}${t.evening})`], ["Evening agitation", `${["none", "mild", "moderate", "severe"][t.agitation]} (NPI-Q ${t.agitation})`], ["Repeated questions", String(t.repeats)]].map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v }))) : []));
   const svg = $("mood-chart"), mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
@@ -1860,8 +1864,11 @@ function renderEnergy() {
   if (!$("energy-now")) return;
   const e = life.energy, state = e?.state || "unknown";
   $("energy-now").dataset.energy = state;
-  $("energy-label").textContent = { low: "Low", positive: "Positive", steady: "Steady", unknown: "Unknown" }[state];
-  $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "no signal yet";
+  const hlx = hLatest() || {}, sleepH = hlx.sleep_hours;
+  const fromHealth = !e && sleepH != null ? (sleepH < 6 ? "Low" : sleepH < 7 ? "Steady" : "Rested") : null;
+  $("energy-label").textContent = e ? { low: "Low", positive: "Positive", steady: "Steady" }[state] || "Steady" : fromHealth || "Steady";
+  $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : sleepH != null ? `${Math.floor(sleepH)} h ${Math.round((sleepH % 1) * 60)} m sleep · ${Math.round(hlx.steps || 0).toLocaleString()} steps` : "from today's readings";
+  if (!e && fromHealth) $("energy-now").dataset.energy = fromHealth === "Low" ? "low" : fromHealth === "Rested" ? "positive" : "steady";
   $("energy-why").textContent = e ? `Your self-report: “${e.text}”.` : "Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.";
   $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
   const v = life.voice, w = sensorsWithHealth(), r = life.days[todayKey()] || {}, h = hLatest() || {};
