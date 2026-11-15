@@ -2,6 +2,7 @@
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
+import { sampleSeed } from './sample-data.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -52,6 +53,59 @@ function loadThread(key) {
   Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], energyLog: saved?.energyLog || [], actions: saved?.actions || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
   life.taskDrafts = saved?.taskDrafts || [];
   threadLoaded = true;
+  seedSample(key);
+}
+/* Sample data fills empty screens for the demo; every item is flagged sample and labelled. */
+const sampleOffKey = (key) => `threadline.sample.off.${key}`;
+function sampleOff(key = threadKey) { try { return localStorage.getItem(sampleOffKey(key)) === "1"; } catch { return false; } }
+function seedSample(key) {
+  if (sampleOff(key)) return;
+  const seed = sampleSeed(new Date());
+  const notes = sessions.reflection.notes;
+  if (!notes.length) notes.push(...seed.notes);
+  if (!(life.tasks || []).length) life.tasks = seed.tasks;
+  if (!(life.energyLog || []).length) life.energyLog = seed.energyLog;
+  if (!(life.actions || []).length) life.actions = seed.actions;
+  if (!life.energy) life.energy = seed.energy;
+  for (const [day, rec] of Object.entries(seed.days)) if (!life.days[day]) life.days[day] = rec;
+  try { if (!JSON.parse(localStorage.getItem(`threadline.transcripts.v1.${key}`) || "[]").length) localStorage.setItem(`threadline.transcripts.v1.${key}`, JSON.stringify(seed.archive)); } catch { /* storage off */ }
+  renderSampleBanner();
+}
+function hasSample() {
+  return sessions.reflection.notes.some((n) => n.sample) || (life.tasks || []).some((t) => t.sample) || (life.actions || []).some((a) => a.sample)
+    || (life.energyLog || []).some((e) => e.sample) || loadArchive().some((e) => e.sample);
+}
+function renderSampleBanner() { const b = $("sample-banner"); if (b) b.hidden = !hasSample(); }
+function clearSample() {
+  try { localStorage.setItem(sampleOffKey(threadKey), "1"); } catch { /* storage off */ }
+  sessions.reflection.notes = sessions.reflection.notes.filter((n) => !n.sample);
+  for (const k of ["tasks", "energyLog", "actions"]) life[k] = (life[k] || []).filter((x) => !x.sample);
+  if (life.energy?.sample) life.energy = null;
+  for (const [day, rec] of Object.entries(life.days)) if (rec.sample) delete life.days[day];
+  saveArchive(loadArchive().filter((e) => !e.sample));
+  saveThread(); render(); renderArchive(); renderEnergy(); renderTasks(); renderToday(); renderDays(); renderSampleBanner();
+}
+/* The owner's Apple Health history (uploaded from the iPhone) — shown on the default profile only. */
+const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
+function healthOn() { return isDefaultProfile() || !configuredBand; }
+function hDay(key) { return healthOn() ? ownerHealth.byDay[key] || null : null; }
+function hLatest() { return healthOn() ? ownerHealth.latest : null; }
+async function loadOwnerHealth() {
+  try {
+    const r = await fetch("/api/health/summary?days=365"); if (!r.ok) return;
+    const d = await r.json();
+    ownerHealth.byDay = Object.fromEntries((d.daily || []).map((x) => [x.date, x]));
+    const keys = Object.keys(ownerHealth.byDay).sort();
+    ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
+    ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
+    renderEnergy(); renderToday(); renderDays(); renderIntegrations();
+  } catch { /* offline: screens keep live readings only */ }
+}
+/* Live watch readings win; the latest Health day fills whatever the watch hasn't sent. */
+function sensorsWithHealth() {
+  const h = hLatest() || {}, live = Object.fromEntries(Object.entries(watch.sensors || {}).filter(([, v]) => v != null));
+  return { heart_rate: h.heart_rate, hrv_sdnn_ms: h.hrv_sdnn, resting_hr: h.resting_heart_rate, respiratory_rate: h.respiratory_rate, spo2: h.oxygen_saturation,
+    sleep_hours_last_night: h.sleep_hours, env_noise_db: h.audio_exposure_db, exercise_min_today: h.exercise_min, mindful_min_today: h.mindful_min, ...live };
 }
 function saveThread() {
   if (!threadLoaded) return;
@@ -419,22 +473,27 @@ $("source").addEventListener("change", () => setRecUI());
   } catch { /* kit failed to load: buttons will report it */ }
 })();
 
-async function connectBand(kind) {
+async function connectBand(kind, port = null) {
   if (!bandNumber || capture.band || pair.busy) return;
+  const quiet = Boolean(port);  // automatic reconnect to the remembered USB port: no chooser, no error noise
   const mine = ++pair.attempt, wanted = bandLabel();
   pair.busy = true;
   setPairState("busy", "Connecting…");
-  bandStatus(kind === "ble" ? `Pick ${wanted} in the list, then press Pair.` : kind === "serial" ? "Pick “Vexo Open band” in the list, then press Connect." : "Starting the pretend band…");
+  bandStatus(quiet ? `Reconnecting ${wanted} on the USB cable…` : kind === "ble" ? `Pick ${wanted} in the list, then press Pair.` : kind === "serial" ? "Pick “Vexo Open band” in the list, then press Connect." : "Starting the pretend band…");
   let connected = null;
   try {
     await loadKit();
     pair.slow = setTimeout(() => { if (mine === pair.attempt && pair.busy) bandStatus(logic.stillConnectingMessage(kind, wanted)); }, logic.STILL_CONNECTING_MS);
     let transport = kind;
+    if (port) {  // a port this site was already allowed to use: open it directly, no chooser
+      const Remembered = class extends kit.WebSerialTransport { async open() { await this._start(port); } };
+      transport = new Remembered();
+    }
     // The library filters Bluetooth to this exact name and refuses a band whose number differs.
     connected = await kit.Band.connect(bandNumber, { transport, autoReconnect: true });
     if (connected.number !== bandNumber) { await connected.disconnect(); throw Object.assign(new Error(`That is ${connected.name}, not ${wanted}. Disconnected without changing it.`), { code: "wrong-band" }); }
   } catch (e) {
-    if (mine === pair.attempt) { pair.busy = false; bandStatus(logic ? logic.connectProblem(e, { kind, wanted }) : e.message, true); }
+    if (mine === pair.attempt) { pair.busy = false; if (quiet) { setPairState("idle", ""); bandStatus(""); } else bandStatus(logic ? logic.connectProblem(e, { kind, wanted }) : e.message, true); }
   } finally { clearTimeout(pair.slow); }
   if (mine !== pair.attempt) { connected?.disconnect().catch(() => {}); return; }  // Cancel was pressed meanwhile
   pair.busy = false;
@@ -1231,16 +1290,17 @@ function renderDays() {
   $("days-panel").hidden = mode !== "reflection";
   $("energy-words").value = life.energyWords;
   const info = cycleInfo(), rows = [];
-  for (let i = 0; i < 7; i++) {
-    const key = todayKey(new Date(Date.now() - i * DAY_MS)), r = life.days[key];
+  for (let i = 0; i < 14; i++) {
+    const key = todayKey(new Date(Date.now() - i * DAY_MS)), r = life.days[key], h = hDay(key);
     const label = i === 0 ? "Today" : i === 1 ? "Yesterday" : parseDay(key).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-    const steps = r ? [r.watchSteps != null ? `${r.watchSteps} watch` : "", r.bandSteps ? `${r.bandSteps} band` : ""].filter(Boolean).join(" · ") : "";
-    const hr = r?.hrN ? `${Math.round(r.hrSum / r.hrN)} avg · ${r.hrMin}–${r.hrMax}` : "";
+    const steps = [r?.watchSteps != null ? `${r.watchSteps} watch` : "", r?.bandSteps ? `${r.bandSteps} band` : "", !r?.watchSteps && h?.steps != null ? `${Math.round(h.steps).toLocaleString()} Health` : ""].filter(Boolean).join(" · ");
+    const hr = r?.hrN ? `${Math.round(r.hrSum / r.hrN)} avg · ${r.hrMin}–${r.hrMax}` : h?.heart_rate != null ? `${Math.round(h.heart_rate)} avg${h.resting_heart_rate != null ? ` · resting ${Math.round(h.resting_heart_rate)}` : ""}` : "";
+    const sleep = h?.sleep_hours != null ? `${Math.floor(h.sleep_hours)} h ${Math.round((h.sleep_hours % 1) * 60)} m` : "";
     const cd = info.dayOf ? info.dayOf(key) : null;
     rows.push(el("tr", {}, el("th", { scope: "row", textContent: label }),
       el("td", { textContent: r?.energy.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
       el("td", { textContent: r && (r.others || r.mine) ? `${r.others}` : "—" }),
-      el("td", { textContent: steps || "—" }), el("td", { textContent: hr || "—" }), el("td", { textContent: cd ? String(cd) : "—" })));
+      el("td", { textContent: steps || "—" }), el("td", { textContent: hr || "—" }), el("td", { textContent: sleep || "—" }), el("td", { textContent: h?.hrv_sdnn != null ? `${Math.round(h.hrv_sdnn)} ms` : "—" }), el("td", { textContent: cd ? String(cd) : "—" })));
   }
   $("days-body").replaceChildren(...rows);
   // cycle
@@ -1533,12 +1593,12 @@ function renderEnergy() {
   $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "no signal yet";
   $("energy-why").textContent = e ? `Your self-report: “${e.text}”.` : "Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.";
   $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
-  const v = life.voice, w = watch.sensors || {}, r = life.days[todayKey()] || {}, info = cycleInfo();
+  const v = life.voice, w = sensorsWithHealth(), r = life.days[todayKey()] || {}, info = cycleInfo(), h = hLatest() || {};
   const rows = (pairs) => pairs.filter(([, val]) => val != null && val !== "").flatMap(([k, val]) => [el("dt", { textContent: k }), el("dd", { textContent: String(val) })]);
   const fill = (id, pairs, empty) => { const items = rows(pairs); $(id).replaceChildren(...(items.length ? items : [el("dt", { className: "empty", textContent: empty })])); };
   fill("sig-voice", [["Speaking pace", v?.words_per_min ? `${v.words_per_min} wpm` : null], ["Pauses", v?.avg_pause_s ? `${v.avg_pause_s} s avg` : null], ["Loudness", v?.loudness != null ? `${Math.round(v.loudness * 100)}%` : null], ["Most-heard speaker's share", v?.talk_share != null ? `${Math.round(v.talk_share * 100)}%` : null]], "Record a session to measure");
   fill("sig-body", [["Heart rate", w.heart_rate != null ? `${Math.round(w.heart_rate)} bpm` : null], ["HRV (SDNN)", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Breathing", w.respiratory_rate != null ? `${Math.round(w.respiratory_rate)} /min` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Sleep last night", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Noise", w.env_noise_db != null ? `${Math.round(w.env_noise_db)} dB` : null], ["Logged mood", w.state_of_mind ? `${w.state_of_mind.valence > 0.2 ? "pleasant" : w.state_of_mind.valence < -0.2 ? "unpleasant" : "neutral"}${w.state_of_mind.labels?.length ? ` · ${w.state_of_mind.labels.join(", ")}` : ""}` : null]], "Pair the Apple Watch in Devices");
-  fill("sig-move", [["Steps today", r.watchSteps ?? (r.bandSteps || null)], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${w.exercise_min_today} min` : null], ["Mindful", w.mindful_min_today != null ? `${w.mindful_min_today} min` : null]], "Connect the band or watch");
+  fill("sig-move", [["Steps today", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${Math.round(w.exercise_min_today)} min` : null], ["Mindful", w.mindful_min_today != null ? `${Math.round(w.mindful_min_today)} min` : null], ["Distance", h.distance_km != null ? `${h.distance_km.toFixed(1)} km` : null], ["Active energy", h.active_energy_kcal != null ? `${Math.round(h.active_energy_kcal)} kcal` : null], ["Walking speed", h.walking_speed_kmh != null ? `${h.walking_speed_kmh.toFixed(1)} km/h` : null], ["Walking steadiness", h.walking_steadiness != null ? `${Math.round(h.walking_steadiness)}%` : null]], "Connect the band or watch");
   fill("sig-cycle", [["Cycle day", info.dayOf ? info.dayOf(todayKey()) : null], ["Next, estimated", info.next ? info.next.toLocaleDateString([], { month: "short", day: "numeric" }) : null], ["Wrist temp", w.wrist_temp_delta_c != null ? `${w.wrist_temp_delta_c > 0 ? "+" : ""}${w.wrist_temp_delta_c.toFixed(1)} °C` : null]], "Add dates in Your days");
   const mood = state === "low" ? "calm" : state === "positive" ? "uplifting" : "steady";
   $("music-links").replaceChildren(...["calm", "steady", "uplifting"].map((m) => el("div", { className: `music-chip m-${m}${m === mood ? " current" : ""}` }, el("b", { textContent: m }),
@@ -1591,6 +1651,7 @@ function renderIntegrations() {
   const card = (name, on, what, how) => el("article", { className: `int-card${on ? " on" : ""}` }, el("header", {}, el("b", { textContent: name }), el("span", { className: "int-state", textContent: on ? "● connected" : "not connected" })), el("p", { textContent: what }), el("p", { className: "caption", textContent: how }));
   $("int-grid").replaceChildren(
     card("Vexo band", Boolean(capture.band), "Microphone (voice pace, pauses, loudness), movement, steps, taps to mark moments, battery.", "Bluetooth or USB · official Vexo Open kit · Devices"),
+    card("Apple Health history", Boolean(ownerHealth.days && healthOn()), ownerHealth.days ? `${ownerHealth.days} days imported from the iPhone (steps, heart rate, HRV, sleep, blood oxygen, walking steadiness, workouts…).` : "Daily history from the iPhone's Health app.", ownerHealth.importedAt ? `Threadline Health app · last sent ${new Date(ownerHealth.importedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Threadline Health iPhone app · or upload an export on Care"),
     card("Apple Watch · Health", $("watch-pair").dataset.state === "connected", "Heart rate, HRV, resting HR, breathing, blood oxygen, sleep, wrist temperature, noise, exercise, mindful minutes, State of Mind, period days you logged. Taps for check-ins.", "Threadline watch app · pairing code · Devices"),
     card("Camera · GoPro", Boolean(capture.camStream), "Video via the GoPro Webcam app; stays in this browser.", "Live session → Add video"),
     card("Calendar", (life.tasks || []).length > 0 || agent.events.length > 0, "Quiet-time blocks and notes around tasks and decisions.", "Add to Google Calendar links or .ics files — each needs your tap"),
@@ -1636,8 +1697,8 @@ function renderToday() {
   const marked = loadArchive().filter((e) => todayKey(new Date(e.startedAt)) === key).flatMap((e) => e.lines.filter((l) => l.marked));
   $("day-moments").replaceChildren(...[...events.map((e) => el("span", { className: `moment m-${e.state}`, textContent: `${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${e.word}”` })),
     ...marked.slice(-6).map((l) => el("span", { className: "moment m-mark", textContent: `★ ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${l.text.slice(0, 40)}${l.text.length > 40 ? "…" : ""}”` }))]);
-  const r = life.days[key] || {}, w = watch.sensors || {}, info = cycleInfo();
-  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Cycle day", info.dayOf ? info.dayOf(key) : null]].filter(([, v]) => v != null);
+  const r = life.days[key] || {}, w = sensorsWithHealth(), info = cycleInfo(), h = hDay(key) || hLatest() || {};
+  const m = [["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], ["Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Cycle day", info.dayOf ? info.dayOf(key) : null]].filter(([, v]) => v != null);
   $("measured").replaceChildren(...(m.length ? m.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })]) : [el("dt", { className: "empty", textContent: "Nothing measured yet today." })]));
   const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
@@ -2373,3 +2434,20 @@ render();
 showView(location.hash.slice(1) || "live");
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
+loadOwnerHealth(); renderSampleBanner();
+/* Keep the owner's band connected: reopen the USB port this site was already allowed to use — on load,
+   whenever the cable is plugged back in, and every 10 s while disconnected. No chooser, no re-pairing. */
+async function autoConnectBand() {
+  if (!bandNumber || capture.band || pair.busy || !navigator.serial?.getPorts) return;
+  let ports = [];
+  try { ports = await navigator.serial.getPorts(); } catch { return; }
+  for (const port of ports) {
+    if (capture.band || pair.busy) return;
+    if (port.readable) continue;  // already open in this page
+    await connectBand("serial", port);
+  }
+}
+navigator.serial?.addEventListener?.("connect", () => setTimeout(autoConnectBand, 800));
+setTimeout(autoConnectBand, 600);
+setInterval(autoConnectBand, 10000);
+$("sample-clear")?.addEventListener("click", clearSample);
