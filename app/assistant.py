@@ -23,7 +23,7 @@ router = APIRouter()
 SLOTS = asyncio.Semaphore(4)
 VIEWS = {"dashboard", "care", "library", "essentials", "tasks", "energy", "days", "graph", "today", "live", "transcripts"}
 MODES = {"memory", "sight", "hearing", "mobility"}
-ACTION_TYPES = {"buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
+ACTION_TYPES = {"log_checkin", "log_energy", "buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
 
 SYSTEM = """You are Threadline, a warm, calm voice companion for an older adult or a person with a disability, and for their caregiver.
 You are speaking out loud through a wearable, so answer in at most two short, natural sentences. Use the person's language if they speak one other than English.
@@ -35,6 +35,8 @@ You can act by adding actions:
 - open_view {view}: one of dashboard, care, library, essentials, tasks, energy (wellbeing), days (daily log), graph (memory map), today, live, transcripts.
 - add_task {title}: a short task for today.
 - care_check {}: run the caregiver agent now.
+- log_checkin {period: morning|evening, mood: very_low|low|neutral|content|happy, agitation: none|mild|moderate|severe, repeats: number, note}: when they (or the caregiver) describe how they feel, their mood, restlessness/agitation, or how many times a question was repeated today. Include only the fields they said. Confirm what you logged.
+- log_energy {state: low|steady|positive, word}: when they describe their energy (tired, exhausted, great, okay); word = their own word.
 - set_mode {mode}: memory, sight, hearing or mobility.
 - emergency {reason}: ONLY if they say they fell, are hurt, can't breathe, have chest pain, or ask for emergency help. Then tell them help is being called and to stay still.
 Rules: never diagnose; never say medication was taken (suggest checking the pill organiser with the caregiver); never identify people by face; if unsure, ask one short question.
@@ -81,6 +83,22 @@ def clean_actions(raw) -> list[dict]:
             out.append({"type": t, "mode": a["mode"]})
         elif t == "add_task" and isinstance(a.get("title"), str) and a["title"].strip():
             out.append({"type": t, "title": re.sub(r"\s+", " ", a["title"]).strip()[:120]})
+        elif t == "log_checkin":
+            item = {"type": t}
+            if a.get("period") in ("morning", "evening"):
+                item["period"] = a["period"]
+            if a.get("mood") in ("very_low", "low", "neutral", "content", "happy"):
+                item["mood"] = a["mood"]
+            if a.get("agitation") in ("none", "mild", "moderate", "severe"):
+                item["agitation"] = a["agitation"]
+            if isinstance(a.get("repeats"), (int, float)) and 0 <= a["repeats"] <= 99:
+                item["repeats"] = int(a["repeats"])
+            if isinstance(a.get("note"), str):
+                item["note"] = a["note"][:160]
+            if len(item) > 1:
+                out.append(item)
+        elif t == "log_energy" and a.get("state") in ("low", "steady", "positive"):
+            out.append({"type": t, "state": a["state"], "word": str(a.get("word") or a["state"])[:40]})
         elif t == "emergency":
             out.append({"type": t, "reason": str(a.get("reason") or "Help requested")[:120]})
         elif t in ("checkout", "care_check", "buy"):

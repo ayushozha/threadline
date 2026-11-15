@@ -563,3 +563,7 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .as-log li{word-break:break-word}.as-meta{display:flex;gap:6px;align-items:center}.as-lang{font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;background:#f2c94c;color:#262921;letter-spacing:.04em;text-transform:uppercase}
 .as-me .as-lang{background:rgba(255,255,255,.2);color:#fffdf7}.as-text{font-size:15px}.as-en{font-size:12px;font-style:italic;opacity:.75;border-top:1px dashed rgba(0,0,0,.15);padding-top:3px}
 .as-me .as-en{border-top-color:rgba(255,255,255,.25)}.as-chips{max-height:76px;overflow:auto}
+
+.dl-actions{margin-top:18px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px}.dl-actions h3{margin:0 0 8px}
+.dl-day{border-top:1px solid #eeeadf;padding:8px 0}.dl-day summary{cursor:pointer}.dl-day ol{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;font-size:13px}
+.dl-day li{display:grid;grid-template-columns:72px 1fr;gap:8px}.dl-day time{color:var(--muted)}

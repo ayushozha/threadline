@@ -1612,6 +1612,16 @@ function renderDays() {
   }
   $("days-status").textContent = `${filled}/${DAYS} days · ${cols.length} metrics${Object.values(chartHealth()).some(d => d.sample) ? " · includes example values" : ""}${ownerHealth.days ? ` · ${ownerHealth.days} days of Health history` : ""}`;
   $("days-body").replaceChildren(...rows);
+  if ($("days-actions")) {
+    const byDay = {};
+    for (const a of life.actions || []) (byDay[todayKey(new Date(a.at))] ||= []).push(a);
+    const mlog = loadMoodLog();
+    for (const [d, e] of Object.entries(mlog)) (byDay[d] ||= []).push({ at: e.at || `${d}T20:00:00`, text: `Check-in${e.by === "voice" ? " by voice" : ""}: ${[e.morning != null ? `morning ${moodWord(e.morning)}` : "", e.evening != null ? `evening ${moodWord(e.evening)}` : "", e.agitation != null ? `agitation ${["none", "mild", "moderate", "severe"][e.agitation]}` : "", e.repeats ? `${e.repeats} repeated questions` : ""].filter(Boolean).join(" · ")}` });
+    const daysSorted = Object.keys(byDay).sort().reverse().slice(0, 14);
+    $("days-actions").replaceChildren(...(daysSorted.length ? daysSorted.map((d) => el("details", { className: "dl-day", open: d === todayKey() },
+      el("summary", {}, el("b", { textContent: d === todayKey() ? "Today" : parseDay(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) }), el("span", { className: "caption", textContent: ` · ${byDay[d].length} entries` })),
+      el("ol", {}, ...byDay[d].sort((p, q) => String(q.at).localeCompare(String(p.at))).map((a) => el("li", {}, el("time", { textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text })))))) : [el("p", { className: "caption", textContent: "Every action Threadline takes and every check-in appears here, day by day." })]));
+  }
   saveThread();
 }
 function sendHaptic(kind, reason) {
@@ -2813,6 +2823,30 @@ function assistantContext() {
     mood_today: moodOf(todayKey()) || null };
 }
 async function assistantAction(a) {
+  const result = await assistantActionRun(a);
+  if (result && !["add_task", "emergency"].includes(a.type)) { try { logAction(`Voice · ${result}`); } catch { /* */ } }
+  return result;
+}
+const MOOD_VALUE = { very_low: -0.8, low: -0.4, neutral: 0, content: 0.4, happy: 0.8 }, AGI_VALUE = { none: 0, mild: 1, moderate: 2, severe: 3 };
+async function assistantActionRun(a) {
+  if (a.type === "log_checkin") {
+    const log = loadMoodLog(), day = todayKey(), cur = log[day] || {}, period = a.period || (new Date().getHours() < 14 ? "morning" : "evening");
+    if (a.mood) cur[period] = MOOD_VALUE[a.mood];
+    if (a.agitation) cur.agitation = AGI_VALUE[a.agitation];
+    if (a.repeats != null) cur.repeats = a.repeats;
+    if (a.note) cur.note = a.note;
+    log[day] = { ...cur, at: new Date().toISOString(), by: "voice" };
+    try { localStorage.setItem(moodLogKey(), JSON.stringify(log)); } catch { /* storage off */ }
+    rebuildMood(); renderMood(); renderDays(); drawDashboard(); renderToday();
+    return `Logged ${[a.mood ? `${period} mood: ${a.mood.replace("_", " ")}` : "", a.agitation ? `agitation: ${a.agitation}` : "", a.repeats != null ? `${a.repeats} repeated questions` : ""].filter(Boolean).join(" · ")}`;
+  }
+  if (a.type === "log_energy") {
+    const at = new Date().toISOString();
+    life.energy = { state: a.state, at, text: `Said by voice: “${a.word}”`, word: a.word };
+    (life.energyLog ||= []).push({ at, state: a.state, word: a.word });
+    saveThread(); renderEnergy(); renderToday(); renderDays(); drawDashboard();
+    return `Energy logged: ${a.state} (“${a.word}”)`;
+  }
   if (a.type === "add_to_cart") { openEssentials(); return shop?.add(a.id, a.qty || 1); }
   if (a.type === "remove_from_cart") { openEssentials(); return shop?.remove(a.id); }
   if (a.type === "buy") {

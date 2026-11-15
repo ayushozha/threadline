@@ -13,7 +13,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   const talk = el("button", { type: "button", className: "as-talk", textContent: "🎙 Talk (band)" });
   const input = el("input", { type: "text", maxLength: 800, placeholder: "…or type: “How did I sleep?” “Order milk and a pill organiser”", "aria-label": "Message to Threadline" });
   const form = el("form", { className: "as-form" }, input, el("button", { type: "submit", className: "dash-btn primary", textContent: "Send" }));
-  const chips = el("div", { className: "as-chips" }, ...["How am I doing today?", "Order milk, bread and a pill organiser", "Check out", "Remind me to call Lily at 5", "Is everything okay at home?", "I've fallen, help", "मलाई आज कस्तो छ?"].map((q) =>
+  const chips = el("div", { className: "as-chips" }, ...["How am I doing today?", "Order milk, bread and a pill organiser", "Check out", "Remind me to call Lily at 5", "Is everything okay at home?", "I've fallen, help", "I'm feeling tired today, mood is low", "He asked about lunch 4 times, a bit restless this evening", "मलाई आज कस्तो छ?"].map((q) =>
     el("button", { type: "button", className: "lib-chip", textContent: q, onclick: () => turn(q) })));
   root.replaceChildren(el("section", { className: "as-card" },
     el("div", { className: "as-head" }, orb, el("div", {}, el("small", { textContent: "Live · Gemini + ElevenLabs" }), el("h2", { textContent: "Talk to Threadline" }), status), talk),
