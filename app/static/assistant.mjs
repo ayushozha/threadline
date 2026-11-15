@@ -9,7 +9,7 @@ const ENGINE_KEY = "threadline.assistantEngine";
 const NO_BAND = "Connect the Vexo band (Your band → Connect) to talk.";
 const ENGINES = { gemini: "Gemini + ElevenLabs", realtime: "OpenAI Realtime" };
 const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "gemini" ? "gemini" : "realtime"; } catch { return "realtime"; } };
-import { speak as speakNatural } from './voice.mjs';
+import { speak as speakNatural, stopSpeaking } from './voice.mjs';
 const WAKE = /^\s*(hey\s+)?(thread\s*line|threadline)[,.!\s]*/i;
 
 export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm, onTurn }) {
@@ -68,7 +68,10 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
     st.speaking = false; setState(st.listening ? "listening" : "idle");
   }
   async function turn(text) {
-    if (!text.trim() || st.busy) return;
+    if (!text.trim()) return;
+    if (st.busy) {  // never drop what they said: interrupt the current reply and handle it next
+      (st.queue ||= []).push(text); if (st.speaking) stopSpeaking(); return;
+    }
     st.busy = true; const mine = add("me", text); setState("thinking"); status.textContent = "Thinking…";
     try {
       const local = await intercept?.(text);
@@ -85,7 +88,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
       status.textContent = st.listening ? "Listening through the Vexo band. Just talk." : "Tap Talk or double-tap the band to speak again.";
       await say(d.say);
     } catch (e) { add("ai", `Sorry, I couldn't answer: ${e.message}`); setState(st.listening ? "listening" : "idle"); }
-    finally { st.busy = false; }
+    finally { st.busy = false; const next = (st.queue || []).shift(); if (next) setTimeout(() => turn(next), 0); }
   }
   // Band lines arrive from the page's live transcript; only lines addressed to Threadline become turns.
   function feedBand(text) {
