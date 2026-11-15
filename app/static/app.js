@@ -10,6 +10,7 @@ import { mountLibrary } from './library.mjs';
 import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
 import { mountEssentials, purchaseReply } from './essentials.mjs';
 import { mountAssistant } from './assistant.mjs';
+import { speak as speakNatural } from './voice.mjs';
 import { mountCalendar } from './calendar.mjs';
 import { mountPhoneCam } from './phonecam.mjs';
 import { suggestTasks } from './task-suggest.mjs';
@@ -228,7 +229,7 @@ function openLibrary() {
   if (library || !$("library")) return;
   library = mountLibrary($("library"), {
     request,
-    onSpeak: (text) => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 0.95; speechSynthesis.speak(u); } catch { /* no speech */ } },
+    onSpeak: (text) => { speakNatural(text).catch(() => {}); },
     onRunLive: (sc) => {
       selectAccessMode(sc.mode);
       careRevokeFiles(); care.files = [{ url: sc.video, name: sc.title, size: 0 }]; care.idx = 0;
@@ -1678,7 +1679,14 @@ async function summarizeToday() {
 
 /* ---------- Views (sidebar) ---------- */
 const VIEW_TITLES = { essentials: "Essentials", library: "Library", dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
+function placeAssistant(name) {  // the same live panel: inline on the Dashboard, a floating drawer everywhere else
+  const panel = $("assistant"), dock = $("assistant-dock"), home = $("assistant-home");
+  if (!panel || !dock || !home) return;
+  if (name === "dashboard" || name === "") { if (panel.parentElement !== home) home.append(panel); dock.hidden = true; document.body.classList.remove("as-open"); }
+  else { const drawer = $("assistant-drawer"); if (panel.parentElement !== drawer) drawer.append(panel); dock.hidden = false; }
+}
 function showView(name) {
+  try { placeAssistant(name); } catch { /* not ready */ }
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
     requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "center" })); return;
@@ -1934,6 +1942,7 @@ const gcalLink = (title, details, date) => { const d = (date || todayKey()).repl
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&dates=${d}/${next}`; };
 function renderTasks() {
   if (!$("tasks-today")) return;
+  if (location.hash === "#tasks") renderTaskCalendar();
   const tasks = life.tasks || [], today = todayKey();
   const drafts = (life.taskDrafts || []).filter(d => !d.exampleMode || d.exampleMode === accessMode);
   $("task-banner").replaceChildren(...(drafts.length ? drafts.map(d => el("div", { className: "task-draft" }, el("p", { className: "caption", textContent: d.suggested ? `From: ${d.suggested.source} · ${d.suggested.why}` : `From: “${d.statement.text}”${d.statement.speaker_confirmed ? "" : " · confirm this was you before saving"}` }), draftControls(d))) : [el("p", { className: "caption", textContent: "No pending suggestions. Ask for a reminder while speaking and it will appear here." })]));
@@ -1947,7 +1956,7 @@ function renderTasks() {
     if (t.big && !(t.heldUntil > today)) mk("Hold 3 days", () => holdTask(t));
     mk("Done", () => { t.done = true; renderTasks(); });
     btns.push(el("a", { className: "text-button", href: gcalLink(t.title, t.note || "From Threadline", t.heldUntil || t.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" }));
-    return el("li", { className: t.big ? "big" : "" }, el("div", {}, el("b", { textContent: t.title }), el("div", { className: "caption", textContent: [t.big ? "big decision" : "", t.heldUntil > today ? `held until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : t.due ? `due ${parseDay(t.due).toLocaleDateString([], { month: "short", day: "numeric" })}` : "", t.note || ""].filter(Boolean).join(" · ") })), el("div", { className: "row tight" }, ...btns));
+    return el("li", { className: `${t.big ? "big" : ""}${t.voice ? " voice" : ""}`, "data-task-id": t.id }, el("div", {}, el("b", { textContent: `${t.time ? `${t.time} · ` : ""}${t.title}` }), t.voice ? el("span", { className: "task-voice", textContent: "🎙 by voice" }) : null, el("div", { className: "caption", textContent: [t.big ? "big decision" : "", t.heldUntil > today ? `held until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : t.due ? `due ${parseDay(t.due).toLocaleDateString([], { month: "short", day: "numeric" })}` : "", t.note || ""].filter(Boolean).join(" · ") })), el("div", { className: "row tight" }, ...btns));
   };
   for (const k of ["today", "later", "held"]) $(`tasks-${k}`).replaceChildren(...(lists[k].length ? lists[k].map(item) : [el("li", { className: "empty", textContent: k === "held" ? "Nothing held." : "Nothing here." })]));
   saveThread();
@@ -1974,6 +1983,18 @@ async function fillTaskSuggestions() {
       statement: { id: `suggest:${s.id}`, text: s.why, speaker_confirmed: true }, ...((sample || s.sample) ? { sample: true } : {}) }))];
     renderTasks(); drawDashboard();
   } finally { suggestBusy = false; if (scope !== threadKey) fillTaskSuggestions(); }
+}
+function flashTasks(id) { if (location.hash !== "#tasks") return; requestAnimationFrame(() => { const li = document.querySelector(`[data-task-id="${id}"]`); li?.classList.add("flash"); li?.scrollIntoView({ block: "center", behavior: "smooth" }); }); }
+async function renderTaskCalendar() {
+  const box = $("tasks-calendar"); if (!box) return;
+  try {
+    const d = await request(`/api/calendar/events?days=7&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`);
+    const ev = (d.events || []).slice(0, 12);
+    if (!(d.calendars || []).length) { box.replaceChildren(el("p", { className: "caption", textContent: "Connect your calendar on the Dashboard (Your calendar) and your week appears here. Say “What's on today?” to Threadline." })); return; }
+    box.replaceChildren(...(ev.length ? ev.map((e) => el("li", { className: "tc-ev" },
+      el("time", { textContent: e.all_day ? new Date(`${e.start}T12:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : new Date(e.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) }),
+      el("b", { textContent: e.title }), e.location ? el("small", { textContent: e.location }) : null)) : [el("p", { className: "caption", textContent: "Nothing on your calendar this week." })]));
+  } catch { box.replaceChildren(el("p", { className: "caption", textContent: "Calendar unavailable right now." })); }
 }
 function holdTask(t, note) { t.heldUntil = todayKey(new Date(Date.now() + 3 * DAY_MS)); t.note = note || `Held on a ${life.energy?.state === "low" ? "low-energy " : ""}day`; renderTasks(); logAction(`Held “${t.title}” until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short" })}`); }
 $("task-form").addEventListener("submit", (e) => {
@@ -2847,7 +2868,8 @@ function assistantContext() {
     health_30d_days: ownerHealth.days, last_care_check: last ? { status: last.status, summary: last.summary, at: last.at } : null,
     tasks: (life.tasks || []).filter((t) => !t.done).map((t) => t.title).slice(0, 12), suggested_tasks: (life.taskDrafts || []).map((d) => d.title).slice(0, 8),
     cart: shop?.summary() || null, emergency_contact: c.name || null, band_connected: Boolean(capture.band),
-    mood_today: moodOf(todayKey()) || null };
+    mood_today: moodOf(todayKey()) || null, current_view: (location.hash || "#dashboard").slice(1),
+    scenarios: (typeof scenarioCache !== "undefined" && scenarioCache ? scenarioCache : []).map((x) => ({ id: x.id, title: x.title, mode: x.mode })) };
 }
 async function assistantAction(a) {
   const result = await assistantActionRun(a);
@@ -2928,7 +2950,32 @@ async function assistantActionRun(a) {
   }
   if (a.type === "checkout") { openEssentials(); location.hash = "essentials"; return `Order ready for caregiver approval · ${shop?.totalText() || ""}`; }
   if (a.type === "open_view") { location.hash = a.view; return `Opened ${VIEW_TITLES[a.view] || a.view}`; }
-  if (a.type === "add_task") { (life.tasks ||= []).push({ id: newId("t"), title: a.title, due: todayKey(), big: false, done: false, note: "From Talk to Threadline" }); renderTasks(); logAction(`Task added by voice: ${a.title}`); return `Task added: ${a.title}`; }
+  if (a.type === "add_task") {
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(a.due || "") ? a.due : todayKey(), time = /^\d{1,2}:\d{2}$/.test(a.time || "") ? a.time : "";
+    const t = { id: newId("t"), title: a.title, due, time, big: Boolean(a.big), done: false, note: `By voice${time ? ` · ${time}` : ""}`, voice: true };
+    (life.tasks ||= []).push(t); saveThread(); renderTasks(); flashTasks(t.id); logAction(`Task added by voice: ${a.title}${time ? ` at ${time}` : ""}${due !== todayKey() ? ` on ${due}` : ""}`);
+    return `Task added: ${a.title}${time ? ` · ${time}` : ""}${due !== todayKey() ? ` · ${due}` : ""}`;
+  }
+  if (a.type === "complete_task") {
+    const words = String(a.title || "").toLowerCase().split(/\W+/).filter((w) => w.length > 2);
+    const t = (life.tasks || []).filter((x) => !x.done).map((x) => ({ x, n: words.filter((w) => x.title.toLowerCase().includes(w)).length })).sort((p, q) => q.n - p.n)[0];
+    if (!t || !t.n) return { data: { error: "No open task matches that." } };
+    t.x.done = true; saveThread(); renderTasks(); logAction(`Task done by voice: ${t.x.title}`); return `Done: ${t.x.title}`;
+  }
+  if (a.type === "open_scenario") {
+    location.hash = "library"; openLibrary(); setTimeout(() => library?.open?.(a.id), 400);
+    return `Opened scenario: ${a.id.replace(/-/g, " ")}`;
+  }
+  if (a.type === "start_live_guidance") {
+    location.hash = "care";
+    if (!$("care-consent")?.checked) return { chip: "Care opened · tick consent to start", data: { needs_consent: true } };
+    try { await careStart(); return "Live guidance started"; } catch (e) { return { data: { error: e.message } }; }
+  }
+  if (a.type === "list_tasks") {
+    let events = [];
+    try { const d = await request(`/api/calendar/events?days=1&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`); events = (d.events || []).map((e) => ({ title: e.title, start: e.start })); } catch { /* none */ }
+    return { data: { open_tasks: (life.tasks || []).filter((x) => !x.done).map((x) => ({ title: x.title, due: x.due, time: x.time || null })), today_events: events } };
+  }
   if (a.type === "care_check") { careAssess(true); return "Care check started"; }
   if (a.type === "set_mode") { selectAccessMode(a.mode); return `${ACCESS_MODES[a.mode]?.label || a.mode} mode`; }
   if (a.type === "emergency") { emergency.trigger({ reason: a.reason || "Help requested by voice", note: "Asked for help out loud." }); return "Emergency alert started"; }
@@ -2955,6 +3002,8 @@ async function assistantIntercept(text) {
 }
 const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
+$("assistant-fab")?.addEventListener("click", () => { const open = document.body.classList.toggle("as-open"); $("assistant-fab").setAttribute("aria-expanded", String(open)); $("assistant-fab").textContent = open ? "✕ Close" : "🎙 Talk to Threadline"; });
+placeAssistant((location.hash || "#dashboard").slice(1));
 if ($("calendar-card")) mountCalendar($("calendar-card"), { el, request });
 if ($("phonecam-card")) mountPhoneCam($("phonecam-card"), { el, request, onFrameSource: (code) => { care.phoneCode = code; if (care.src === "phone") careBridgeStatus(); },
   onTalk: (code) => { care.phoneCode = code; location.hash = "care"; careSetSource("phone"); setTimeout(careStart, 300); } });

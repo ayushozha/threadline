@@ -221,7 +221,7 @@
       </section>
 
       <section class="view" data-view="dashboard" hidden>
-        <div id="assistant"></div>
+        <div id="assistant-home"><div id="assistant"></div></div>
         <div id="calendar-card"></div>
         <div id="phonecam-card"></div>
         <section class="card access-picker" aria-labelledby="access-h"><h2 id="access-h">Support that fits the person</h2>
@@ -427,6 +427,7 @@
       </section>
 
       <section class="view" data-view="tasks" hidden>
+        <section class="card tasks-cal" aria-labelledby="tasks-cal-h"><h2 id="tasks-cal-h">Your calendar · next 7 days</h2><ul id="tasks-calendar" class="tc-list"><li class="caption">Loading…</li></ul></section>
         <section class="card" aria-labelledby="task-suggestions-h"><h2 id="task-suggestions-h">From your conversation</h2><p class="caption">Suggested tasks appear here automatically. Review before saving.</p><div class="task-banner" id="task-banner"></div></section>
         <form id="task-form" class="card task-form">
           <label for="task-title">Add a task</label>
@@ -561,5 +562,6 @@
       <footer><p>Your saved transcripts stay in this browser until you delete them.</p><p>An accessibility prototype — not medical guidance, diagnosis, or emergency monitoring.</p></footer>
     </main>
   </div>
+<div id="assistant-dock" class="as-dock" hidden><button type="button" id="assistant-fab" class="as-fab" aria-expanded="false">🎙 Talk to Threadline</button><div id="assistant-drawer" class="as-drawer"></div></div>
 </body>
 </html>

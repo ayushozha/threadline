@@ -9,6 +9,7 @@ const ENGINE_KEY = "threadline.assistantEngine";
 const NO_BAND = "Connect the Vexo band (Your band → Connect) to talk.";
 const ENGINES = { gemini: "Gemini + ElevenLabs", realtime: "OpenAI Realtime" };
 const loadEngine = () => { try { return localStorage.getItem(ENGINE_KEY) === "gemini" ? "gemini" : "realtime"; } catch { return "realtime"; } };
+import { speak as speakNatural } from './voice.mjs';
 const WAKE = /^\s*(hey\s+)?(thread\s*line|threadline)[,.!\s]*/i;
 
 export function mountAssistant(root, { el, request, getContext, runAction, bandOn, ensureBand, intercept, bandPcm }) {
@@ -17,6 +18,8 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   const status = el("p", { className: "as-status", textContent: "Listens through the Vexo band. Tap Talk or double-tap the band, then speak." });
   const live = el("p", { className: "as-live" });
   const log = el("ol", { className: "as-log", "aria-live": "polite" });
+  const sos = el("button", { type: "button", className: "as-sos", textContent: "🚨 Emergency", title: "Start the emergency countdown now" });
+  sos.addEventListener("click", () => { runAction({ type: "emergency", reason: "Emergency button pressed" }); });
   const talk = el("button", { type: "button", className: "as-talk", textContent: "🎙 Talk (band)" });
   const input = el("input", { type: "text", maxLength: 800, placeholder: "…or type: “How did I sleep?” “Order milk and a pill organiser”", "aria-label": "Message to Threadline" });
   const form = el("form", { className: "as-form" }, input, el("button", { type: "submit", className: "dash-btn primary", textContent: "Send" }));
@@ -34,7 +37,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
     status.textContent = st.engine === "realtime" ? (bandPcmOn() ? "Tap Talk and speak through the Vexo band." : NO_BAND) : "Tap Talk, then speak.";
   });
   root.replaceChildren(el("section", { className: "as-card" },
-    el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", { textContent: "Talk to Threadline" }), status), talk),
+    el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", { textContent: "Talk to Threadline" }), status), el("div", { className: "as-head-actions" }, talk, sos)),
     el("label", { className: "as-engine-row" }, el("span", { textContent: "Voice engine" }), engine),
     live, log, chips, form));
   form.addEventListener("submit", (e) => {
@@ -57,15 +60,9 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
   }
   async function say(text) {
     st.speaking = true; setState("speaking");
-    try {
-      const r = await fetch("/api/assistant/speak", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ text }) });
-      if (!r.ok) throw new Error("no voice");
-      const url = URL.createObjectURL(await r.blob()), a = new Audio(url);
-      await new Promise((res) => { a.onended = res; a.onerror = res; a.play().catch(res); });
-      URL.revokeObjectURL(url);
-    } catch {
-      await new Promise((res) => { try { const u = new SpeechSynthesisUtterance(text); u.rate = 0.98; u.onend = res; u.onerror = res; speechSynthesis.speak(u); } catch { res(); } });
-    }
+    let ok = false;
+    try { ok = await speakNatural(text); } catch { ok = false; }
+    if (!ok) status.textContent = "Voice is unavailable right now. The reply is shown as text.";
     st.speaking = false; setState(st.listening ? "listening" : "idle");
   }
   async function turn(text) {

@@ -23,7 +23,7 @@ router = APIRouter()
 SLOTS = asyncio.Semaphore(4)
 VIEWS = {"dashboard", "care", "library", "essentials", "tasks", "energy", "days", "graph", "today", "live", "transcripts"}
 MODES = {"memory", "sight", "hearing", "mobility"}
-ACTION_TYPES = {"log_checkin", "log_energy", "buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
+ACTION_TYPES = {"open_scenario", "start_live_guidance", "complete_task", "log_checkin", "log_energy", "buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
 
 SYSTEM = """You are Threadline, a warm, calm voice companion for an older adult or a person with a disability, and for their caregiver.
 You are speaking out loud through a wearable, so answer in at most two short, natural sentences. Use the person's language if they speak one other than English.
@@ -33,8 +33,11 @@ You can act by adding actions:
 - checkout {}: opens the order for the caregiver to approve and pay with Stripe Checkout.
 - buy {}: when they ask you to buy/order/purchase and CONTEXT.cart.wallet.saved is true, add the items and then add buy: say the items and the total and ASK "Shall I buy it?". The page waits for them to say yes; never claim it is paid. If no card is saved, use checkout and say the caregiver needs to save a card once.
 - open_view {view}: one of dashboard, care, library, essentials, tasks, energy (wellbeing), days (daily log), graph (memory map), today, live, transcripts.
-- add_task {title}: a short task for today.
+- add_task {title, due?: YYYY-MM-DD, time?: HH:MM}: a task or reminder; set due/time when they say when (CONTEXT.now gives today's date).
+- complete_task {title}: mark a task done.
 - care_check {}: run the caregiver agent now.
+- open_scenario {id}: open a scenario video in the Library (ids in CONTEXT.scenarios).
+- start_live_guidance {}: open Care and start live camera guidance.
 - log_checkin {period: morning|evening, mood: very_low|low|neutral|content|happy, agitation: none|mild|moderate|severe, repeats: number, note}: when they (or the caregiver) describe how they feel, their mood, restlessness/agitation, or how many times a question was repeated today. Include only the fields they said. Confirm what you logged.
 - log_energy {state: low|steady|positive, word}: when they describe their energy (tired, exhausted, great, okay); word = their own word.
 - set_mode {mode}: memory, sight, hearing or mobility.
@@ -82,7 +85,18 @@ def clean_actions(raw) -> list[dict]:
         elif t == "set_mode" and a.get("mode") in MODES:
             out.append({"type": t, "mode": a["mode"]})
         elif t == "add_task" and isinstance(a.get("title"), str) and a["title"].strip():
-            out.append({"type": t, "title": re.sub(r"\s+", " ", a["title"]).strip()[:120]})
+            item = {"type": t, "title": re.sub(r"\s+", " ", a["title"]).strip()[:120]}
+            if isinstance(a.get("due"), str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", a["due"]):
+                item["due"] = a["due"]
+            if isinstance(a.get("time"), str) and re.fullmatch(r"\d{1,2}:\d{2}", a["time"]):
+                item["time"] = a["time"]
+            out.append(item)
+        elif t == "open_scenario" and isinstance(a.get("id"), str) and re.fullmatch(r"[a-z0-9-]{3,60}", a["id"]):
+            out.append({"type": t, "id": a["id"]})
+        elif t == "start_live_guidance":
+            out.append({"type": t})
+        elif t == "complete_task" and isinstance(a.get("title"), str) and a["title"].strip():
+            out.append({"type": t, "title": a["title"].strip()[:120]})
         elif t == "log_checkin":
             item = {"type": t}
             if a.get("period") in ("morning", "evening"):

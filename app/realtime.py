@@ -42,6 +42,7 @@ def _fn(name: str, description: str, properties: dict | None = None, required: l
             "parameters": {"type": "object", "properties": properties or {}, "required": required or [], "additionalProperties": False}}
 
 
+SCENARIO_IDS = ["sight-stairs-indoor", "sight-steps-night", "mobility-steps-street", "memory-glasses", "memory-pills", "memory-door-confused", "memory-stove", "sight-cane-crossing", "sight-shelf", "hearing-doorbell", "hearing-missed-call", "mobility-hallway", "mobility-curb", "mobility-fall", "parkinsons-tea"]
 ITEM_ID = {"type": "string", "enum": sorted(BY_ID), "description": "Catalog item id"}
 TOOLS = [
     _fn("add_to_cart", "Add an everyday item from the catalog to the shopping cart.",
@@ -49,7 +50,13 @@ TOOLS = [
     _fn("remove_from_cart", "Remove an item from the shopping cart.", {"id": ITEM_ID}, ["id"]),
     _fn("checkout", "Open the order so the caregiver can approve and pay with Stripe. Never claim it is paid."),
     _fn("open_view", "Open a screen of the dashboard.", {"view": {"type": "string", "enum": sorted(VIEWS)}}, ["view"]),
-    _fn("add_task", "Add a short task for today.", {"title": {"type": "string", "maxLength": 120}}, ["title"]),
+    _fn("add_task", "Add a task or reminder. Use due (YYYY-MM-DD) and time (HH:MM, 24h) when they say when.",
+        {"title": {"type": "string", "maxLength": 120}, "due": {"type": "string", "description": "YYYY-MM-DD"}, "time": {"type": "string", "description": "HH:MM"},
+         "big": {"type": "boolean", "description": "true for a big decision"}}, ["title"]),
+    _fn("complete_task", "Mark a task done (match by words in its title).", {"title": {"type": "string", "maxLength": 120}}, ["title"]),
+    _fn("list_tasks", "List open tasks and today's calendar events."),
+    _fn("open_scenario", "Open a scenario video in the Library and show Gemini's analysis.", {"id": {"type": "string", "enum": SCENARIO_IDS}}, ["id"]),
+    _fn("start_live_guidance", "Open Care and start live camera guidance with Gemini Live."),
     _fn("care_check", "Run the caregiver agent's care check now."),
     _fn("set_mode", "Switch the access mode.", {"mode": {"type": "string", "enum": sorted(MODES)}}, ["mode"]),
     _fn("buy", "Open the current cart for caregiver approval in Checkout. This Realtime path does not charge a saved card. Never claim payment completed.",

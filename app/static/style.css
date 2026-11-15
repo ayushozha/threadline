@@ -814,3 +814,17 @@ input[type=file]::file-selector-button:hover{border-color:var(--ink)}
 .pc-url{overflow-wrap:anywhere}
 .pc-more summary{cursor:pointer;color:var(--muted);font-size:13px}
 @media (max-width:560px){.pc-qr{width:100%;height:auto;max-width:260px}}
+
+/* ---------- Live tasks + floating Talk ---------- */
+.tasks-cal{margin-bottom:16px}.tc-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}.tc-ev{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;align-items:baseline;padding:8px 10px;border-radius:10px;background:var(--paper)}
+.tc-ev time{color:var(--muted);font-size:13px}.tc-ev small{grid-column:2;color:var(--muted)}
+.task-voice{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#fde7e1;color:#9d2e1c}
+li.flash{animation:taskflash 2.2s ease-out}@keyframes taskflash{0%{background:#ffe2b8}100%{background:transparent}}
+.as-dock{position:fixed;right:20px;bottom:20px;z-index:70;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.as-fab{border:0;border-radius:30px;padding:14px 20px;font-weight:700;font-size:15px;background:#e8452c;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.25);cursor:pointer}
+.as-drawer{display:none;width:min(440px,calc(100vw - 40px))}body.as-open .as-drawer{display:block}
+.as-drawer .as-card{height:min(560px,calc(100vh - 120px));margin:0;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+
+.as-head-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.as-sos{border:2px solid #ffb3a3;border-radius:30px;padding:10px 16px;font-weight:800;font-size:14px;background:#7d1d10;color:#fff;cursor:pointer}
+.as-sos:hover{background:#9d2e1c}

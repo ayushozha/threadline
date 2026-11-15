@@ -79,7 +79,7 @@ export function mountLibrary(root, { request, onRunLive, onSpeak }) {
     const input = h("input", { type: "text", maxlength: "1000", placeholder: "Ask Gemini about this video…", "aria-label": "Message to Gemini" });
     const send = h("button", { type: "submit", className: "dash-btn primary", textContent: "Send" });
     const speak = h("button", { type: "button", className: "dash-btn", "aria-pressed": String(speakOn), textContent: speakOn ? "🔊 On" : "🔇 Off",
-      onclick: () => { speakOn = !speakOn; speak.textContent = speakOn ? "🔊 On" : "🔇 Off"; speak.setAttribute("aria-pressed", String(speakOn)); if (!speakOn) try { speechSynthesis.cancel(); } catch { /* no speech */ } } });
+      onclick: () => { speakOn = !speakOn; speak.textContent = speakOn ? "🔊 On" : "🔇 Off"; speak.setAttribute("aria-pressed", String(speakOn));  } });
     const line = (t) => {
       const d = t.decision && ACTION[t.decision.action];
       return h("div", { className: `lib-msg ${t.role}` }, h("p", { textContent: t.text }), d ? h("small", { textContent: `${d.icon} ${d.label} · ${t.decision.urgency}${pct(t.decision.confidence)}` }) : null);
@@ -180,7 +180,7 @@ export function mountLibrary(root, { request, onRunLive, onSpeak }) {
     render();
   }
   load();
-  return { reload: load };
+  return { reload: load, open: (id) => open(id) };
 }
 
 async function grabFrames(video, n) {
