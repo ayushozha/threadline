@@ -149,6 +149,13 @@ class Devices(BaseModel):
     watch: bool = False
 
 
+class CalendarItem(BaseModel):
+    """A connected-calendar event in the next few days. Read-only context for the decision."""
+    title: str = Field(max_length=120)
+    start: str = Field(max_length=40)
+    end: str = Field(max_length=40)
+
+
 class DecideRequest(BaseModel):
     statement: Statement
     recent: list[Earlier] = Field(default_factory=list, max_length=20)
@@ -157,6 +164,7 @@ class DecideRequest(BaseModel):
     devices: Devices = Field(default_factory=Devices)
     tasks: list[Task] = Field(default_factory=list, max_length=40)
     voice: Voice = Field(default_factory=Voice)
+    calendar: list[CalendarItem] = Field(default_factory=list, max_length=30)
     engine: Literal["gemini", "local"] = "local"
 
 
