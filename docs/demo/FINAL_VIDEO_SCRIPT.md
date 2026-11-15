@@ -1,49 +1,41 @@
-# Threadline — one-minute demo script
+# Threadline — one story, one minute
 
-Use the three uploaded clips as the human scenes. Record the actual app screen
-for the response, captions and draft; do not label the existing concept film as
-live-product proof. Match the clip roles below to their actual contents.
+Fictional story: Priya and her mother, Meera. Use a warm female narrator as
+Priya. Keep a small “Fictional demonstration” label on illustrative footage.
+The emotional thread is independence during one interrupted everyday routine.
+The four support modes belong on the closing slide, not in this narration.
 
-| Time | Picture / action | Voiceover |
+| Time | Visual | Audio |
 | --- | --- | --- |
-| 0:00–0:07 | Three quick human moments: a forgotten task, small print, a missed conversation. No logo yet. | “A forgotten step. Unreadable text. A conversation you can't hear. Everyday moments can take away independence.” |
-| 0:07–0:14 | Reveal Threadline. Select Memory on the real Dashboard. Briefly show the band and camera. | “Threadline turns wearable audio and camera context into one assistant that adapts to the support you choose.” |
-| 0:14–0:25 | Clip 1: glasses or an interrupted routine. Show the earlier statement with timestamp, then the actual response and source. | “In Memory, it connects earlier conversations with what the camera sees, helping you pick up where you left off.” |
-| 0:25–0:34 | Clip 2: clear ordinary product label. Select Sight; show the actual text read aloud. | “In Sight, it describes the scene and reads visible text, saying when it isn't sure.” |
-| 0:34–0:43 | Clip 3: conversation. Select Hearing; show words arriving in large captions, then the speaker change. | “In Hearing, live captions keep the conversation in view, even when speech is hard to follow.” |
-| 0:43–0:52 | Select Mobility. Press Request assistance; show the message draft, then the review boundary. | “In Mobility, a request for help becomes a message you can review and send.” |
-| 0:52–1:00 | Show the real Memory graph, Dashboard and report preview. End card: Threadline. | “One shared memory. Clear evidence. Support on your terms. Threadline: different needs, one assistant that listens.” |
+| 0:00–0:09 | Meera's familiar afternoon ritual: a blue cup, tea tin, sunlight. A photo of mother and daughter if supplied with permission. | **Priya:** “Every afternoon, my mum makes tea. It's a small ritual. But lately, a phone call can interrupt her—and she loses her place.” |
+| 0:09–0:16 | Cut to Priya away from home, then Meera looking at the counter. | **Priya:** “I live far away. I can't always be there when she asks…” |
+| 0:16–0:20 | Close view of Meera. Keep the moment ordinary, not distressing. | **Meera:** “म के गर्दै थिएँ?” **Subtitle:** “What was I doing?” |
+| 0:20–0:31 | Show the actual saved plan and its timestamp. Then the current camera view of the blue cup. A simple line connects the two. | **Priya:** “Threadline connects what she said earlier with what the camera sees now. Using Gemini, it speaks with her naturally, in Nepali—the language she speaks at home.” |
+| 0:31–0:43 | Show the actual app response. Let the Nepali dialogue breathe; English translation appears as captions. | **Threadline:** “तपाईंले चिया बनाउँछु भन्नुभएको थियो। निलो कप टेबलमा देखिन्छ। अब चिया बनाउन चाहनुहुन्छ?” **Subtitle:** “You said you wanted to make tea. I can see the blue cup on the table. Would you like to make tea now?” |
+| 0:43–0:54 | Meera chooses to continue. Show the small next step and its sources. Briefly show a report draft being reviewed. | **Priya:** “One familiar conversation. One next step. No app for her to navigate. And when she wants support, the context is there to share.” |
+| 0:54–1:00 | Return to the blue cup. End on the Threadline wordmark. | **Priya:** “I can't always be beside her. Threadline helps her carry on.” |
 
-## Copy-paste narration
+## Voice direction
 
-```text
-A forgotten step. Unreadable text. A conversation you can't hear. Everyday moments can take away independence.
+Jessica narrates Priya's lines, warmly and conversationally. No dramatic trailer
+voice. Pause after “she loses her place” and before the final sentence. Use a
+natural Nepali voice for Meera and Threadline; preview pronunciation with a
+Nepali speaker before publishing. Do not imply Jessica has been verified for
+Nepali. Let the actual Gemini response replace the proposed line if it differs.
 
-Threadline turns wearable audio and camera context into one assistant that adapts to the support you choose.
+## Evidence to show
 
-In Memory, it connects earlier conversations with what the camera sees, helping you pick up where you left off.
+- The saved statement must actually say she plans to make tea.
+- Only say the cup is on the table if it is visible in the current frame.
+- The proposed Nepali response is rehearsal copy, not a transcript of a completed
+  live interaction. Capture the real response for the product demonstration.
+- The report is a reviewed draft, not an automatically delivered alert.
+- No claim of treatment, completed tea-making, emergency detection or guaranteed
+  independent use is made. The moment illustrates memory support.
 
-In Sight, it describes the scene and reads visible text, saying when it isn't sure.
+## Three-clip edit
 
-In Hearing, live captions keep the conversation in view, even when speech is hard to follow.
-
-In Mobility, a request for help becomes a message you can review and send.
-
-One shared memory. Clear evidence. Support on your terms. Threadline: different needs, one assistant that listens.
-```
-
-113 words; target a natural 60-second delivery with short pauses. Use Jessica,
-warm and conversational, with curiosity on the opening and a confident quiet
-close. Keep real app responses audible; lower the voiceover beneath them rather
-than speaking over them. If the response takes time, use a clearly visible cut.
-
-On-screen Memory example: “Last mentioned: kitchen table · 9:14 AM.” Show this
-only when that location and timestamp are present in the actual source. If the
-glasses are not visible now, retain “last mentioned”; do not change it to a
-current-location guarantee. Read the actual Sight result rather than scripting
-a medicine dose. Use the assistance button until the physical triple-tap has
-been tested. Opening the messaging app is not proof of delivery.
-
-Synthetic footage, captions or charts must retain their visible fictional/demo
-label. Use a three-second sponsor credit at the end only if there is room:
-“Vexo · Gemini · Deepgram · MiniMax · ElevenLabs.”
+Use the uploaded clips that match: the routine before interruption, the question
+at the counter, and the chosen next step. Keep unrelated footage out. Intercut
+actual app evidence between clips two and three. MiniMax illustrations may fill
+transitions if marked synthetic; do not substitute them for product proof.
