@@ -1986,7 +1986,7 @@ function renderTasks() {
     const mk = (label, fn, cls = "text-button") => { const b = el("button", { type: "button", className: cls, textContent: label }); b.addEventListener("click", fn); btns.push(b); };
     if (!(t.due && t.due <= today)) mk("Move to today", () => { t.due = today; t.heldUntil = null; renderTasks(); logAction(`Moved “${t.title}” to today`); });
     if (t.big && !(t.heldUntil > today)) mk("Hold 3 days", () => holdTask(t));
-    mk("Done", () => { t.done = true; renderTasks(); });
+    mk("Done", () => { t.done = true; t.doneAt = new Date().toISOString(); logAction(`Done: ${t.title}`); renderTasks(); });
     btns.push(el("a", { className: "text-button", href: gcalLink(t.title, t.note || "From Threadline", t.heldUntil || t.due), target: "_blank", rel: "noopener", textContent: "Add to Google Calendar" }));
     return el("li", { className: `${t.big ? "big" : ""}${t.voice ? " voice" : ""}`, "data-task-id": t.id }, el("div", {}, el("b", { textContent: `${t.time ? `${t.time} · ` : ""}${t.title}` }), t.voice ? el("span", { className: "task-voice", textContent: "🎙 by voice" }) : null, el("div", { className: "caption", textContent: [t.big ? "big decision" : "", t.heldUntil > today ? `held until ${parseDay(t.heldUntil).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : t.due ? `due ${parseDay(t.due).toLocaleDateString([], { month: "short", day: "numeric" })}` : "", t.note || ""].filter(Boolean).join(" · ") })), el("div", { className: "row tight" }, ...btns));
   };
@@ -2072,7 +2072,60 @@ $("music-gen").addEventListener("click", async () => {
 
 /* ---------- Your day: energy timeline, moments, measured, and what Threadline did ---------- */
 function logAction(text) { (life.actions ||= []).push({ at: new Date().toISOString(), text }); life.actions = life.actions.slice(-200); saveThread(); renderToday(); }
+/* Your day · today at a glance: charts + to do / done / coming up. */
+async function renderDayBoard() {
+  const box = $("day-board"); if (!box) return;
+  const key = todayKey(), now = new Date(), NS = "http://www.w3.org/2000/svg";
+  const svg = (w, h, kids) => { const n = document.createElementNS(NS, "svg"); n.setAttribute("viewBox", `0 0 ${w} ${h}`); n.setAttribute("class", "db-svg"); n.setAttribute("preserveAspectRatio", "none"); n.append(...kids.filter(Boolean)); return n; };
+  const mk = (tag, attrs, text) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; };
+  // 1) activity by hour: conversation lines, statements, actions
+  const hours = [...Array(24)].map(() => ({ talk: 0, words: 0, acts: 0 }));
+  for (const t of loadArchive()) for (const l of t.lines || []) { const d = new Date(l.at); if (todayKey(d) === key) hours[d.getHours()].talk += 1; }
+  for (const n of sessions.reflection.notes) { const d = new Date(n.at); if (todayKey(d) === key) hours[d.getHours()].words += 1; }
+  for (const a of life.actions || []) { const d = new Date(a.at); if (todayKey(d) === key) hours[d.getHours()].acts += 1; }
+  const peak = Math.max(1, ...hours.map((x) => x.talk + x.words + x.acts));
+  const bars = hours.flatMap((x, i) => { let y = 120; const out = []; for (const [k, cls] of [["talk", "b-talk"], ["words", "b-words"], ["acts", "b-acts"]]) { const hgt = (x[k] / peak) * 100; if (hgt) { y -= hgt; out.push(mk("rect", { x: i * 25 + 3, y, width: 19, height: hgt, rx: 3, class: cls })); } } return out; });
+  const axis = [0, 6, 12, 18, 23].map((hh) => mk("text", { x: hh * 25 + 12, y: 136, "text-anchor": "middle", class: "db-ax" }, hh === 0 ? "12a" : hh === 12 ? "12p" : hh > 12 ? `${hh - 12}p` : `${hh}a`));
+  const nowLine = mk("line", { x1: now.getHours() * 25 + 12, x2: now.getHours() * 25 + 12, y1: 8, y2: 122, class: "db-now" });
+  const activity = svg(600, 140, [...bars, nowLine, ...axis]);
+  // 2) mood: today's morning/evening against the last 7 days
+  const week = (ownerMood.days || []).slice(-7);
+  const moodSvg = svg(300, 120, [mk("line", { x1: 0, x2: 300, y1: 60, y2: 60, class: "db-zero" }),
+    ...week.flatMap((d, i) => { const x = 20 + i * 43, out = []; for (const [f, cls, dx] of [["morning", "m-am", -7], ["evening", "m-pm", 7]]) if (d[f] != null) { const v = d[f], hgt = Math.abs(v) * 50; out.push(mk("rect", { x: x + dx - 6, y: v >= 0 ? 60 - hgt : 60, width: 12, height: Math.max(2, hgt), rx: 3, class: cls + (d.date === key ? " today" : "") })); } out.push(mk("text", { x, y: 116, "text-anchor": "middle", class: "db-ax" }, d.date === key ? "today" : new Date(`${d.date}T12:00`).toLocaleDateString([], { weekday: "narrow" }))); return out; })]);
+  // 3) health vs 30-day average
+  const h = hLatest() || {}, H = Object.values(ownerHealth.byDay || {}), avg = (f) => { const v = H.map((d) => d[f]).filter((x) => typeof x === "number"); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const rows = [["Sleep", "sleep_hours", (v) => `${Math.floor(v)}h ${Math.round((v % 1) * 60)}m`, 1], ["Steps", "steps", (v) => Math.round(v).toLocaleString(), 1], ["Resting HR", "resting_heart_rate", (v) => `${Math.round(v)} bpm`, -1], ["HRV", "hrv_sdnn", (v) => `${Math.round(v)} ms`, 1], ["Exercise", "exercise_min", (v) => `${Math.round(v)} min`, 1]]
+    .filter(([, f]) => h[f] != null && avg(f)).map(([label, f, fmtv, dir]) => { const ratio = h[f] / avg(f), good = dir > 0 ? ratio >= 0.95 : ratio <= 1.05;
+      return el("div", { className: "db-hrow" }, el("span", { className: "db-hl", textContent: label }),
+        el("div", { className: "db-track" }, el("i", { className: `db-fill ${good ? "good" : "bad"}` }), el("b", { className: "db-mark" })),
+        el("span", { className: "db-hv", textContent: `${fmtv(h[f])} · ${ratio >= 1 ? "+" : ""}${Math.round((ratio - 1) * 100)}%` })); });
+  rows.forEach((row, i) => { const f = [["sleep_hours"], ["steps"], ["resting_heart_rate"], ["hrv_sdnn"], ["exercise_min"]].flat().filter((x) => h[x] != null && avg(x))[i]; const ratio = Math.min(2, h[f] / avg(f)); row.querySelector(".db-fill").style.width = `${Math.round(ratio * 50)}%`; });
+  // 4) lists
+  const tasks = life.tasks || [];
+  const todo = [...tasks.filter((t) => !t.done && (!t.due || t.due <= key)).map((t) => ({ when: t.time || (t.due && t.due < key ? "overdue" : "today"), text: t.title, tag: t.voice ? "voice" : "task" })),
+    ...(life.taskDrafts || []).slice(0, 3).map((d) => ({ when: "suggested", text: d.title, tag: "suggestion" })),
+    ...((typeof care !== "undefined" ? care.history : []).at(-1)?.next_step ? [{ when: "care", text: care.history.at(-1).next_step, tag: "care agent" }] : [])];
+  const done = [...tasks.filter((t) => t.done && t.doneAt && todayKey(new Date(t.doneAt)) === key).map((t) => ({ when: new Date(t.doneAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), text: t.title, tag: "done" })),
+    ...(life.actions || []).filter((a) => todayKey(new Date(a.at)) === key && !/Opened /.test(a.text)).slice(-8).reverse().map((a) => ({ when: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), text: a.text.replace(/^Voice · /, ""), tag: /^Voice/.test(a.text) ? "voice" : "action" }))];
+  let upcoming = tasks.filter((t) => !t.done && t.due && t.due > key).slice(0, 5).map((t) => ({ when: new Date(`${t.due}T12:00`).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) + (t.time ? ` ${t.time}` : ""), text: t.title, tag: "task" }));
+  try {
+    const d = await request(`/api/calendar/events?days=2&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`);
+    upcoming = [...(d.events || []).filter((e) => e.all_day || new Date(e.start) > now).slice(0, 5).map((e) => ({ when: e.all_day ? "all day" : new Date(e.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }), text: e.title, tag: "calendar" })), ...upcoming];
+  } catch { /* no calendar */ }
+  const list = (title, items, empty, cls) => el("section", { className: `db-list ${cls}` }, el("h3", {}, el("span", { textContent: title }), el("em", { textContent: String(items.length) })),
+    items.length ? el("ol", {}, ...items.slice(0, 8).map((x) => el("li", {}, el("time", { textContent: x.when }), el("span", { textContent: x.text }), el("small", { className: `db-tag t-${x.tag.replace(/\s/g, "-")}`, textContent: x.tag })))) : el("p", { className: "caption", textContent: empty }));
+  const stat = (n, label) => el("div", { className: "db-stat" }, el("b", { textContent: String(n) }), el("span", { textContent: label }));
+  const talkToday = hours.reduce((a, x) => a + x.talk, 0), actsToday = hours.reduce((a, x) => a + x.acts, 0);
+  box.replaceChildren(
+    el("div", { className: "db-stats" }, stat(todo.length, "to do"), stat(done.length, "done today"), stat(upcoming.length, "coming up"), stat(talkToday, "conversation lines"), stat(actsToday, "actions taken")),
+    el("div", { className: "db-grid" },
+      el("figure", { className: "db-card db-wide" }, el("figcaption", {}, el("b", { textContent: "Your day, hour by hour" }), el("span", { className: "db-legend" }, el("i", { className: "b-talk" }), "conversation ", el("i", { className: "b-words" }), "statements ", el("i", { className: "b-acts" }), "actions")), activity),
+      el("figure", { className: "db-card" }, el("figcaption", {}, el("b", { textContent: "Mood · last 7 days" }), el("span", { className: "db-legend" }, el("i", { className: "m-am" }), "morning ", el("i", { className: "m-pm" }), "evening")), week.length ? moodSvg : el("p", { className: "caption", textContent: "Say how you feel to Threadline to start." })),
+      el("figure", { className: "db-card" }, el("figcaption", {}, el("b", { textContent: "Today vs your 30-day average" }), el("span", { className: "caption", textContent: "Apple Health" })), rows.length ? el("div", { className: "db-health" }, ...rows) : el("p", { className: "caption", textContent: "Health data appears here once imported." }))),
+    el("div", { className: "db-lists" }, list("To do", todo, "Nothing due. Say “Remind me to…” to add one.", "todo"), list("Done today", done, "Nothing done yet today.", "done"), list("Coming up", upcoming, "Nothing scheduled. Connect your calendar on the Dashboard.", "next")));
+}
 function renderToday() {
+  try { renderDayBoard(); } catch { /* board is optional */ }
   if (!$("day-arc")) return;
   const key = todayKey(), start = parseDay(key); start.setHours(6, 0, 0, 0);
   const end = new Date(start.getTime() + 18 * 3600000), now = new Date();
@@ -2097,7 +2150,7 @@ function renderToday() {
     $(id).replaceChildren(el("p", {className:"caption",textContent:"Latest saved statements · select a source to read it"}), ...notes.slice(-3).map(n => el("p", {}, el("a", {href:`#note-${n.id}`,textContent:`${n.sample ? 'Example · ' : ''}${n.speaker || 'You'}: “${n.text}”`}))));
   const r = life.days[key] || {}, w = sensorsWithHealth(), h = hDay(key) || hLatest() || {};
   $("measured-h").textContent = h.sample ? "Today’s context · includes examples" : "Measured today";
-  const m = [["Conversations today", todays.length || null], ["Saved statements", notes.length || null], ["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], [h.sample ? "Steps · Example" : "Steps", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null]].filter(([, v]) => v != null);
+  const m = [["Conversations today", todays.length || null], ["Saved statements", notes.length || null], ["Low-energy words", r.energy?.length || null], ["Lines from others", r.others || null], [h.sample ? "Steps · Example" : "Steps", (() => { const b = Math.max(r.watchSteps || 0, r.bandSteps || 0, h.steps || 0); return b ? Math.round(b).toLocaleString() : null; })()], ["Heart rate", r.hrN ? `${Math.round(r.hrSum / r.hrN)} avg` : h.heart_rate != null ? `${Math.round(h.heart_rate)} avg` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Exercise", h.exercise_min != null ? `${Math.round(h.exercise_min)} min` : null], ["Stand hours", h.stand_hours != null ? Math.round(h.stand_hours) : null], ["HRV", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Sleep", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null]].filter(([, v]) => v != null);
   $("measured").replaceChildren(...(m.length ? m.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: String(v) })]) : [el("dt", { className: "empty", textContent: "Nothing measured yet today." })]));
   const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
@@ -2993,7 +3046,7 @@ async function assistantActionRun(a) {
     const words = String(a.title || "").toLowerCase().split(/\W+/).filter((w) => w.length > 2);
     const t = (life.tasks || []).filter((x) => !x.done).map((x) => ({ x, n: words.filter((w) => x.title.toLowerCase().includes(w)).length })).sort((p, q) => q.n - p.n)[0];
     if (!t || !t.n) return { data: { error: "No open task matches that." } };
-    t.x.done = true; saveThread(); renderTasks(); logAction(`Task done by voice: ${t.x.title}`); return `Done: ${t.x.title}`;
+    t.x.done = true; t.x.doneAt = new Date().toISOString(); saveThread(); renderTasks(); logAction(`Task done by voice: ${t.x.title}`); return `Done: ${t.x.title}`;
   }
   if (a.type === "open_scenario") {
     location.hash = "library"; openLibrary(); setTimeout(() => library?.open?.(a.id), 400);
