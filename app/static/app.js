@@ -2236,7 +2236,7 @@ $("lh-start").addEventListener("click", async () => {
       if (event.data instanceof ArrayBuffer) return lhPlay(event.data);
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === "ready") {
-        const notes = (sessions.reflection?.notes || []).slice(-20).map((n) => `${new Date(n.at).toLocaleString()}: ${n.text}`);
+        const notes = contextNotes(sessions.reflection?.notes || []).slice(-20).map((n) => `${n.sample ? `[Example ${n.persona || n.speaker || accessMode}; not a real patient observation] ` : ""}${new Date(n.at).toLocaleString()}: ${n.text}`);
         if (notes.length) ws.send(JSON.stringify({ type: "context", notes }));
         const where = await lhStartAudio().catch((e) => { lhLog("said", `(No microphone: ${e.message})`); return "no microphone"; });
         if (!lh.bridge) lhStartFrames();
@@ -2539,7 +2539,7 @@ function careWatchBand() {
   if (b && !care.bandSeen.has(b)) {
     care.bandSeen.add(b);
     b.on("tap", () => care.taps.push(Date.now()));
-    b.on("free-fall", () => { requestAssistance("Band reported a possible fall"); care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); emergency.trigger({ reason: "Possible fall detected", note: "The band felt a fall." }); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
+    b.on("free-fall", () => { requestAssistance("Band reported a possible fall"); care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); emergency.trigger({ reason: "Possible incident: band motion signal", note: "The band reported a free-fall signal. A person falling or being injured has not been confirmed." }); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
   }
   const cut = Date.now() - 10 * 60000;
   care.taps = care.taps.filter((t) => t > cut); care.falls = care.falls.filter((t) => t > cut);
@@ -2752,9 +2752,9 @@ function careRenderAssessment(d) {
 }
 const emergency = mountEmergency({ el, onLog: (t) => { try { logAction(t); } catch { /* not ready */ } } });
 function renderContacts() { const c = loadContacts(); if (!$("ec-name")) return; $("ec-name").value = c.name; $("ec-phone").value = c.phone; $("ec-services").value = c.services; }
-$("ec-form")?.addEventListener("submit", (e) => { e.preventDefault(); saveContacts({ name: $("ec-name").value.trim(), phone: $("ec-phone").value.trim(), services: $("ec-services").value.trim() || "911" }); $("ec-msg").textContent = "Saved. In an emergency Threadline calls this contact after a 10-second countdown."; });
+$("ec-form")?.addEventListener("submit", (e) => { e.preventDefault(); saveContacts({ name: $("ec-name").value.trim(), phone: $("ec-phone").value.trim(), services: $("ec-services").value.trim() || "911" }); $("ec-msg").textContent = "Saved. A possible-incident countdown opens your dialer for this contact. You place the call; completion is not verified."; });
 renderContacts();
-$("care-sim-fall")?.addEventListener("click", () => { emergency.trigger({ reason: "Possible fall detected", note: "The band felt a fall and there was no movement afterwards." }); care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
+$("care-sim-fall")?.addEventListener("click", () => { emergency.trigger({ reason: "Simulated fall signal", note: "Demonstration only. No physical band event or injury was observed." }); careLog("note", "Demo: simulated fall signal; no physical band event.", true); });
 async function careAssess(manual) {
   if (!isFictionalDemo() && !$("care-consent").checked && !$("rec-consent").checked) return;
   if (isFictionalDemo() && (!manual || !processingConsent())) return;
