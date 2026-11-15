@@ -199,7 +199,7 @@ function drawDashboard() {
       transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: isFictionalDemo() });
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
-window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); });
+window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); if (location.hash === "#tasks") renderTasks(); });
 let library = null;
 function openLibrary() {
   if (library || !$("library")) return;
@@ -1899,7 +1899,9 @@ async function fillTaskSuggestions() {
     scenarioCache ||= await fetch("/static/scenarios/scenarios.json").then(r => r.ok ? r.json() : { scenarios: [] }).then(d => d.scenarios || []).catch(() => []);
     if (scope !== threadKey || (life.taskDrafts || []).length) return;
     const seen = suggestSeenSet();
-    const list = suggestTasks({ scenarios: scenarioCache, careHistory: care.history || [], routine: careRoutine(), healthLatest: hLatest() || hDay(todayKey()),
+    let careHistory = [], routine = [];
+    try { careHistory = care.history || []; routine = careRoutine(); } catch { /* Care not initialised yet */ }
+    const list = suggestTasks({ scenarios: scenarioCache, careHistory, routine, healthLatest: hLatest() || hDay(todayKey()),
       existingTitles: (life.tasks || []).map(t => t.title), today: todayKey(), mode: accessMode, limit: 20 }).filter(s => !seen.has(s.id)).slice(0, 8);
     if (!list.length) return;
     const sample = isFictionalDemo();
@@ -2740,6 +2742,7 @@ render();
 renderAccessMode();
 showView(location.hash.slice(1) || "dashboard");
 if (location.hash === "#library") openLibrary();
+if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();
 loadOwnerHealth(); renderSampleBanner();
