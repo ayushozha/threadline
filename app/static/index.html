@@ -48,7 +48,14 @@
         </div></div>
       </header>
       <section class="view" data-view="live">
-        <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Connect your Vexo band.</h2><p>Choose your band, connect, and talk. Threadline keeps your words together.</p></div>
+        <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Live from the Vexo band.</h2><p>What the band hears appears below as it is said, and is kept in Threadline's database.</p>
+          <div class="row tight"><button type="button" id="connect-toggle" class="secondary">Connect a device</button><span id="demo-rec-badge" class="demo-rec" hidden>● Recording live</span></div></div>
+        <div id="connect-panel" hidden>
+          <details class="owner-key" id="owner-key">
+            <summary>Owner: publish this band to the live demo</summary>
+            <p class="caption">Enter the demo key once on the owner's computer. Recordings from this browser then stream to everyone on this site and are saved in the database.</p>
+            <div class="row tight"><label class="visually-hidden" for="publish-key">Demo key</label><input id="publish-key" type="password" autocomplete="off" placeholder="Demo key"><button type="button" id="publish-save" class="secondary">Save</button><span id="publish-state" class="caption"></span></div>
+          </details>
         <div class="pair" id="pair" data-state="idle">
           <div class="pair-head">
             <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
@@ -97,6 +104,7 @@
           <p class="pair-hint">One band serves one program per link: close the Vexo dashboard before connecting here. Pair only your own band.</p>
         </div>
 
+        </div>
         <div class="live-grid">
           <div class="live-main">
             <div class="setup">

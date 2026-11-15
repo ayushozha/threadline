@@ -103,7 +103,7 @@ function renderTimeline() {
     const time = el("time", { dateTime: note.at, textContent: fmtWhen(note.at) }, el("span", { className: "note-id", textContent: note.id }));
     const badge = el("span", { className: `badge ${note.source}`, textContent: SOURCE_LABELS[note.source] || note.source });
     const text = el("p", { textContent: note.text });
-    const li = el("li", { id: `note-${note.id}` }, time, el("div", { className: "meta" }, badge, el("span", { className: "speaker", textContent: "Speaker: you" })), text);
+    const li = el("li", { id: `note-${note.id}` }, time, el("div", { className: "meta" }, badge, el("span", { className: "speaker", textContent: note.speaker ? note.speaker : "Speaker: you" })), text);
     if (note.context) li.append(el("p", { className: "context", textContent: note.context }));
     {
       const edit = el("button", { type: "button", className: "text-button", textContent: "Correct" });
@@ -441,6 +441,7 @@ async function connectBand(kind) {
   if (!connected) return renderPair();
   rememberBand(bandNumber);
   attachBand(connected);
+  showConnect(true);
   if (!capture.active) $("source").value = "vexo";  // the band is the microphone again
   setTimeout(maybeAutoStart, 1200);
   bandStatus(`Connected to ${connected.name}. It flashes white.`);
@@ -588,7 +589,7 @@ function openSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
   ws.binaryType = "arraybuffer"; capture.ws = ws;
   const opened = Date.now();
-  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? "vexo" : "browser" }));
+  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? "vexo" : "browser", ...(publishKey() ? { publish_key: publishKey() } : {}) }));
   ws.onmessage = async (event) => {
     if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
@@ -655,7 +656,7 @@ function addLiveLine(msg) {
       el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }),
         el("span", { textContent: ` · ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` })),
       el("p", { textContent: msg.transcript }))));
-  if (location.hash === "#live" || !location.hash) $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+  if (location.hash === "#live" || !location.hash) { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
   archiveSession(capture.finals, { startedAt: capture.startedAt, source: capture.source, marks: capture.marks || [], id: capture.archiveId });
   const voice = voiceMetrics(capture.finals); if (voice) life.voice = voice;
   renderEnergy(); renderToday();
@@ -769,6 +770,16 @@ $("transcribe").addEventListener("click", async () => {
   catch (e) { recState(e.message, true); }
 });
 function openReview(segments, source, startedAt, label) {
+  // Everyone present consented, so every line is saved automatically, labelled by speaker. No review step.
+  const items = segments.filter((seg) => (seg.text || "").trim()).map((seg) => ({
+    text: seg.text.trim(), at: new Date(startedAt.getTime() + (seg.offset || 0) * 1000).toISOString(), source,
+    speaker: seg.speaker == null ? "Unlabeled" : `Speaker ${seg.speaker}` }));
+  if (items.length) addNotes(items);
+  capture.review = null; $("review").hidden = true;
+  message(`Saved ${items.length} line${items.length === 1 ? "" : "s"} automatically · ${label.split("·")[0].trim()}`);
+  return;
+}
+function openReviewManual(segments, source, startedAt, label) {
   capture.review = { source, startedAt, segments: segments.map((s) => ({ ...s, who: "unsure" })) };
   const speakers = [...new Set(segments.map((s) => s.speaker))];
   $("who").replaceChildren(el("option", { value: "", textContent: "Choose…" }), ...speakers.map((s) => el("option", { value: String(s), textContent: s === null ? "Unlabeled speaker" : `Speaker ${s}` })), el("option", { value: "none", textContent: "None of these is me" }));
@@ -1094,7 +1105,7 @@ async function openWatchFeed(token) {
         watch.finals.push(msg);
         const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((s) => s != null))];
         $("live-lines").append(el("li", {}, el("span", { className: "caption", textContent: `${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · ${watch.device} · ${speakers.length ? speakers.map((s) => `Speaker ${s}`).join(", ") : "Speaker ?"}` }), el("p", { textContent: msg.transcript })));
-        $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+        { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
         $("live-interim").textContent = "";
       } else if (!msg.is_final) $("live-interim").textContent = msg.transcript;
     } else if (msg.type === "watch_disconnected") {
@@ -1109,7 +1120,7 @@ function finishWatchSession() {
   const finals = watch.finals.map((f) => ({ ...f, start: f.start || 0 })); watch.finals = [];
   archiveSession(finals, { startedAt: watch.startedAt || new Date(), source: "watch", marks: [], device: watch.device });
   openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), "watch", watch.startedAt || new Date(), `${watch.device} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
-  recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
+  recState("Watch recording ended. Everything was saved automatically.");
 }
 $("watch-unpair").addEventListener("click", () => { rememberWatch(null); setTimeout(startDemoFeed, 500); const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
 
@@ -1693,7 +1704,7 @@ function applyWatchSensors(msg) {
 const demo = { ws: null, live: false, device: null, retry: 0 };
 function demoWanted() { return isDefaultProfile() && !savedWatch() && !watch.ws; }
 function startDemoFeed() {
-  if (!demoWanted() || demo.ws) return;
+  if (demo.ws) return;
   let ws;
   try { ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/demo/feed`); } catch { return; }
   demo.ws = ws;
@@ -1704,6 +1715,8 @@ function startDemoFeed() {
       if (msg.last) applyWatchSensors(msg.last);
       if (demoWanted()) watchState(demo.live ? "connected" : "idle", demo.live ? `Demo owner's ${demo.device || "Apple Watch"} · live` : "Demo owner's watch · offline");
       if (demoWanted()) watchMsg(demo.live ? "You're seeing the demo owner's live readings, shared on purpose. Pair your own watch to see yours." : "The demo owner's watch isn't streaming right now.");
+    } else if (msg.type === "demo_line") { addDemoLine(msg);
+    } else if (msg.type === "demo_recording") { setDemoRecording(Boolean(msg.live));
     } else if (msg.type === "sensors" && demoWanted()) {
       applyWatchSensors(msg);
       if (!demo.live) { demo.live = true; watchState("connected", `Demo owner's ${msg.device || "Apple Watch"} · live`); }
@@ -1754,7 +1767,7 @@ function lhLog(kind, text) {
   const last = $("lh-log").lastElementChild;
   if (last && last.dataset.kind === kind && !last.dataset.done) { last.querySelector("p").textContent += text; }
   else $("lh-log").append(el("li", { className: `lh-${kind}`, "data-kind": kind }, el("b", { textContent: kind === "said" ? "Threadline" : "Heard" }), el("p", { textContent: text })));
-  $("lh-log").lastElementChild.scrollIntoView({ block: "nearest" });
+  { const box = $("lh-log"); box.scrollTop = box.scrollHeight; }
   while ($("lh-log").children.length > 40) $("lh-log").firstChild.remove();
 }
 function lhSetState(state, text) { $("live-help").dataset.state = state; $("lh-status").textContent = text; $("lh-start").hidden = state !== "idle"; $("lh-stop").hidden = state === "idle"; $("lh-ask").hidden = state !== "live"; }
@@ -1846,6 +1859,45 @@ $("lh-ask").addEventListener("submit", (e) => { e.preventDefault(); const t = $(
 lhListCameras();
 navigator.mediaDevices?.addEventListener?.("devicechange", lhListCameras);
 
+
+/* ---------- Public live transcript: the owner's band recording, streamed to everyone and kept in the database ---------- */
+const PUBLISH_KEY = "threadline.publish.v1";
+function publishKey() { try { return localStorage.getItem(PUBLISH_KEY) || ""; } catch { return ""; } }
+function renderPublish() { $("publish-state").textContent = publishKey() ? "This browser publishes to the live demo." : "Not publishing."; }
+$("publish-save").addEventListener("click", () => {
+  const k = $("publish-key").value.trim();
+  try { k ? localStorage.setItem(PUBLISH_KEY, k) : localStorage.removeItem(PUBLISH_KEY); } catch { /* storage off */ }
+  $("publish-key").value = ""; renderPublish();
+});
+function showConnect(open) { $("connect-panel").hidden = !open; $("connect-toggle").textContent = open ? "Hide device connection" : "Connect a device"; }
+$("connect-toggle").addEventListener("click", () => showConnect($("connect-panel").hidden));
+const pub = { lines: 0 };
+function addDemoLine(d) {
+  if (capture.active) return;  // your own recording is already on screen
+  const interim = $("live-interim");
+  if (!d.final) { interim.textContent = d.text || ""; return; }
+  interim.textContent = "";
+  const who = d.speaker;
+  $("live-lines").append(el("li", { className: `line spk-${who ?? "x"}` },
+    el("span", { className: "avatar", "aria-hidden": "true", textContent: who ?? "?" }),
+    el("div", {}, el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }), el("span", { textContent: ` · ${new Date(d.at || Date.now()).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })} · Vexo band (live demo)` })),
+      el("p", { textContent: d.text }))));
+  while ($("live-lines").children.length > 200) $("live-lines").firstChild.remove();
+  { const box = $("live-lines"); box.scrollTop = box.scrollHeight; }
+}
+async function loadDemoTranscript() {
+  try {
+    const d = await (await fetch("/api/demo/transcript?limit=60")).json();
+    if (!d || !Array.isArray(d.lines) || capture.active) return;
+    $("live-lines").replaceChildren();
+    if (d.lines.length) $("live-interim").textContent = "";
+    d.lines.forEach((l) => addDemoLine({ ...l, final: true }));
+    setDemoRecording(Boolean(d.recording));
+  } catch { /* older server */ }
+}
+function setDemoRecording(live) { $("demo-rec-badge").hidden = !live; if (live && !capture.active) $("live-source").textContent = "Vexo band · live demo"; }
+
 render();
 showView(location.hash.slice(1) || "live");
 renderProfile();
+renderPublish(); loadDemoTranscript(); startDemoFeed();
