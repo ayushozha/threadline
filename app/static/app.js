@@ -441,6 +441,7 @@ async function connectBand(kind) {
   if (!connected) return renderPair();
   rememberBand(bandNumber);
   attachBand(connected);
+  setTimeout(maybeAutoStart, 1200);
   bandStatus(`Connected to ${connected.name}. It flashes white.`);
   $("info-link").textContent = { serial: "USB cable", ble: "Bluetooth", sim: "Pretend (simulator)" }[connected.transportKind] || connected.transportKind;
   $("info-fw").textContent = connected.info?.firmware || "—";
@@ -459,6 +460,7 @@ function attachBand(band) {
   });
   band.on("reconnecting", (e) => { bandStatus(logic ? logic.reconnectingMessage(e.seconds, e.reason) : `Reconnecting for up to ${e.seconds} s.`, true); setRecUI(); if (capture.active) recState("Band reconnecting… capture continues as soon as it is back.", true); });
   band.on("reconnected", async (event) => {
+    setTimeout(maybeAutoStart, 1500);
     bandStatus("The band reconnected."); setRecUI();
     if (capture.active && !capture.stopping) {
       capture.lastPacketAt = Date.now(); capture.warnedSilent = false;
@@ -470,7 +472,7 @@ function attachBand(band) {
     }
   });
   band.on("double-tap", () => { if (band.transportKind === "sim") return;  // the pretend band double-taps by itself
-    if (capture.active) stopLive(); else if (!busy) $("rec-start").click(); });
+    if (capture.active) { autoRec.userStopped = true; stopLive(); } else if (!busy) { autoRec.userStopped = false; $("rec-start").click(); } });
   band.on("stream-taken", (e) => { recState(`${e.message} Close the Vexo dashboard tab, then press “Take it back”.`, true); $("rec-takeback").hidden = false; });
   band.on("notice", (e) => { if (e.kind === "low-battery" || e.kind === "critical-battery") bandStatus(`Band battery is low (${e.kind}). Plug in the cable.`, true); });
   // Audio goes to whichever Deepgram socket is open right now (sockets are replaced on reconnect).
@@ -671,7 +673,7 @@ async function stopLive(reason) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "stop" })); else finishLive();
   setTimeout(() => { if (capture.ws === ws && ws) ws.close(); }, 6000);
 }
-$("rec-stop").addEventListener("click", () => stopLive());
+$("rec-stop").addEventListener("click", () => { autoRec.userStopped = true; stopLive(); });
 $("rec-takeback").addEventListener("click", async () => {
   if (!capture.band) return;
   try {
@@ -682,6 +684,7 @@ $("rec-takeback").addEventListener("click", async () => {
   } catch (e) { recState(`Could not take the band back: ${e.message}`, true); }
 });
 async function finishLive() {
+  setTimeout(maybeAutoRestart, 4000);
   if (!capture.active || capture.finishing) return;
   capture.finishing = true;
   if (capture.vexo && (capture.fallbackBusy || capture.lastSpeechAt > capture.lastTextAt)) {
@@ -1707,6 +1710,31 @@ function startDemoFeed() {
   ws.onclose = () => { if (demo.ws === ws) { demo.ws = null; if (demoWanted() && demo.retry++ < 20) setTimeout(startDemoFeed, 3000); } };
 }
 function stopDemoFeed() { const ws = demo.ws; demo.ws = null; try { ws?.close(); } catch { /* closed */ } }
+
+
+/* ---------- Continuous recording: everyone present has consented, so record whenever the band is on ---------- */
+const autoRec = { userStopped: false, restarts: [] };
+const CONSENT_KEY = "threadline.consent.v1";
+try { if (localStorage.getItem(CONSENT_KEY) === "yes") $("rec-consent").checked = true; } catch { /* storage off */ }
+$("rec-consent").addEventListener("change", () => {
+  try { $("rec-consent").checked ? localStorage.setItem(CONSENT_KEY, "yes") : localStorage.removeItem(CONSENT_KEY); } catch { /* storage off */ }
+  if ($("rec-consent").checked) { autoRec.userStopped = false; maybeAutoStart(); }
+});
+function canAutoRecord() { return $("rec-consent").checked && !autoRec.userStopped && !capture.active && !busy && capture.band && !capture.band.reconnecting && $("source").value === "vexo"; }
+function maybeAutoStart() {
+  if (!canAutoRecord()) return;
+  recState("Band connected and consent given — recording continuously. Press Stop or double-tap the band to pause.");
+  $("rec-start").click();
+}
+function maybeAutoRestart() {
+  if (!canAutoRecord()) return;
+  const now = Date.now(); autoRec.restarts = autoRec.restarts.filter((t) => now - t < 10 * 60000);
+  if (autoRec.restarts.length >= 5) return recState("Recording stopped several times in a row. Check the band and press Start to try again.", true);
+  autoRec.restarts.push(now);
+  recState("Recording resumed automatically.");
+  $("rec-start").click();
+}
+$("rec-start").addEventListener("click", () => { autoRec.userStopped = false; }, true);
 
 render();
 showView(location.hash.slice(1) || "live");
