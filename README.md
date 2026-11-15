@@ -2,7 +2,7 @@
 
 **One assistant, four chosen ways to help: Memory, Sight, Hearing and Mobility.**
 
-[Live prototype](https://threadline.ayushojha.com/) · [Watch the concept film](https://threadline.ayushojha.com/accessibility/) · [Try the evidence demo](https://threadline.ayushojha.com/demo/) · [Video script](docs/demo/FINAL_VIDEO_SCRIPT.md) · [Device setup](docs/LIVE_CAPTURE_HANDOFF.md)
+[Live prototype](https://threadline.ayushojha.com/) · [Project media](https://threadline.ayushojha.com/media/) · [Watch the concept film](https://threadline.ayushojha.com/accessibility/) · [Try the evidence demo](https://threadline.ayushojha.com/demo/) · [Video script](docs/demo/FINAL_VIDEO_SCRIPT.md) · [Device setup](docs/LIVE_CAPTURE_HANDOFF.md)
 
 [![Stage: hackathon prototype](https://img.shields.io/badge/stage-hackathon_prototype-52734b)](#status) [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab)](pyproject.toml) [![Hardware: Vexo](https://img.shields.io/badge/hardware-Vexo_band-242424)](#connect-the-hardware)
 
@@ -48,7 +48,7 @@ All four use the existing Dashboard, transcript archive, Memory graph, saved not
 1. Open the [live site](https://threadline.ayushojha.com/) and choose a support mode.
 2. Open **Thread**, **Transcripts** or **Memory**. The conversation history is included in the regular app; no separate demo screen is needed.
 3. Explore the conversations, Memory graph and Dashboard. With recording/processing consent, ask a question for a fresh response based on the selected mode’s notes. Examples retain source metadata and never replace recorded data.
-4. Follow its source links. Use **Back to my data** to return to the real workspace.
+4. Follow its source links. Your own saved notes and recordings keep their original sources alongside the example history.
 
 The four scenarios contain **111 written dialogue lines across 19 conversations**: Memory has 48 lines, and each other mode has 21. Each scenario also supplies 14 days of clearly labeled synthetic chart values. They are illustrative inputs, not patient histories, device measurements or clinical evidence. Decisions and completed actions are not prefilled.
 
@@ -58,6 +58,7 @@ The [Memory evidence demo](https://threadline.ayushojha.com/demo/) submits a fic
 
 | Asset | Use |
 | --- | --- |
+| [Project media kit](https://threadline.ayushojha.com/media/) | Six actual app screenshots, thumbnail, two-minute story script and the earlier concept film, with a downloadable ZIP. |
 | [Four-mode concept film](assets/demo/accessibility/threadline-four-modes.mp4) | Approximately 59 seconds, Jessica narration, captions, synthetic scenes and illustrative UI. |
 | [Memory evidence film](assets/demo/dementia/threadline-dementia-demo.mp4) | Approximately 55 seconds; the interrupted-routine scenario and a captured Gemini response. |
 | [Shot list and narration plan](docs/demo/ACCESSIBILITY_VIDEO.md) | What the pitch demonstrates, what remains conceptual, and the real footage needed. |

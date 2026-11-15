@@ -1336,3 +1336,6 @@ if demo_assets.is_dir():
 accessibility_assets = ROOT.parent / "assets" / "demo" / "accessibility"
 if accessibility_assets.is_dir():
     app.mount("/accessibility", StaticFiles(directory=accessibility_assets, html=True), name="accessibility-demo")
+project_media = ROOT.parent / "assets" / "demo" / "project"
+if project_media.is_dir():
+    app.mount("/media", StaticFiles(directory=project_media, html=True), name="project-media")

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser assets/demo/dementia ./assets/demo/dementia
 COPY --chown=appuser:appuser assets/demo/accessibility ./assets/demo/accessibility
+COPY --chown=appuser:appuser assets/demo/project ./assets/demo/project
 USER appuser
 EXPOSE 3000
 

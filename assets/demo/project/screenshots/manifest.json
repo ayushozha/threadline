@@ -1,0 +1,51 @@
+{
+  "captured_at": "2026-11-15T01:50:43.407Z",
+  "source": "http://127.0.0.1:8012/",
+  "captures": [
+    {
+      "file": "01-dashboard.png",
+      "description": "Four assistance modes with example history and chart provenance.",
+      "view": "",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    },
+    {
+      "file": "02-memory.png",
+      "description": "Interactive Memory graph built from saved example conversations.",
+      "view": "#graph",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    },
+    {
+      "file": "03-transcripts.png",
+      "description": "Conversation archive with source labels and the selected transcript.",
+      "view": "#transcripts",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    },
+    {
+      "file": "04-hearing.png",
+      "description": "Large captions from the explicitly labeled example conversation playback.",
+      "view": "#care",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    },
+    {
+      "file": "05-library.png",
+      "description": "Existing scenario footage and recorded model reasoning; no provider response invented for the screenshot.",
+      "view": "#library",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    },
+    {
+      "file": "06-report.png",
+      "description": "Report preview prepared from the visible available inputs; no message sent.",
+      "view": "#dashboard",
+      "dimensions": "1920x1080",
+      "source": "Actual local Threadline UI; built-in example history and empty isolated server storage."
+    }
+  ],
+  "browser_errors": [],
+  "privacy": "Fresh browser profile and empty local database; no real patient recordings or Health data used.",
+  "visual_review": "Reviewed Dashboard, Memory, Transcripts, Hearing, Library and report screenshots. Actual UI, readable labels, no connected hardware claimed. Library filtered to synthetic Memory scenes; no private recording appears."
+}
