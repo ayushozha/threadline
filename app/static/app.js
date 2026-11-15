@@ -2525,7 +2525,7 @@ function careWatchBand() {
   if (b && !care.bandSeen.has(b)) {
     care.bandSeen.add(b);
     b.on("tap", () => care.taps.push(Date.now()));
-    b.on("free-fall", () => { requestAssistance("Band reported a possible fall"); care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
+    b.on("free-fall", () => { requestAssistance("Band reported a possible fall"); care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); emergency.trigger({ reason: "Possible fall detected", note: "The band felt a fall." }); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
   }
   const cut = Date.now() - 10 * 60000;
   care.taps = care.taps.filter((t) => t > cut); care.falls = care.falls.filter((t) => t > cut);
@@ -2735,7 +2735,7 @@ const emergency = mountEmergency({ el, onLog: (t) => { try { logAction(t); } cat
 function renderContacts() { const c = loadContacts(); if (!$("ec-name")) return; $("ec-name").value = c.name; $("ec-phone").value = c.phone; $("ec-services").value = c.services; }
 $("ec-form")?.addEventListener("submit", (e) => { e.preventDefault(); saveContacts({ name: $("ec-name").value.trim(), phone: $("ec-phone").value.trim(), services: $("ec-services").value.trim() || "911" }); $("ec-msg").textContent = "Saved. In an emergency Threadline calls this contact after a 10-second countdown."; });
 renderContacts();
-$("care-sim-fall")?.addEventListener("click", () => { care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
+$("care-sim-fall")?.addEventListener("click", () => { emergency.trigger({ reason: "Possible fall detected", note: "The band felt a fall and there was no movement afterwards." }); care.falls.push(Date.now()); careLog("note", "Demo: simulated a fall from the band.", true); careAssess(true); });
 async function careAssess(manual) {
   if (!isFictionalDemo() && !$("care-consent").checked && !$("rec-consent").checked) return;
   if (isFictionalDemo() && (!manual || !processingConsent())) return;
