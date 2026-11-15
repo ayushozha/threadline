@@ -1415,6 +1415,11 @@ async function buildGraph() {
 document.querySelectorAll("input[name=graph-engine]").forEach((r) => r.addEventListener("change", () => scheduleGraph(0)));
 let memGraph = null;
 const NAME_STOP = new Set("I Im Ill Ive Dad Mum Mom Yes No Okay Ok Oh Good The That This She He It Its Has Did Where What When Who Why How Is Are Was Can Could Should Would Will Do Does Monday Tuesday Wednesday Thursday Friday Saturday Sunday Today Tomorrow Right Then And But So We You They My Our Your There Here Hello Hi Thanks Thank Please".split(" "));
+function namesIn(text) {
+  const out = new Set();
+  for (const sent of String(text || "").split(/[.?!·,]\s*/)) sent.split(/\s+/).forEach((w, i) => { const m = w.replace(/[^A-Za-z']/g, "").replace(/'s$/, ""); if (/^[A-Z][a-z]{2,}$/.test(m) && !NAME_STOP.has(m) && !/^(GP|Morning|Video|Refill|Walk|Pharmacy|Water|Physio|Eye|Call|Lunch|Charge|Check|Put|Grocery|Short|Dentist|Fix|Memory|Sunday|Install|Hearing|Show|Open|Take|Remind|Give|Add|Tell|Order|Buy|Logged|Energy|Said)$/.test(m) && (i > 0 || /with|call|visit|from|to/i.test(sent))) out.add(m); });
+  return [...out];
+}
 function memoryData() {
   const N = new Map(), E = [], seen = new Set();
   const add = (id, label, type, weight = 1, extra = {}) => { if (!N.has(id)) N.set(id, { id, label, type, weight, ...extra }); else N.get(id).weight += weight; return id; };
@@ -1426,6 +1431,12 @@ function memoryData() {
     const id = add(`note:${note.id}`, note.text, "note", 1, { note });
     if (note.sample && note.speaker) { const p = add(`example-person:${note.speaker}`, note.speaker, "person", 2); link(id, p); }
     const refs = gd ? gd.nodes.filter((n) => n.sources?.includes(note.id)) : []; refs.forEach((r) => link(id, r.id)); if (!refs.length) link(id, self);
+    for (const nm of namesIn(note.text)) { const pid = add(`person:${nm.toLowerCase()}`, nm, "person", 1); link(id, pid); link(pid, self); }
+  }
+  for (const t of (life.tasks || []).slice(-60)) {  // people and places from the care plan
+    for (const nm of namesIn(t.title)) { const pid = add(`person:${nm.toLowerCase()}`, nm, "person", 1); link(pid, self); const tid = add(`event:task-${t.id}`, t.title, "event", 1); link(tid, pid); }
+    const place = (t.title.match(/\b(park|pharmacy|bank|dentist|optician|community centre|garden|hallway|kitchen|GP)\b/i) || [])[0];
+    if (place) { const plid = add(`place:${place.toLowerCase()}`, place[0].toUpperCase() + place.slice(1), "place", 1); link(plid, self); }
   }
   for (const t of loadArchive().filter(t => !t.sample || t.exampleMode === accessMode).slice(0, 20)) {
     const cid = add(`conv:${t.id}`, `Conversation · ${new Date(t.startedAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "conversation", 1, { conv: t }); link(cid, self);
@@ -3158,7 +3169,8 @@ function saveTalkTurn({ role, text, lang, english }) {
   if (!sess) { sess = { id, startedAt: now.toISOString(), endedAt: now.toISOString(), source: "voice", device: capture.band ? `${bandLabel()} · Talk to Threadline` : "Talk to Threadline", title: "Talk to Threadline", marks: 0, lines: [] }; list.unshift(sess); }
   sess.lines.push({ at: now.toISOString(), offset: (now - new Date(sess.startedAt)) / 1000, speakers: [role === "user" ? 0 : 1], text: english && english !== t ? `${t} (${english})` : t, provider: "assistant", activity: "", hr: null, marked: false, ...(lang ? { language: lang } : {}) });
   sess.endedAt = now.toISOString(); saveArchive([sess, ...list.filter((x) => x.id !== id)]); try { renderArchive(); } catch { /* */ }
-  if (role === "user" && t.split(/\s+/).length >= 3) {
+  const isCommand = /^(please\s+)?(show|open|go|take me|navigate|start|stop|check out|order|buy|remind|add|put|play|switch|turn|scroll|close|cancel|yes|no|okay|ok)\b/i.test(t);
+  if (role === "user" && !isCommand && t.split(/\s+/).length >= 3) {
     sessions.reflection.notes.push({ id: newId("n"), text: english && english !== t ? `${t} (${english})` : t, at: now.toISOString(), source: "voice", context: "Said to Threadline" });
     saveThread(); try { renderTimeline(); scheduleGraph(4000); } catch { /* */ }
   }
