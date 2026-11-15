@@ -375,9 +375,18 @@
             <article class="sig-card"><header><b>Movement</b><span>Band + watch</span></header><dl id="sig-move"></dl></article>
           </div>
         </div>
-        <section class="card mood-card" aria-labelledby="mood-h" hidden>
+        <section class="card mood-card" aria-labelledby="mood-h">
           <div class="section-top"><h2 id="mood-h">Mood over the last 30 days</h2><span class="tag-demo" title="Demo profile">Demo</span></div>
           <p class="caption">Morning and evening mood on Apple Health's State of Mind scale, evening agitation on the NPI-Q severity scale (0–3), and a weekly Cornell Scale for Depression in Dementia score, read alongside sleep and activity from Apple Health.</p>
+          <form id="mood-checkin" class="mood-checkin" aria-label="Caregiver check-in for today">
+            <b>Caregiver check-in · today</b>
+            <div class="mc-row"><span>Morning</span><div class="mc-faces" data-field="morning"></div></div>
+            <div class="mc-row"><span>Evening</span><div class="mc-faces" data-field="evening"></div></div>
+            <div class="mc-row"><span>Evening agitation (NPI-Q)</span><div class="mc-agi" data-field="agitation"></div></div>
+            <div class="mc-row"><label for="mc-repeats">Repeated questions</label><input id="mc-repeats" type="number" min="0" max="99" inputmode="numeric"></div>
+            <div class="mc-row"><label for="mc-csdd">Weekly CSDD total (optional, 0–38)</label><input id="mc-csdd" type="number" min="0" max="38" inputmode="numeric"></div>
+            <div class="row tight"><button type="submit" class="primary-sm">Save check-in</button><span id="mc-msg" class="caption" role="status"></span></div>
+          </form>
           <div class="mood-today" id="mood-today"></div>
           <svg id="mood-chart" class="mood-chart" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Mood and agitation over 30 days"></svg>
           <div class="mood-legend"><span class="lg am">Morning mood</span><span class="lg pm">Evening mood</span><span class="lg ag">Evening agitation</span></div>

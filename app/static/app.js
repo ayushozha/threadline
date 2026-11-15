@@ -192,6 +192,7 @@ let ownerMood = { days: [], weeks: [] }; // Only actual caregiver assessments be
 const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
 function drawDashboard() {
+  try { rebuildMood(); } catch { /* not ready */ }
   try {
     renderDashboard($("dashboard"), { health: isFictionalDemo() ? demoSeed().demoHealth : healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
       transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: isFictionalDemo() });
@@ -212,13 +213,45 @@ function openLibrary() {
     },
   });
 }
+/* Caregiver mood check-ins: real assessments entered by the caregiver, kept per profile in this browser. */
+const MOOD_FACES = [["😢", -0.8, "very low"], ["🙁", -0.4, "low"], ["😐", 0, "neutral"], ["🙂", 0.4, "content"], ["😊", 0.8, "happy"]];
+const moodLogKey = () => `threadline.moodlog.v1.${threadKey}`;
+function loadMoodLog() { try { return JSON.parse(localStorage.getItem(moodLogKey()) || "{}") || {}; } catch { return {}; } }
+function rebuildMood() {
+  const log = loadMoodLog(), keys = Object.keys(log).sort().slice(-30), label = (v) => (MOOD_FACES.reduce((b, f) => Math.abs(f[1] - v) < Math.abs(b[1] - v) ? f : b)[2]);
+  const days = keys.filter((k) => log[k].morning != null || log[k].evening != null).map((k) => { const e = log[k], m = e.morning ?? e.evening, ev = e.evening ?? e.morning;
+    return { date: k, morning: m, evening: ev, morningLabel: label(m), eveningLabel: label(ev), agitation: e.agitation ?? 0, repeats: e.repeats ?? 0 }; });
+  const weeks = keys.filter((k) => Number.isFinite(log[k].csdd)).map((k) => ({ weekEnding: k, score: log[k].csdd, band: log[k].csdd >= 18 ? "Definite major depression range — talk to the GP soon" : log[k].csdd >= 11 ? "Probable major depression range — talk to the GP" : log[k].csdd >= 6 ? "Mild symptoms — keep watching" : "No significant depressive symptoms" }));
+  ownerMood = { days, weeks };
+}
+const moodForm = { morning: null, evening: null, agitation: null };
+function renderMoodForm() {
+  const today = loadMoodLog()[todayKey()] || {};
+  for (const f of ["morning", "evening"]) { if (moodForm[f] == null) moodForm[f] = today[f] ?? null;
+    document.querySelector(`.mc-faces[data-field=${f}]`).replaceChildren(...MOOD_FACES.map(([icon, v, name]) => { const b = el("button", { type: "button", className: `mc-face${moodForm[f] === v ? " on" : ""}`, textContent: icon, title: name, "aria-label": `${f} ${name}` }); b.addEventListener("click", () => { moodForm[f] = v; renderMoodForm(); }); return b; })); }
+  if (moodForm.agitation == null) moodForm.agitation = today.agitation ?? null;
+  document.querySelector(".mc-agi").replaceChildren(...["none", "mild", "moderate", "severe"].map((n, i) => { const b = el("button", { type: "button", className: `mc-ag${moodForm.agitation === i ? " on" : ""}`, textContent: n }); b.addEventListener("click", () => { moodForm.agitation = i; renderMoodForm(); }); return b; }));
+  if (!$("mc-repeats").value && today.repeats != null) $("mc-repeats").value = today.repeats;
+  if (!$("mc-csdd").value && today.csdd != null) $("mc-csdd").value = today.csdd;
+}
+$("mood-checkin")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (moodForm.morning == null && moodForm.evening == null) return ($("mc-msg").textContent = "Pick at least a morning or evening mood.");
+  const log = loadMoodLog(), csdd = $("mc-csdd").value === "" ? null : Math.max(0, Math.min(38, Math.round(Number($("mc-csdd").value))));
+  log[todayKey()] = { morning: moodForm.morning, evening: moodForm.evening, agitation: moodForm.agitation ?? 0, repeats: Math.max(0, Math.round(Number($("mc-repeats").value) || 0)), ...(csdd != null ? { csdd } : {}), at: new Date().toISOString(), by: "caregiver" };
+  try { localStorage.setItem(moodLogKey(), JSON.stringify(log)); } catch { /* storage off */ }
+  rebuildMood(); renderMood(); drawDashboard(); renderDays();
+  $("mc-msg").textContent = "Saved. Charts, the Daily log and the Dashboard now include today's check-in.";
+  if (typeof logAction === "function") logAction("Caregiver mood check-in saved");
+});
 function renderMood() {
   if (!$("mood-chart")) return;
+  rebuildMood(); renderMoodForm();
   if (!ownerMood.days.length) {
-    $("mood-today").textContent = "No caregiver mood assessments recorded. Sleep and activity do not determine a mood or clinical score.";
+    $("mood-today").textContent = "No check-ins yet. Save today's caregiver check-in above and the 30-day mood chart starts here.";
     $("mood-chart").replaceChildren(); $("mood-weeks").replaceChildren(); return;
   }
-  const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
+  const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => days.length < 2 ? W / 2 : 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
   $("mood-today").replaceChildren(...(t ? [["This morning", `${t.morningLabel} · ${moodWord(t.morning)} (${t.morning > 0 ? "+" : ""}${t.morning})`], ["This evening", `${t.eveningLabel} · ${moodWord(t.evening)} (${t.evening > 0 ? "+" : ""}${t.evening})`], ["Evening agitation", `${["none", "mild", "moderate", "severe"][t.agitation]} (NPI-Q ${t.agitation})`], ["Repeated questions", String(t.repeats)]].map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v }))) : []));
   const svg = $("mood-chart"), mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
   const kids = [mk("line", { x1: 0, x2: W, y1: H / 2, y2: H / 2, class: "zero" })];
@@ -1493,6 +1526,7 @@ const DAY_MS = 86400000;
 const parseDay = (s) => new Date(`${s}T12:00:00`);
 function renderDays() {
   if (!$("days-body")) return;
+  try { rebuildMood(); } catch { /* not ready */ }
   $("days-panel").hidden = mode !== "reflection";
   $("energy-words").value = life.energyWords;
   const rows = [];
@@ -1810,7 +1844,7 @@ function renderEnergy() {
   const fill = (id, pairs, empty) => { const items = rows(pairs); $(id).replaceChildren(...(items.length ? items : [el("dt", { className: "empty", textContent: empty })])); };
   fill("sig-voice", [["Speaking pace", v?.words_per_min ? `${v.words_per_min} wpm` : null], ["Pauses", v?.avg_pause_s ? `${v.avg_pause_s} s avg` : null], ["Loudness", v?.loudness != null ? `${Math.round(v.loudness * 100)}%` : null], ["Most-heard speaker's share", v?.talk_share != null ? `${Math.round(v.talk_share * 100)}%` : null]], "Record a session to measure");
   fill("sig-body", [["Heart rate", w.heart_rate != null ? `${Math.round(w.heart_rate)} bpm` : null], ["HRV (SDNN)", w.hrv_sdnn_ms != null ? `${Math.round(w.hrv_sdnn_ms)} ms` : null], ["Resting HR", w.resting_hr != null ? `${Math.round(w.resting_hr)} bpm` : null], ["Breathing", w.respiratory_rate != null ? `${Math.round(w.respiratory_rate)} /min` : null], ["Blood oxygen", w.spo2 != null ? `${Math.round(w.spo2)}%` : null], ["Sleep last night", w.sleep_hours_last_night != null ? `${Math.floor(w.sleep_hours_last_night)} h ${Math.round((w.sleep_hours_last_night % 1) * 60)}` : null], ["Noise", w.env_noise_db != null ? `${Math.round(w.env_noise_db)} dB` : null], ["Logged mood", w.state_of_mind ? `${w.state_of_mind.valence > 0.2 ? "pleasant" : w.state_of_mind.valence < -0.2 ? "unpleasant" : "neutral"}${w.state_of_mind.labels?.length ? ` · ${w.state_of_mind.labels.join(", ")}` : ""}` : null]], "Pair the Apple Watch in Devices");
-  fill("sig-move", [["Steps today", r.watchSteps ?? (r.bandSteps || null) ?? (h.steps != null ? Math.round(h.steps).toLocaleString() : null)], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${Math.round(w.exercise_min_today)} min` : null], ["Mindful", w.mindful_min_today != null ? `${Math.round(w.mindful_min_today)} min` : null], ["Distance", h.distance_km != null ? `${h.distance_km.toFixed(1)} km` : null], ["Active energy", h.active_energy_kcal != null ? `${Math.round(h.active_energy_kcal)} kcal` : null], ["Walking speed", h.walking_speed_kmh != null ? `${h.walking_speed_kmh.toFixed(1)} km/h` : null], ["Walking steadiness", h.walking_steadiness != null ? `${Math.round(h.walking_steadiness)}%` : null]], "Connect the band or watch");
+  fill("sig-move", [["Steps today", (() => { const best = Math.max(r.watchSteps || 0, r.bandSteps || 0, h.steps || 0); return best ? Math.round(best).toLocaleString() : null; })()], ["Right now", w.activity || signals.activity || null], ["Exercise", w.exercise_min_today != null ? `${Math.round(w.exercise_min_today)} min` : null], ["Mindful", w.mindful_min_today != null ? `${Math.round(w.mindful_min_today)} min` : null], ["Distance", h.distance_km != null ? `${h.distance_km.toFixed(1)} km` : null], ["Active energy", h.active_energy_kcal != null ? `${Math.round(h.active_energy_kcal)} kcal` : null], ["Walking speed", h.walking_speed_kmh != null ? `${h.walking_speed_kmh.toFixed(1)} km/h` : null], ["Walking steadiness", h.walking_steadiness != null ? `${Math.round(h.walking_steadiness)}%` : null]], "Connect the band or watch");
   const mood = state === "low" ? "calm" : state === "positive" ? "uplifting" : "steady";
   $("music-links").replaceChildren(...["calm", "steady", "uplifting"].map((m) => el("div", { className: `music-chip m-${m}${m === mood ? " current" : ""}` }, el("b", { textContent: m }),
     el("a", { href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Apple Music" }),
