@@ -98,7 +98,9 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
 
   try {
     await pc.setLocalDescription(await pc.createOffer());
-    const r = await fetch("/api/realtime/sdp", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/sdp" }, body: pc.localDescription.sdp });
+    const post = () => fetch("/api/realtime/sdp", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/sdp" }, body: pc.localDescription.sdp });
+    let r = await post();
+    if (r.status === 401) { await fetch("/api/session", { method: "POST", credentials: "same-origin" }).catch(() => {}); r = await post(); }  // renew an expired guest session once
     const text = await r.text();
     if (!r.ok) { let msg = text; try { msg = JSON.parse(text).detail || text; } catch { /* plain text */ } throw new Error(msg || `Realtime call failed (${r.status})`); }
     await pc.setRemoteDescription({ type: "answer", sdp: text });
