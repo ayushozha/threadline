@@ -93,11 +93,11 @@ export function mountCalendar(root, { el, request }) {
     if (loading) { card.replaceChildren(head, el("p", { className: "caption", textContent: "Loading your calendar…" })); return; }
     const cals = data.calendars || [];
     if (!cals.length) {
-      card.replaceChildren(head,
+      card.replaceChildren(...[head,
         el("p", { className: "caption", textContent: "Connect your own calendar with its private iCal link. No sign-in is shared; you can remove it any time." }),
         el("ul", { className: "cal-how" }, ...HOW.map(([who, how]) => el("li", {}, el("b", { textContent: `${who}: ` }), el("span", { textContent: how })))),
         connectForm(false),
-        error ? el("p", { className: "caption", role: "alert", textContent: error }) : null);
+        error ? el("p", { className: "caption", role: "alert", textContent: error }) : null].filter(Boolean));
       return;
     }
     const groups = groupByDay(data.events || []);
@@ -115,10 +115,10 @@ export function mountCalendar(root, { el, request }) {
         ev.target.disabled = true;
         try { await call(`/api/calendar/${encodeURIComponent(c.id)}`, { method: "DELETE" }); await load(); } catch (e) { error = e.message; ev.target.disabled = false; render(); }
       } }))));
-    card.replaceChildren(head, agenda,
+    card.replaceChildren(...[head, agenda,
       error ? el("p", { className: "caption", role: "alert", textContent: error }) : null,
       el("details", { className: "cal-manage" }, el("summary", { textContent: `Connected calendars (${cals.length})` }), list, cals.length < 5 ? connectForm(true) : null),
-      el("button", { type: "button", className: "text-button", textContent: "Refresh", onclick: load }));
+      el("button", { type: "button", className: "text-button", textContent: "Refresh", onclick: load })].filter(Boolean));
   }
 
   render(); load();
