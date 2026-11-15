@@ -12,6 +12,7 @@ import { mountEssentials, purchaseReply } from './essentials.mjs';
 import { mountAssistant } from './assistant.mjs';
 import { speak as speakNatural } from './voice.mjs';
 import { mountCalendar } from './calendar.mjs';
+import { mountCalendarView } from './calview.mjs';
 import { mountPhoneCam } from './phonecam.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
@@ -1444,10 +1445,37 @@ function memoryData() {
     const w = ownerMood.weeks.at(-1); if (w) link(add("health:csdd", `Weekly CSDD ${w.score}`, "health", 2), m); }
   return { nodes: [...N.values()], edges: E.filter((e) => N.has(e.source) && N.has(e.target)) };
 }
+/* What Threadline remembers: the graph's facts as readable cards. */
+function renderMemoryInsights(data) {
+  const box = $("memory-insights"); if (!box || !data) return;
+  const deg = {}; for (const e of data.edges) { deg[e.source] = (deg[e.source] || 0) + 1; deg[e.target] = (deg[e.target] || 0) + 1; }
+  const byType = (t) => data.nodes.filter((n) => n.type === t).sort((a, b) => (deg[b.id] || 0) - (deg[a.id] || 0) || (b.weight || 0) - (a.weight || 0));
+  const notes = [...sessions.reflection.notes, ...sessions.routine.notes].filter((n) => n.text).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const lastMention = (word) => notes.find((n) => n.text.toLowerCase().includes(String(word).toLowerCase()));
+  const when = (at) => { const d = new Date(at); return Number.isNaN(d) ? "" : d.toLocaleDateString([], { month: "short", day: "numeric" }) + " · " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+  const people = byType("person").slice(0, 6), places = byType("place").slice(0, 5), things = byType("object").slice(0, 6), topics = [...byType("topic"), ...byType("event")].slice(0, 10);
+  const where = [...things.map((t) => ({ name: t.label, note: lastMention(t.label) })), ...notes.filter((n) => /\b(glasses|keys|phone|wallet|tablets|pills|hearing aid|remote)\b.*\b(in|on|by|next to|under)\b/i.test(n.text)).slice(0, 4).map((n) => ({ name: (n.text.match(/\b(glasses|keys|phone|wallet|tablets|pills|hearing aid|remote)\b/i) || ["Item"])[0], note: n }))]
+    .filter((x, i, a) => x.note && a.findIndex((y) => y.name.toLowerCase() === x.name.toLowerCase()) === i).slice(0, 5);
+  const recent = notes.filter((n) => n.source === "voice" || n.source === "vexo" || n.source === "typed" || !n.sample).slice(0, 6);
+  const go = (id) => () => { memGraph?.select?.(id); $("memory-graph")?.scrollIntoView({ behavior: "smooth", block: "center" }); };
+  const card = (title, icon, body) => el("article", { className: "mi-card" }, el("h3", {}, el("span", { className: "mi-ic", textContent: icon }), title), body);
+  const stat = (n, label) => el("div", { className: "mi-stat" }, el("b", { textContent: String(n) }), el("span", { textContent: label }));
+  box.replaceChildren(
+    el("div", { className: "mi-stats" }, stat(notes.length, "memories saved"), stat(byType("person").length, "people"), stat(byType("place").length, "places"), stat(byType("object").length, "things"),
+      stat(loadArchive().length, "conversations"), stat(notes.filter((n) => n.source === "voice").length, "said to Threadline")),
+    el("div", { className: "mi-grid" },
+      card("Who matters", "👪", people.length ? el("ul", { className: "mi-people" }, ...people.map((p) => { const m = lastMention(p.label);
+        return el("li", {}, el("button", { type: "button", className: "mi-chip", textContent: p.label, onclick: go(p.id) }), el("small", { textContent: `${deg[p.id] || 0} links${m ? ` · last ${when(m.at)}` : ""}` })); })) : el("p", { className: "caption", textContent: "Names mentioned in conversations appear here." })),
+      card("Where things are", "📍", where.length ? el("ul", { className: "mi-where" }, ...where.map((w) => el("li", {}, el("b", { textContent: w.name }), el("span", { textContent: `“${w.note.text.slice(0, 110)}”` }), el("small", { textContent: when(w.note.at) })))) : el("p", { className: "caption", textContent: "Say “my glasses are on the kitchen table” and Threadline remembers it." })),
+      card("Recent memories", "🧠", recent.length ? el("ol", { className: "mi-recent" }, ...recent.map((n) => el("li", {}, el("time", { textContent: when(n.at) }), el("span", { textContent: n.text.slice(0, 140) }), el("small", { textContent: n.context || n.source || "" })))) : el("p", { className: "caption", textContent: "Nothing saved yet." })),
+      card("What keeps coming up", "💬", el("div", { className: "mi-topics" }, ...topics.map((t) => el("button", { type: "button", className: "mi-chip", textContent: t.label, onclick: go(t.id) })), ...places.map((pl) => el("button", { type: "button", className: "mi-chip place", textContent: `📍 ${pl.label}`, onclick: go(pl.id) }))))));
+}
 function drawGraph() {
   const host = $("memory-graph"); if (!host) return;
-  if (!memGraph) memGraph = mountMemoryGraph(host, { onSelect: showMemoryNode });
-  try { memGraph.update(memoryData()); } catch (e) { $("graph-status").textContent = `Graph not drawn: ${e.message}`; }
+  if (!memGraph) memGraph = mountMemoryGraph(host, { onSelect: showMemoryNode, hide: ["note"] });
+  let data = null;
+  try { data = memoryData(); memGraph.update(data); } catch (e) { $("graph-status").textContent = `Graph not drawn: ${e.message}`; }
+  try { renderMemoryInsights(data); } catch { /* insights are optional */ }
 }
 function showMemoryNode(n, near = [], expand, depth = 1) {
   const box = $("graph-detail");
@@ -1972,8 +2000,40 @@ $("mood-to-health").addEventListener("click", () => {
 /* ---------- Tasks ---------- */
 const gcalLink = (title, details, date) => { const d = (date || todayKey()).replaceAll("-", ""), next = todayKey(new Date(parseDay(date || todayKey()).getTime() + DAY_MS)).replaceAll("-", "");
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&details=${encodeURIComponent(details)}&dates=${d}/${next}`; };
+/* A realistic two weeks of care tasks so Tasks, the calendar and the day boards aren't empty (marked seeded, once per profile). */
+function seedTasks() {
+  if (isFictionalDemo()) return;
+  const flag = `threadline.tasks.seeded.v1.${threadKey}`;
+  try { if (localStorage.getItem(flag)) return; } catch { return; }
+  const day = (n) => todayKey(new Date(Date.now() + n * DAY_MS));
+  const at = (n, h) => { const d = new Date(Date.now() + n * DAY_MS); d.setHours(h, 0, 0, 0); return d.toISOString(); };
+  const T = [
+    [-12, "09:00", "Morning tablets with breakfast", true], [-11, "10:30", "GP appointment · blood pressure check", true], [-10, "16:00", "Video call with Lily", true],
+    [-9, "11:00", "Refill the weekly pill organiser", true], [-8, "15:00", "Walk around the park with Asha", true], [-7, "10:00", "Pharmacy · collect repeat prescription", true],
+    [-6, "18:00", "Water the roses", true], [-5, "14:00", "Physio exercises · 15 minutes", true], [-4, "09:30", "Eye test at the optician", true],
+    [-3, "17:00", "Call the bank about the card", false], [-2, "12:00", "Lunch with Meera", true], [-1, "20:00", "Charge the band and the watch", true],
+    [0, "09:00", "Morning tablets with breakfast", false], [0, "11:00", "Check the stove is off before sitting down", false], [0, "16:00", "Video call with Lily", false],
+    [0, "19:00", "Put today's plan on the whiteboard", false], [1, "10:00", "Grocery delivery · milk, bread, fruit", false], [1, "15:00", "Short walk after lunch", false],
+    [2, "09:30", "Dentist appointment", false], [3, "11:00", "Fix the folded rug in the hallway", false], [4, "14:00", "Memory club at the community centre", false],
+    [5, "10:00", "Refill the weekly pill organiser", false], [6, "16:00", "Sunday visit · compare gardens with Lily", false], [8, "10:30", "GP follow-up · sleep and mood", false],
+    [10, "15:00", "Install stair edge tape", false], [12, "11:00", "Hearing check", false],
+  ];
+  const existing = new Set((life.tasks || []).map((t) => `${t.due}|${t.title}`));
+  for (const [n, time, title, done] of T) {
+    if (existing.has(`${day(n)}|${title}`)) continue;
+    (life.tasks ||= []).push({ id: newId("t"), title, due: day(n), time, big: /decide|appointment/i.test(title) && n > 0 && false, done, ...(done ? { doneAt: at(n, Number(time.slice(0, 2)) + 1) } : {}), note: "Care plan", seeded: true });
+  }
+  try { localStorage.setItem(flag, "1"); } catch { /* */ }
+  saveThread();
+}
+let calView = null;
 function renderTasks() {
   if (!$("tasks-today")) return;
+  try { seedTasks(); } catch { /* */ }
+  if ($("task-month") && !calView) calView = mountCalendarView($("task-month"), { el, request, getTasks: () => life.tasks || [],
+    addTask: ({ title, due, time }) => { (life.tasks ||= []).push({ id: newId("t"), title, due, time, big: false, done: false, note: "Added on the calendar" }); saveThread(); renderTasks(); logAction(`Task added: ${title} · ${due}${time ? ` ${time}` : ""}`); },
+    toggleDone: (t) => { t.done = !t.done; t.doneAt = t.done ? new Date().toISOString() : undefined; saveThread(); renderTasks(); if (t.done) logAction(`Done: ${t.title}`); } });
+  else calView?.refresh();
   if (location.hash === "#tasks") renderTaskCalendar();
   const tasks = life.tasks || [], today = todayKey();
   const drafts = (life.taskDrafts || []).filter(d => !d.exampleMode || d.exampleMode === accessMode);
@@ -2927,6 +2987,7 @@ $("care-check").addEventListener("click", async () => {
 function careOnView(name) {
   const was = care.visible; care.visible = name === "care";
   if (care.visible && !was) {
+    if (care.src === "file" && !care.files.length && !isFictionalDemo()) { care.files = [{ url: "/static/scenarios/memory-stove.mp4", name: "Stove left on (scenario)", size: 0 }]; care.idx = 0; try { carePlayIndex(0); } catch { /* */ } }
     renderCareRoutine(); loadCareHealth(); careShowMedia(); careRenderPlaylist();
     if (careStill()) careBridgeOn();
     clearInterval(care.agentTimer);

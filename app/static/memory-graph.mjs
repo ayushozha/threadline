@@ -9,7 +9,7 @@ export const TYPE_STYLE = {
 };
 const styleOf = (t) => TYPE_STYLE[t] || { color: "#8a8a92", label: t };
 
-export function mountMemoryGraph(root, { onSelect } = {}) {
+export function mountMemoryGraph(root, { onSelect, hide = [] } = {}) {
   root.replaceChildren();
   root.classList.add("mg");
   const bar = document.createElement("div"); bar.className = "mg-bar";
@@ -28,7 +28,7 @@ export function mountMemoryGraph(root, { onSelect } = {}) {
   const ctx = canvas.getContext("2d");
 
   let nodes = [], edges = [], byId = new Map(), adj = new Map();
-  const view = { x: 0, y: 0, k: 1 }, hidden = new Set();
+  const view = { x: 0, y: 0, k: 1 }, hidden = new Set(hide);
   let hover = null, focus = null, drag = null, pan = null, alpha = 1, query = "", W = 0, H = 0, dpr = 1, raf = 0, depth = 1;
 
   function resize() {

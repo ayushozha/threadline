@@ -429,6 +429,7 @@
       </section>
 
       <section class="view" data-view="tasks" hidden>
+        <section class="card task-month-card" aria-labelledby="task-month-h"><div class="section-top"><h2 id="task-month-h">Calendar</h2><span class="caption">Tasks and your connected calendar · click a day</span></div><div id="task-month"></div></section>
         <section class="card tasks-cal" aria-labelledby="tasks-cal-h"><h2 id="tasks-cal-h">Your calendar · next 7 days</h2><ul id="tasks-calendar" class="tc-list"><li class="caption">Loading…</li></ul></section>
         <section class="card" aria-labelledby="task-suggestions-h"><h2 id="task-suggestions-h">From your conversation</h2><p class="caption">Suggested tasks appear here automatically. Review before saving.</p><div class="task-banner" id="task-banner"></div></section>
         <form id="task-form" class="card task-form">
@@ -505,6 +506,7 @@
             <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
             <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
           </div>
+          <div id="memory-insights" class="memory-insights"></div>
           <div class="mg-layout"><div id="memory-graph" class="mg-host" aria-label="Interactive memory graph"></div>
           <aside id="graph-detail" class="graph-detail mg-detail"><p class="caption">Drag to move, scroll to zoom, click a node to focus its memories. Double-click a pinned node to release it.</p></aside></div>
         </section></section>
