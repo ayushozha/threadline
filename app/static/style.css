@@ -352,3 +352,4 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .profile-k{font-weight:600}.profile-v{color:var(--muted)}
 .profile-bar .text-button{font-size:12px;padding:6px 8px}
 .own-devices{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:14px}.own-devices summary{font-weight:600;cursor:pointer}.own-devices code{font:12px var(--mono)}
+.vision-panel{margin:20px 0}.vision-panel input{flex:1;min-width:160px}.vision-evidence{display:flex;gap:12px;overflow-x:auto}.vision-evidence figure{margin:0;min-width:180px;flex:1}.vision-evidence img{display:block;width:100%;max-height:180px;object-fit:contain;border-radius:8px;background:#eee}.vision-evidence figcaption{font-size:13px;margin-top:5px}

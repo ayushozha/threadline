@@ -30,6 +30,7 @@ from app.agent import DecideRequest, decide
 from app.music import MusicRequest, generate_music
 from app.graph import GraphRequest, gemini_graph, local_graph, validate_request
 from app.schedule import BookRequest, SlotRequest, book, find_slot
+from app.vision import VisionRequest, analyze as analyze_vision
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT.parent / ".env")
@@ -360,6 +361,15 @@ async def agent_decide(body: DecideRequest):
     """One proposed next step for a saved statement. Gemini proposes; app/agent.py enforces every rule.
     Gemini unavailable -> deterministic local decision with fallback_reason (still 200)."""
     return await decide(body, os.environ, provider_slots)
+
+
+@app.post("/api/vision", dependencies=[Depends(authorize)])
+async def visual_context(body: VisionRequest):
+    """Analyze consented snapshots with recent words. Images are not stored on this server."""
+    key, model = os.getenv("GOOGLE_API_KEY"), os.getenv("GEMINI_MODEL")
+    if not key or not model:
+        raise HTTPException(503, "Visual help is temporarily unavailable.")
+    return await analyze_vision(body, key, model, provider_slots)
 
 
 @app.post("/api/transcribe", dependencies=[Depends(authorize)])

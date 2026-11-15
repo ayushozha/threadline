@@ -1,5 +1,11 @@
 # Live video + Vexo: implementation and setup handoff
 
+**Current update:** [Camera + Vexo visual context](VISUAL_CONTEXT.md) implements
+consented, bounded snapshots from a browser camera to Gemini alongside recent
+speech. Camera selection is visible in the main app. The older baseline and
+remote-streaming target below remain separate: a remote viewer, native Meta/Pi
+bridges, and continuous video publication are still not implemented.
+
 This is the requested implementation contract for Claude or another contributor.
 Build on the existing Threadline app; do not replace it with a separate demo.
 Work directly on `main`, with scoped commits and no PRs. Preserve hooks and remote

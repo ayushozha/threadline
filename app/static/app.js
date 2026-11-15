@@ -1,6 +1,7 @@
 "use strict";
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
+import { createVisionController } from './vision.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -36,6 +37,7 @@ const todayKey = (d = new Date()) => localDate(d);
 function dayRec(key = todayKey()) { return (life.days[key] ||= { energy: [], others: 0, mine: 0, hrSum: 0, hrN: 0, hrMin: null, hrMax: null, watchSteps: null, bandSteps: 0 }); }
 function loadThread(key) {
   workspaceVersion += 1;
+  stopVision();
   decisions.clear();
   $("agent-feed").replaceChildren(el("li", { className: "agent-empty", textContent: "Ready for your next thought. Suggestions appear here as you talk." }));
   for (const id of ["today-summary-out", "day-summary-out"]) $(id).replaceChildren(el("p", { className: "caption", textContent: "Your summary updates from your saved words." }));
@@ -71,6 +73,7 @@ function flushUtterance() {
 }
 function acceptUtterance(statement) {
   delete statement.speaker;
+  if ($("vision-consent").checked && capture.camStream) vision.queueCheck(statement.text);
   if (statement.speaker_confirmed) {
     addNotes([statement]);
     for (const line of capture.finals) if (statement.lineIds.includes(line.id)) line.saved = true;
@@ -399,6 +402,7 @@ function setRecUI() {
   $("rec-start").disabled = busy || live || (vexo && (!capture.band || capture.band.reconnecting));
   $("rec-stop").disabled = !live;
   $("source").disabled = live; $("cam-on").disabled = live; $("capture-identity").disabled = live;
+  $("cam-device").disabled = live; $("cam-connect").disabled = live;
   $("band-disconnect").disabled = live;
   $("rec-start").classList.toggle("recording", live);
   renderPair();
@@ -529,6 +533,7 @@ $("rec-start").addEventListener("click", async () => {
       // Audio comes from the band when it records, so the camera's own microphone is never requested.
       const audio = vexo ? null : await navigator.mediaDevices.getUserMedia({ audio: true });
       const video = camera ? (capture.camStream || await navigator.mediaDevices.getUserMedia({ video: cameraConstraint() })) : null;
+      if (video) capture.camStream = video;
       stream = new MediaStream([...(audio ? audio.getTracks() : []), ...(video ? video.getVideoTracks() : [])]);
     } catch { return recState(`${camera ? "Camera" : "Microphone"} permission was not granted. Nothing was recorded.`, true); }
   }
@@ -709,6 +714,7 @@ function startVideo(stream) {
   const tracks = stream.getVideoTracks(); if (!tracks.length) return;
   clearVideo();
   const preview = $("cam-preview"); preview.srcObject = new MediaStream(tracks); preview.hidden = false; preview.play().catch(() => {});
+  if ($("vision-consent").checked) vision.start(preview);
   const mixed = new MediaStream([...tracks, ...stream.getAudioTracks()]);
   capture.videoChunks = [];
   capture.videoRecorder = new MediaRecorder(mixed);
@@ -724,6 +730,7 @@ function startVideo(stream) {
   capture.videoRecorder.start(1000);
 }
 function stopVideo() {
+  stopVision();
   if (capture.videoRecorder && capture.videoRecorder.state !== "inactive") capture.videoRecorder.stop();
   const preview = $("cam-preview"); preview.srcObject = null; preview.hidden = true;
 }
@@ -1102,7 +1109,52 @@ function finishWatchSession() {
 $("watch-unpair").addEventListener("click", () => { rememberWatch(null); setTimeout(startDemoFeed, 500); const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
 
 
-/* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. Video only. */
+/* Consented visual context. Frames stay in memory and are not written to the transcript store. */
+const vision = createVisionController({
+  getContext: () => {
+    const saved = sessions.reflection.notes.slice(-6).map(({ id, text, at, source }) => ({ id, text, at, source }));
+    const recent = capture.active ? capture.finals.slice(-6).map(f => ({ id: f.id, text: f.transcript,
+      at: new Date(capture.startedAt.getTime() + f.start * 1000).toISOString(), source: "live conversation; speaker unverified" })) : [];
+    let budget = 12000;
+    const transcript = [...saved, ...recent].slice(-12).reverse().filter(line => {
+      if (line.text.length > budget) return false;
+      budget -= line.text.length; return true;
+    }).reverse();
+    return { active: Boolean(capture.camStream?.getVideoTracks().some(t => t.readyState === "live")),
+      allowed: $("vision-consent").checked && $("rec-consent").checked, scope: workspaceVersion,
+      transcript, question: $("vision-question").value.trim() };
+  },
+  request,
+  onStatus: text => { $("vision-status").textContent = text; },
+  onResult: (data, frames) => {
+    const evidence = new Map(frames.map(frame => [frame.id, frame]));
+    $("vision-answer").replaceChildren(el("p", { className: "provenance", textContent: "Gemini · camera snapshots + recent words · check the evidence" }),
+      el("p", { textContent: data.answer }),
+      el("p", {}, el("b", { textContent: "Next step: " }), data.next_step),
+      ...(data.uncertainties?.length ? [el("p", { className: "caption", textContent: `Still unknown: ${data.uncertainties.join(" ")}` })] : []));
+    $("vision-evidence").replaceChildren(...(data.observations || []).map(observation => {
+      const frame = evidence.get(observation.frame_id);
+      return el("figure", {}, ...(frame ? [el("img", { src: frame.dataUrl, alt: observation.description }),
+        el("span", { className: "caption", textContent: new Date(frame.at).toLocaleTimeString() })] : []), el("figcaption", { textContent: observation.description }));
+    }));
+  },
+});
+function stopVision() {
+  vision.stop();
+  $("vision-status").textContent = "Visual help stopped. Connect a camera and allow snapshots to start.";
+  $("vision-evidence").replaceChildren();
+  $("vision-answer").replaceChildren(el("p", { className: "caption", textContent: "Visual session stopped. Images were cleared from this page." }));
+}
+function syncVision() {
+  if ($("vision-consent").checked && $("rec-consent").checked && capture.camStream) vision.start($("cam-preview"));
+  else stopVision();
+}
+$("vision-consent").addEventListener("change", syncVision);
+$("rec-consent").addEventListener("change", syncVision);
+$("vision-check").addEventListener("click", () => vision.analyze($("vision-question").value.trim()));
+$("vision-question-form").addEventListener("submit", event => { event.preventDefault(); vision.analyze($("vision-question").value.trim()); });
+
+/* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. */
 function cameraConstraint() { const id = $("cam-device").value; return id ? { deviceId: { exact: id } } : true; }
 async function listCameras() {
   try {
@@ -1113,8 +1165,8 @@ async function listCameras() {
     if (gopro && !current) $("cam-device").value = gopro.deviceId;
   } catch { /* no device list */ }
 }
-function releaseCamera() { capture.camStream?.getTracks().forEach((t) => t.stop()); capture.camStream = null; if (!capture.active) { $("cam-preview").srcObject = null; $("cam-preview").hidden = true; } chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); }
-$("cam-on").addEventListener("change", () => { $("cam-pick").hidden = !$("cam-on").checked; if ($("cam-on").checked) listCameras(); else releaseCamera(); chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); });
+function releaseCamera() { stopVision(); capture.camStream?.getTracks().forEach((t) => t.stop()); capture.camStream = null; if (!capture.active) { $("cam-preview").srcObject = null; $("cam-preview").hidden = true; } chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); }
+$("cam-on").addEventListener("change", () => { $("cam-pick").hidden = !$("cam-on").checked; $("vision-panel").hidden = !$("cam-on").checked; if ($("cam-on").checked) listCameras(); else releaseCamera(); chip("cam", false, $("cam-on").checked ? "ready to connect" : "off"); });
 $("cam-device").addEventListener("change", () => { if (capture.camStream) $("cam-connect").click(); });
 $("cam-connect").addEventListener("click", async () => {
   if (capture.active) return;
@@ -1123,9 +1175,13 @@ $("cam-connect").addEventListener("click", async () => {
     capture.camStream = await navigator.mediaDevices.getUserMedia({ video: cameraConstraint() });
     const track = capture.camStream.getVideoTracks()[0];
     $("cam-preview").srcObject = capture.camStream; $("cam-preview").hidden = false; $("cam-preview").play().catch(() => {});
+    $("vision-panel").hidden = false;
+    if ($("vision-consent").checked) vision.start($("cam-preview"));
+    else $("vision-status").textContent = "Camera preview only. Allow visual help to send selected snapshots to Gemini.";
     await listCameras();
     chip("cam", true, track?.label || "connected");
-    track?.addEventListener("ended", () => { chip("cam", false, "disconnected"); recState("The camera disconnected.", true); });
+    $("chip-cam").hidden = false;
+    track?.addEventListener("ended", () => { stopVision(); chip("cam", false, "disconnected"); recState("The camera disconnected.", true); });
   } catch (e) { chip("cam", false, "not allowed"); recState(`Camera unavailable: ${e.message}`, true); }
 });
 navigator.mediaDevices?.addEventListener?.("devicechange", () => { if ($("cam-on").checked) listCameras(); });

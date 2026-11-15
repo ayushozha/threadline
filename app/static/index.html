@@ -104,11 +104,13 @@
           <select id="source">
             <option value="vexo">Vexo band (Devices, below)</option>
             <option value="browser">This browser's microphone</option>
-          </select></div><label class="check"><input id="cam-on" type="checkbox"><span>Add video (e.g. a GoPro via the GoPro Webcam app). Video stays in this browser; it is never uploaded.</span></label></div>
+          </select></div></div>
+              <label class="check"><input id="cam-on" type="checkbox"><span>Add camera vision — webcam or GoPro Webcam</span></label>
               <div id="cam-pick" class="cam-pick" hidden>
             <label for="cam-device">Camera</label>
             <div class="row tight"><select id="cam-device"><option value="">Default camera</option></select><button type="button" id="cam-connect" class="secondary">Connect camera</button></div>
             <p class="caption">Pick “GoPro Webcam” if it's plugged in and its app is running. The camera's own mic is not used.</p>
+            <label class="check"><input id="vision-consent" type="checkbox"><span>Allow selected camera snapshots and recent transcript to be sent to Google for visual help. Everyone in view agrees.</span></label>
           </div>
               <label class="check"><input id="rec-consent" type="checkbox"><span>Everyone speaking agrees to recording and processing by Deepgram and Google. I can stop at any time.</span></label>
               <label for="capture-identity">Who is speaking?</label>
@@ -124,6 +126,13 @@
             </div>
             <p id="rec-state" class="rec-state" role="status">Not recording.</p>
             <video id="cam-preview" class="cam-preview" muted playsinline hidden></video>
+            <section id="vision-panel" class="card vision-panel" aria-labelledby="vision-heading" hidden>
+              <div class="section-top"><h2 id="vision-heading">What’s in front of you</h2><button type="button" id="vision-check" class="secondary">Check now</button></div>
+              <p id="vision-status" class="caption" role="status">Connect a camera to begin. Visual checks use snapshots, not continuous video.</p>
+              <form id="vision-question-form" class="row tight"><label for="vision-question" class="visually-hidden">Question about the scene</label><input id="vision-question" type="text" maxlength="1500" placeholder="What was I doing? What should I do next?"><button type="submit" class="secondary">Ask about this</button></form>
+              <div id="vision-answer" class="answer" aria-live="polite"><p>Say what you are trying to do. Threadline connects your words with the scene.</p></div>
+              <div id="vision-evidence" class="vision-evidence" aria-label="Snapshots used for this answer"></div>
+            </section>
             <div id="signals" class="signals" hidden aria-label="Band signals">
               <div class="sig"><span class="sig-k">Loudness</span><span class="meter"><span id="sig-loud"></span></span></div>
               <div class="sig"><span class="sig-k">Movement</span><span id="sig-activity" class="sig-v">—</span></div>
