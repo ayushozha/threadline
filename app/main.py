@@ -930,7 +930,9 @@ def sensor_forwarder(pairing: Pairing, device: str) -> Callable[[dict], Awaitabl
         if now - last["at"] < SENSOR_MIN_INTERVAL:
             return False  # too fast: dropped
         last["at"] = now
-        await fanout(pairing, clean_sensors(frame, device))
+        cleaned = clean_sensors(frame, device)
+        await fanout(pairing, cleaned)
+        await demo_feed.publish(pairing, cleaned)
         return True
 
     return forward
@@ -1071,6 +1073,7 @@ async def watch_stream(client: WebSocket):
     if problem := watch_claim.watch_gate(pairing, hello.get("watch_key")):
         return await fail(problem[1])
     watch_claim.touch(pairing)
+    demo_feed.apply(pairing, hello.get("demo_key"))
     source = hello.get("format", "pcm16")
     if source not in {"pcm16", "sensors"}:
         return await fail('Use format "sensors" or "pcm16" (16 kHz mono linear16 PCM).')
@@ -1117,9 +1120,10 @@ async def watch_stream(client: WebSocket):
 
 @app.post("/api/watch/sensors")
 async def watch_sensors(request: Request, x_watch_code: str = Header(default=""), x_watch_device: str = Header(default=""),
-                       x_watch_key: str = Header(default="")):
+                       x_watch_key: str = Header(default=""), x_demo_key: str = Header(default="")):
     """HTTP form of a sensors frame for real watches (no WebSocket). A watch that stops posting is reported gone."""
     pairing = watch_claim.require_watch(x_watch_code, x_watch_key)
+    demo_feed.apply(pairing, x_demo_key)
     body = await request.body()
     if len(body) > 4096:
         raise HTTPException(413, "Sensor frame too large.")
@@ -1269,4 +1273,6 @@ async def index():
 from app import watch_claim  # noqa: E402  (device-code pairing; imports this module)
 
 app.include_router(watch_claim.router)
+from app import demo_feed  # noqa: E402  (public demo feed; imports this module)
+app.include_router(demo_feed.router)
 app.mount("/static", StaticFiles(directory=ROOT / "static", check_dir=False), name="static")

@@ -163,6 +163,13 @@ private struct StreamContent: View {
                 Toggle("Record audio too", isOn: $session.recordAudio)
                     .disabled(session.isStreaming)
 
+                if !AppConfig.demoKey.isEmpty {
+                    Toggle("Share on the public demo", isOn: $session.shareDemo)
+                        .disabled(session.isStreaming)
+                    Text("Your live readings appear on threadline.ayushojha.com for anyone viewing the demo.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+
                 Toggle("Share cycle dates", isOn: $session.shareCycle)
                     .onChange(of: session.shareCycle) { _, _ in session.shareCycleChanged() }
                 Text(session.cycleNote ?? "Off by default. When on, sends the first day of each period you logged in Health (last 12 months) to your page. No flow levels, no predictions.")

@@ -22,4 +22,10 @@ enum AppConfig {
         let configured = (Bundle.main.object(forInfoDictionaryKey: "ThreadlineDefaultServer") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
         return configured.isEmpty || configured.contains("$(") ? "https://threadline.ayushojha.com" : configured
     }()
+
+    /// Public demo key from the THREADLINE_DEMO_KEY build setting; empty for normal builds (no demo toggle).
+    static let demoKey: String = {
+        let configured = (Bundle.main.object(forInfoDictionaryKey: "ThreadlineDemoKey") as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
+        return configured.contains("$(") ? "" : configured
+    }()
 }

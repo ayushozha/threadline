@@ -18,6 +18,8 @@ final class StreamSession: ObservableObject {
     @Published var lines: [String] = []
     @Published var interim = ""
     @Published var shareCycle = false  // explicit opt-in, off every launch
+    @Published var shareDemo = !AppConfig.demoKey.isEmpty  // demo builds only: publish readings to the public demo
+    private var demoKey: String? { shareDemo && !AppConfig.demoKey.isEmpty ? AppConfig.demoKey : nil }
     @Published var cycleNote: String?
     @Published var hapticReason: String?
     @Published var moodRequest: MoodRequest?  // shown as "Save this mood to Apple Health?"
@@ -295,6 +297,7 @@ final class StreamSession: ObservableObject {
         task.resume()
         var hello = ["code": code, "device": device, "format": recordAudio ? "pcm16" : "sensors"]
         if !watchKey.isEmpty { hello["watch_key"] = watchKey }
+        if let demoKey { hello["demo_key"] = demoKey }
         if let data = try? JSONSerialization.data(withJSONObject: hello), let text = String(data: data, encoding: .utf8) {
             task.send(.string(text)) { _ in }
         }
@@ -370,6 +373,7 @@ final class StreamSession: ObservableObject {
         request.httpMethod = "POST"
         request.setValue(code, forHTTPHeaderField: "X-Watch-Code")
         if !watchKey.isEmpty { request.setValue(watchKey, forHTTPHeaderField: "X-Watch-Key") }
+        if path == "/api/watch/sensors", let demoKey { request.setValue(demoKey, forHTTPHeaderField: "X-Demo-Key") }
         request.setValue(device, forHTTPHeaderField: "X-Watch-Device")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body

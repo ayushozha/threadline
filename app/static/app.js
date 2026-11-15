@@ -357,7 +357,7 @@ function chooseBand(number, remember = true) {
   $("pick-number").value = String(number).padStart(2, "0");
   if (remember) rememberBand(number);
   const url = new URL(location.href); url.searchParams.set("band", String(number).padStart(2, "0")); history.replaceState(null, "", url);
-  loadThread(`band-${number}`); render(); renderProfile(); setTimeout(resumeWatch, 0);
+  loadThread(`band-${number}`); render(); renderProfile(); setTimeout(() => { resumeWatch(); if (demoWanted()) startDemoFeed(); else stopDemoFeed(); }, 0);
   renderPair(); renderArchive(); bandStatus("");
 }
 $("pick-form").addEventListener("submit", (e) => {
@@ -1064,14 +1064,7 @@ async function openWatchFeed(token) {
       watchState("connected", `${watch.device} · connected`); watchMsg("Connected. Readings stream from the watch.");
       $("watch-code-box").hidden = true; watch.owningLive = false;
     } else if (msg.type === "sensors") {
-      watch.sensors = msg; watch.sensorsAt = Date.now(); $("watch-sensors").hidden = false;
-      const rec = dayRec();
-      if (msg.heart_rate != null) { const h = Math.round(msg.heart_rate); rec.hrSum += h; rec.hrN += 1; rec.hrMin = rec.hrMin == null ? h : Math.min(rec.hrMin, h); rec.hrMax = rec.hrMax == null ? h : Math.max(rec.hrMax, h); }
-      if (msg.steps != null) rec.watchSteps = Math.max(rec.watchSteps ?? 0, msg.steps);
-      if (!watch.lastDaysRender || Date.now() - watch.lastDaysRender > 5000) { watch.lastDaysRender = Date.now(); renderDays(); renderEnergy(); }
-      if (msg.heart_rate != null) $("ws-hr").textContent = `${Math.round(msg.heart_rate)} bpm`;
-      if (msg.steps != null) $("ws-steps").textContent = String(msg.steps);
-      if (msg.activity) $("ws-activity").textContent = msg.activity;
+      applyWatchSensors(msg);
     } else if (msg.type === "cycle") {
       let added = 0;
       for (const d of msg.period_starts || []) if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !life.cycle.starts.some((x) => x.date === d)) { life.cycle.starts.push({ date: d, source: "health" }); added += 1; }
@@ -1106,7 +1099,7 @@ function finishWatchSession() {
   openReview(segmentsFromWords(finals.flatMap((f) => f.words), finals.map((f) => f.transcript).join(" ")), "watch", watch.startedAt || new Date(), `${watch.device} · Deepgram live transcript. Speaker labels separate voices; they do not prove identity.`);
   recState("Watch recording ended. Review below: choose which speaker is you before anything is saved.");
 }
-$("watch-unpair").addEventListener("click", () => { rememberWatch(null); const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
+$("watch-unpair").addEventListener("click", () => { rememberWatch(null); setTimeout(startDemoFeed, 500); const ws = watch.ws; watch.ws = null; ws?.close(); finishWatchSession(); watchState("idle", "Not paired"); watchMsg("Unpaired."); $("watch-pair-btn").hidden = true;  /* page-started codes need operator access; guests pair from the watch */ $("watch-unpair").hidden = true; $("watch-code-box").hidden = true; $("watch-claim-form").hidden = false; });
 
 
 /* Camera choice: any camera the browser sees, e.g. "GoPro Webcam" from the GoPro Webcam app. Video only. */
@@ -1580,7 +1573,7 @@ $("watch-claim-form").addEventListener("submit", async (e) => {
   try {
     const data = await request("/api/watch/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
     watch.code = code; watch.device = data.device || "Apple Watch";
-    rememberWatch({ code, device: watch.device, at: new Date().toISOString() });
+    rememberWatch({ code, device: watch.device, at: new Date().toISOString() }); stopDemoFeed();
     $("watch-claim-form").hidden = true; $("watch-pair-btn").hidden = true; $("watch-unpair").hidden = false;
     watchState("busy", `${watch.device} · paired, waiting for readings`); watchMsg("Paired. Your watch shows Paired ✓ and starts sending readings.");
     if (typeof logAction === "function") logAction(`Paired ${watch.device}`);
@@ -1621,6 +1614,43 @@ function resumeWatch() {
   watchState("busy", `${watch.device} · reconnecting`);
   openWatchFeed("");
 }
+
+
+/* One place that applies a watch reading to the page (your own paired watch, or the public demo). */
+function applyWatchSensors(msg) {
+  watch.sensors = msg; watch.sensorsAt = Date.now(); $("watch-sensors").hidden = false;
+  const rec = dayRec();
+  if (msg.heart_rate != null) { const h = Math.round(msg.heart_rate); rec.hrSum += h; rec.hrN += 1; rec.hrMin = rec.hrMin == null ? h : Math.min(rec.hrMin, h); rec.hrMax = rec.hrMax == null ? h : Math.max(rec.hrMax, h); }
+  if (msg.steps != null) rec.watchSteps = Math.max(rec.watchSteps ?? 0, msg.steps);
+  if (!watch.lastDaysRender || Date.now() - watch.lastDaysRender > 5000) { watch.lastDaysRender = Date.now(); renderDays(); renderEnergy(); }
+  if (msg.heart_rate != null) $("ws-hr").textContent = `${Math.round(msg.heart_rate)} bpm`;
+  if (msg.steps != null) $("ws-steps").textContent = String(msg.steps);
+  if (msg.activity) $("ws-activity").textContent = msg.activity;
+}
+
+/* ---------- Public demo: the default profile shows the demo owner's live watch readings ---------- */
+const demo = { ws: null, live: false, device: null, retry: 0 };
+function demoWanted() { return isDefaultProfile() && !savedWatch() && !watch.ws; }
+function startDemoFeed() {
+  if (!demoWanted() || demo.ws) return;
+  let ws;
+  try { ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/demo/feed`); } catch { return; }
+  demo.ws = ws;
+  ws.onmessage = (event) => {
+    let msg; try { msg = JSON.parse(event.data); } catch { return; }
+    if (msg.type === "demo_status") {
+      demo.live = Boolean(msg.live); demo.device = msg.device || demo.device;
+      if (msg.last) applyWatchSensors(msg.last);
+      if (demoWanted()) watchState(demo.live ? "connected" : "idle", demo.live ? `Demo owner's ${demo.device || "Apple Watch"} · live` : "Demo owner's watch · offline");
+      if (demoWanted()) watchMsg(demo.live ? "You're seeing the demo owner's live readings, shared on purpose. Pair your own watch to see yours." : "The demo owner's watch isn't streaming right now.");
+    } else if (msg.type === "sensors" && demoWanted()) {
+      applyWatchSensors(msg);
+      if (!demo.live) { demo.live = true; watchState("connected", `Demo owner's ${msg.device || "Apple Watch"} · live`); }
+    }
+  };
+  ws.onclose = () => { if (demo.ws === ws) { demo.ws = null; if (demoWanted() && demo.retry++ < 20) setTimeout(startDemoFeed, 3000); } };
+}
+function stopDemoFeed() { const ws = demo.ws; demo.ws = null; try { ws?.close(); } catch { /* closed */ } }
 
 render();
 showView(location.hash.slice(1) || "live");
