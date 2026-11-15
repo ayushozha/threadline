@@ -29,7 +29,7 @@ test('recorded and fictional transcript counts retain their provenance', () => {
   ] });
   assert.deepEqual(model.insights.map(x => [x.big, x.text]), [
     ['1', 'saved transcript lines · recorded or imported'],
-    ['2', 'fictional dialogue lines · demonstration only'],
+    ['2', 'example conversation lines'],
   ]);
 });
 

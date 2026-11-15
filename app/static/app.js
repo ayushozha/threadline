@@ -2,7 +2,7 @@
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
-import { sampleSeed, DEMO_QUESTIONS } from './sample-data.mjs';
+import { sampleSeed, seedForApp, DEMO_QUESTIONS } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
 import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
@@ -22,6 +22,9 @@ const demoSeed = () => {
   if (!seedCache || seedCache.mode !== accessMode || seedCache.day !== day) seedCache = { mode: accessMode, day, value: sampleSeed(new Date(), accessMode) };
   return seedCache.value;
 };
+let appSeedCache;
+const appSeed = () => appSeedCache ||= seedForApp(new Date());
+const contextNotes = (notes = sessions[mode].notes) => notes.filter(n => !n.sample || n.exampleMode === accessMode);
 const HOUR = 3600000, DAY = 24 * HOUR;
 const ago = (days, hour = 20, minute = 0) => { const d = new Date(Date.now() - days * DAY); d.setHours(hour, minute, 0, 0); return d.toISOString(); };
 const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -29,7 +32,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const fmtWhen = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 const fmtClock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
-const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", fictional: "Fictional demo" };
+const SOURCE_LABELS = { typed: "Typed", vexo: "Vexo band · reviewed", watch: "Apple Watch · reviewed", mic: "Browser mic · reviewed", upload: "Audio file · reviewed", fictional: "Example", seeded: "Example" };
 
 const MODES = {
   reflection: { description: "Personal reflection: keep your own words with their source, revisit them later, and get only the support you chose. Cycle timing is optional self-reported context — never a cause, diagnosis, or judgment." },
@@ -68,11 +71,21 @@ function loadThread(key) {
   life.taskDrafts = saved?.taskDrafts || [];
   threadLoaded = true;
   if (!isFictionalDemo()) {
-    for (const m of ["reflection", "routine"]) sessions[m].notes = sessions[m].notes.filter(n => !n.sample);
+    for (const m of ["reflection", "routine"]) sessions[m].notes = sessions[m].notes.filter(n => !n.sample || n.seeded);
     for (const field of ["tasks", "taskDrafts", "energyLog", "actions"]) life[field] = life[field].filter(x => !x.sample);
     if (life.energy?.sample) life.energy = null;
     for (const [day, rec] of Object.entries(life.days)) if (rec.sample) delete life.days[day];
-    saveArchive(loadArchive().filter(x => !x.sample));
+    saveArchive(loadArchive().filter(x => !x.sample || x.seeded));
+    if (!saved?.seedVersion) {
+      const seed = appSeed();
+      for (const m of ["reflection", "routine"]) {
+        const ids = new Set(sessions[m].notes.map(n => n.id));
+        sessions[m].notes.push(...seed.notes.filter(n => !ids.has(n.id)).map(n => ({ ...n })));
+      }
+      const archive = loadArchive(), ids = new Set(archive.map(x => x.id));
+      saveArchive([...archive, ...seed.archive.filter(x => !ids.has(x.id))]);
+      saveThread();
+    }
   }
   renderSampleBanner();
 }
@@ -83,9 +96,10 @@ function processingConsent() { return isFictionalDemo() ? $("sample-consent").ch
 function renderSampleBanner() {
   const active = isFictionalDemo();
   if (active) $("care-band-transcript").hidden = true;
-  $("sample-banner").hidden = !active;
-  $("sample-load").hidden = active;
-  $("sample-exit").hidden = !active;
+  $("sample-banner").hidden = true;
+  $("sample-load").hidden = true;
+  $("sample-exit").hidden = true;
+  $("seed-notice").hidden = !sessions.reflection.notes.some(n => n.seeded);
 }
 function loadSample() {
   if (busy || capture.active || care.ws || lh.ws || watch.owningLive) return message("Stop the live session before opening fictional history.", true);
@@ -125,7 +139,7 @@ function renderAccessMode() {
   $('sample-load').textContent = `Load fictional ${accessInfo().label} demo`;
   $('care-live-h').textContent = `${accessInfo().label} · live assistance`;
   $('hearing-screen').hidden = accessMode !== 'hearing';
-  $('caption-demo').hidden = !isFictionalDemo();
+  $('caption-demo').hidden = !contextNotes().some(n => n.sample);
   $('hearing-name').value = localStorage.getItem(`threadline.caption-name.${realThreadKey()}`) || '';
   care.muted = accessMode === 'hearing'; lh.muted = care.muted; $('care-mute').checked = care.muted;
 }
@@ -138,7 +152,7 @@ function selectAccessMode(value) {
   try { localStorage.setItem(`threadline.access-mode.${realThreadKey()}`, value); } catch { /* optional persistence */ }
   $('care-consent').checked = false; $('lh-consent').checked = false;
   care.history = []; $('care-history').replaceChildren(); $('assistance-panel').hidden = true;
-  renderAccessMode(); if (demo) loadSample();
+  renderAccessMode(); if (demo) loadSample(); else { render(); scheduleGraph(0); }
   drawDashboard();
 }
 document.querySelectorAll('[data-access-mode]').forEach(b => b.addEventListener('click', () => selectAccessMode(b.dataset.accessMode)));
@@ -159,13 +173,13 @@ function renderHearingCaption(text, final, speaker = null) {
   }
 }
 $('caption-demo').addEventListener('click', async () => {
-  if (!isFictionalDemo() || accessMode !== 'hearing') return;
+  if (!contextNotes().some(n => n.sample) || accessMode !== 'hearing') return;
   const scope = workspaceVersion;
   $('caption-demo').disabled = true; $('caption-history').replaceChildren();
   for (const line of demoSeed().archive[0].lines) {
     if (scope !== workspaceVersion) break;
     renderHearingCaption(line.text, true, line.speakers[0]);
-    $('caption-status').textContent = 'Fictional transcript playback · not a live microphone';
+    $('caption-status').textContent = 'Example conversation playback · not a live microphone';
     await new Promise(resolve => setTimeout(resolve, 900));
   }
   $('caption-demo').disabled = false;
@@ -195,8 +209,10 @@ const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -
 function drawDashboard() {
   try { rebuildMood(); } catch { /* not ready */ }
   try {
-    renderDashboard($("dashboard"), { health: isFictionalDemo() ? demoSeed().demoHealth : healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
-      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: isFictionalDemo() });
+    const health = chartHealth();
+    renderDashboard($("dashboard"), { health, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
+      transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? `${demoSeed().persona} · fictional demo` : "Your person", accessMode, synthetic: Object.values(health).some(d => d.sample) });
+    const count = $("memory-count"); if (count) count.textContent = `${sessions.reflection.notes.length} notes · ${loadArchive().length} conversations`;
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
 window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); if (location.hash === "#tasks") renderTasks(); });
@@ -273,7 +289,13 @@ const HEALTH_COLS = [
   ["mindful_min", "Mindful (min)", r0], ["workouts", "Workouts", (v, h) => `${h.workout_count ?? 1} · ${Math.round(v)} min`], ["mood", "Logged mood (valence)", (v) => v.toFixed(2)],
 ];
 function healthOn() { return !isFictionalDemo() && (isDefaultProfile() || !configuredBand); }
-function hDay(key) { return isFictionalDemo() ? demoSeed().demoHealth[key] || null : healthOn() ? ownerHealth.byDay[key] || null : null; }
+function chartHealth() {
+  if (isFictionalDemo()) return demoSeed().demoHealth;
+  const result = { ...appSeed().demoHealth };
+  if (healthOn()) for (const [day, actual] of Object.entries(ownerHealth.byDay)) result[day] = { ...actual, sample: false };
+  return result;
+}
+function hDay(key) { return chartHealth()[key] || null; }
 function hLatest() { return healthOn() ? ownerHealth.latest : null; }
 async function loadOwnerHealth() {
   try {
@@ -302,6 +324,7 @@ function saveThread() {
       routine: { notes: sessions.routine.notes }, events: agent.events,
       days: life.days, cycle: life.cycle, energyWords: life.energyWords,
       positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, taskDrafts: life.taskDrafts, energyLog: life.energyLog, actions: life.actions, checkins: life.checkins, voice: life.voice,
+      seedVersion: isFictionalDemo() ? null : appSeed().version,
     }));
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
@@ -362,14 +385,14 @@ function renderTimeline() {
   const session = sessions[mode];
   if (typeof scheduleGraph === "function") scheduleGraph();
   rebuildWordRecords(); saveThread(); renderEnergy(); renderDays(); renderToday(); scheduleDaySummary();
-  $("sample-label").textContent = isFictionalDemo() ? "Fictional Meera history · written demo, not recorded speech or clinical data." : `Your statements only — stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Nothing is stored on the server.`;
+  $("sample-label").textContent = `Saved conversations and example history · stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Select a source to see its context.`;
   $("timeline").replaceChildren();
-  for (const note of session.notes) {
+  for (const note of contextNotes(session.notes)) {
     const time = el("time", { dateTime: note.at, textContent: fmtWhen(note.at) }, el("span", { className: "note-id", textContent: note.id }));
     const badge = el("span", { className: `badge ${note.source}`, textContent: SOURCE_LABELS[note.source] || note.source });
     const text = el("p", { textContent: note.text });
     const li = el("li", { id: `note-${note.id}` }, time, el("div", { className: "meta" }, badge, el("span", { className: "speaker", textContent: note.speaker ? note.speaker : "Speaker: you" })), text);
-    if (note.context) li.append(el("p", { className: "context", textContent: note.context }));
+    if (note.context) li.append(el("p", { className: "context", textContent: note.context.replace(/^Seeded /, "Example · ") }));
     {
       const edit = el("button", { type: "button", className: "text-button", textContent: "Correct" });
       const del = el("button", { type: "button", className: "text-button", textContent: "Delete" });
@@ -1187,7 +1210,7 @@ $("clear").addEventListener("click", () => {
   render(); showAnswer("Your session notes have been cleared."); message("Fresh session · no saved notes");
 });
 $("question-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); const question = $("question").value.trim(), notes = sessions[mode].notes;
+  event.preventDefault(); const question = $("question").value.trim(), notes = contextNotes();
   if (busy || !question) return;
   if (!notes.length) return message("Add a note before asking a question.", true);
   if (!service.reflection || !processingConsent()) {
@@ -1251,7 +1274,7 @@ async function stopSignals() {
 const archiveKey = () => `threadline.transcripts.v1.${threadKey || realThreadKey()}`;
 function loadArchive() { try { return JSON.parse(localStorage.getItem(archiveKey()) || "[]"); } catch { return []; } }
 function saveArchive(list) { try { localStorage.setItem(archiveKey(), JSON.stringify(list.slice(0, 50))); return true; } catch { return false; } }
-function transcriptProviders(lines) { return [...new Set(lines.map(l => l.provider === "fictional" ? "Written fictional dialogue" : l.provider === "gemini" ? "Gemini recovery" : "Deepgram"))].join(" + "); }
+function transcriptProviders(lines) { return [...new Set(lines.map(l => ["fictional", "seeded"].includes(l.provider) ? "Example dialogue" : l.provider === "gemini" ? "Gemini recovery" : "Deepgram"))].join(" + "); }
 function archiveSession(finals, meta) {
   const lines = finals.map((f) => {
     const speakers = [...new Set(f.words.map((w) => w.speaker).filter((s) => s != null))];
@@ -1265,7 +1288,7 @@ function archiveSession(finals, meta) {
 }
 function renderArchive() {
   const list = loadArchive(), box = $("archive"), q = ($("archive-search")?.value || "").trim().toLowerCase();
-  $("archive-caption").textContent = `Every captured session's full transcript${bandNumber ? ` for ${bandLabel()}` : ""}, stored in this browser only. Nothing is stored on the server.`;
+  $("archive-caption").textContent = `Saved conversations${bandNumber ? ` for ${bandLabel()}` : ""} · examples retain their source. Stored in this browser.`;
   const shown = q ? list.filter((e) => e.lines.some((l) => l.text.toLowerCase().includes(q))) : list;
   box.replaceChildren();
   if (!shown.length) { box.append(el("li", { className: "empty", textContent: q ? "No session mentions that." : "No transcripts yet. Start a live capture." })); $("archive-detail").replaceChildren(el("p", { className: "caption", textContent: list.length ? "Choose a session to read its transcript." : "Transcripts appear here after a live session." })); return; }
@@ -1274,7 +1297,7 @@ function renderArchive() {
     const mins = Math.max(1, Math.round((new Date(entry.endedAt) - new Date(entry.startedAt)) / 60000));
     const a = el("button", { type: "button", className: `session${entry.id === archiveSel ? " current" : ""}`, "aria-pressed": String(entry.id === archiveSel) },
       el("span", { className: "s-top" }, el("b", { textContent: new Date(entry.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) }), entry.marks ? el("span", { className: "s-star", textContent: `★ ${entry.marks}` }) : null),
-      el("span", { className: "caption", textContent: `${entry.sample ? "Fictional · " : ""}${entry.title || entry.device} · ${mins} min · ${entry.lines.length} lines` }));
+      el("span", { className: "caption", textContent: `${entry.sample ? "Example · " : ""}${entry.title || entry.device} · ${mins} min · ${entry.lines.length} lines` }));
     a.addEventListener("click", () => { archiveSel = entry.id; renderArchive(); });
     box.append(el("li", {}, a));
   }
@@ -1306,13 +1329,12 @@ const graph = { timer: 0, version: 0, data: null, selected: null, signature: "" 
 const TYPE_COLORS = { person: "#0E7C86", feeling: "#E8452C", time: "#D99A1E", place: "#6B5BD6", commitment: "#16161A", preference: "#3B4BDB", topic: "#8A8A92" };
 function graphEngine() { return service.reflection && processingConsent() ? "gemini" : "local"; }
 function scheduleGraph(delay = 8000) {
-  if (mode !== "reflection") { $("graph-panel").hidden = true; return; }
   $("graph-panel").hidden = false;
   if (graph.timer && delay) return;
   clearTimeout(graph.timer); graph.timer = setTimeout(() => { graph.timer = 0; buildGraph(); }, delay);
 }
 async function buildGraph() {
-  const notes = sessions.reflection.notes.slice(-60).map(({ id, text, at, source, context }) => ({ id, text, at, source, context, speaker: "me", device: source === "vexo" && bandNumber ? bandLabel() : "" }));
+  const notes = contextNotes(sessions.reflection.notes).slice(-60).map(({ id, text, at, source, context, speaker }) => ({ id, text, at, source, context, speaker: speaker || "me", device: source === "vexo" && bandNumber ? bandLabel() : "" }));
   const engine = graphEngine(), signature = engine + "|" + notes.map((n) => n.id + n.text).join("|");
   const version = ++graph.version, scope = workspaceVersion;
   if (!notes.length) { graph.data = null; graph.signature = ""; drawGraph(); $("graph-status").textContent = "No saved statements yet"; return; }
@@ -1335,14 +1357,15 @@ function memoryData() {
   const N = new Map(), E = [], seen = new Set();
   const add = (id, label, type, weight = 1, extra = {}) => { if (!N.has(id)) N.set(id, { id, label, type, weight, ...extra }); else N.get(id).weight += weight; return id; };
   const link = (a, b) => { if (!a || !b || a === b) return; const k = a < b ? a + "|" + b : b + "|" + a; if (!seen.has(k)) { seen.add(k); E.push({ source: a, target: b }); } };
-  const self = add("self", isFictionalDemo() ? demoSeed().persona : "You", "self", 8), gd = graph.data;
+  const self = add("self", "Your memory", "self", 8), gd = graph.data;
   if (gd) { for (const n of gd.nodes) add(n.id, n.label, TYPE_STYLE[n.type] ? n.type : "topic", n.weight || 1, { sources: n.sources }); for (const e of gd.edges) link(e.source, e.target);
     for (const n of gd.nodes) if (n.weight >= 2 || ["person", "place"].includes(n.type)) link(self, n.id); }
-  for (const note of sessions.reflection.notes.slice(-80)) {
+  for (const note of contextNotes(sessions.reflection.notes).slice(-80)) {
     const id = add(`note:${note.id}`, note.text, "note", 1, { note });
+    if (note.sample && note.speaker) { const p = add(`example-person:${note.speaker}`, note.speaker, "person", 2); link(id, p); }
     const refs = gd ? gd.nodes.filter((n) => n.sources?.includes(note.id)) : []; refs.forEach((r) => link(id, r.id)); if (!refs.length) link(id, self);
   }
-  for (const t of loadArchive().slice(0, 15)) {
+  for (const t of loadArchive().filter(t => !t.sample || t.exampleMode === accessMode).slice(0, 20)) {
     const cid = add(`conv:${t.id}`, `Conversation · ${new Date(t.startedAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "conversation", 1, { conv: t }); link(cid, self);
     const names = new Set();
     for (const l of t.lines) for (const sent of l.text.split(/[.?!]\s+/)) sent.split(/\s+/).slice(1).forEach((w) => { const m = w.replace(/[^A-Za-z']/g, "").replace(/'s$/, ""); if (/^[A-Z][a-z]{2,}$/.test(m) && !NAME_STOP.has(m)) names.add(m); });
@@ -1528,7 +1551,7 @@ const parseDay = (s) => new Date(`${s}T12:00:00`);
 function renderDays() {
   if (!$("days-body")) return;
   try { rebuildMood(); } catch { /* not ready */ }
-  $("days-panel").hidden = mode !== "reflection";
+  $("days-panel").hidden = false;
   $("energy-words").value = life.energyWords;
   const rows = [];
   // Columns come from the data: every metric found in the Health history gets its own column automatically.
@@ -1554,7 +1577,7 @@ function renderDays() {
   const summary = $("days-summary");
   if (summary) summary.replaceChildren(...headline.map((m) => { const c = cols.find((x) => x[0] === m), st = stats[m], today = hDay(keys[0])?.[m];
     return el("article", { className: `dl-card ${tone(m, today)}` }, el("small", { textContent: c[1] }), el("b", { textContent: today != null ? c[2](today, hDay(keys[0])) : "—" }),
-      el("span", { className: "dl-avg", textContent: `30-day avg ${c[2](st.mean, {})} · ${c[2](st.min, {})}–${c[2](st.max, {})}` }), sparkSvg(st.series)); }));
+      el("span", { className: "dl-avg", textContent: `${Object.values(chartHealth()).some(d => d.sample) ? "Includes examples · " : ""}30-day avg ${c[2](st.mean, {})} · ${c[2](st.min, {})}–${c[2](st.max, {})}` }), sparkSvg(st.series)); }));
   const groups = []; for (const c of cols) { const g = GROUP[c[0]] || "Other"; if (groups.at(-1)?.g === g) groups.at(-1).n += 1; else groups.push({ g, n: 1 }); }
   const lead = 1 + (hasConv ? 1 : 0) + (hasMood ? 3 : 0);
   $("days-head").replaceChildren(
@@ -1572,10 +1595,10 @@ function renderDays() {
     rows.push(el("tr", { className: `${i === 0 ? "dl-today" : ""}${weekend ? " dl-weekend" : ""}` }, el("th", { scope: "row", textContent: label }),
       hasConv ? el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)} lines` : "—" }) : null,
       ...(hasMood ? [el("td", { textContent: moodOf(key) ? `${moodOf(key).morningLabel} / ${moodOf(key).eveningLabel}` : "—" }), el("td", { textContent: moodOf(key) ? ["none", "mild", "moderate", "severe"][moodOf(key).agitation] : "—" }), el("td", { textContent: moodOf(key) ? String(moodOf(key).repeats) : "—" })] : []),
-      ...cols.map(([m, , f]) => el("td", { className: tone(m, h[m]), textContent: fmt(m, f) })),
+      ...cols.map(([m, , f]) => el("td", { className: tone(m, h[m]), textContent: fmt(m, f), title: h.sample ? "Example value — not a device reading" : "Recorded Health value" })),
       present.has("workout_types") ? el("td", { className: "dl-wrap", textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)}m`).join(", ") : "—" }) : null));
   }
-  $("days-status").textContent = isFictionalDemo() ? "14 days of synthetic chart examples; not recorded health data." : ownerHealth.days ? `Auto-logged · ${filled}/${DAYS} days · ${cols.length} metrics · ${ownerHealth.days} days of history` : "Waiting for Health data…";
+  $("days-status").textContent = `${filled}/${DAYS} days · ${cols.length} metrics${Object.values(chartHealth()).some(d => d.sample) ? " · includes example values" : ""}${ownerHealth.days ? ` · ${ownerHealth.days} days of Health history` : ""}`;
   $("days-body").replaceChildren(...rows);
   saveThread();
 }
@@ -1593,7 +1616,7 @@ $("day-summary").addEventListener("click", () => summarizeToday());
 async function summarizeToday() {
   if (daySummary.running) { scheduleDaySummary(); return; }
   const key = todayKey(), r = life.days[key];
-  const notes = sessions.reflection.notes.filter((n) => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context }));
+  const notes = contextNotes(sessions.reflection.notes).filter((n) => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context }));
   const outputs = [$("today-summary-out"), $("day-summary-out")];
   const signature = JSON.stringify(notes), scope = workspaceVersion;
   if (!notes.length) { for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "caption", textContent: "Your summary will update automatically as your words are saved." })); } daySummary.signature = signature; return; }
@@ -1665,7 +1688,7 @@ function agentPayload(statement) {
   const r = life.days[todayKey()];
   return {
     statement,
-    recent: sessions.reflection.notes.filter((n) => n.id !== statement.id).slice(-20).map(({ id, text, at }) => ({ id, text, at })),
+    recent: contextNotes(sessions.reflection.notes).filter((n) => n.id !== statement.id).slice(-20).map(({ id, text, at, source, context, speaker }) => ({ id, text: source === "seeded" ? `[Example ${speaker || "conversation"}] ${text}` : text, at })),
     preferences: sessions.reflection.prefs.slice(-20).map(({ id, text, triggers, action }) => ({ id, text, triggers, action })),
     today: { low_energy_words: r?.energy.length || 0, lines_from_others: r?.others || 0, steps: r?.watchSteps ?? (r?.bandSteps || null), heart_rate_avg: r?.hrN ? Math.round(r.hrSum / r.hrN) : null,
       hrv_sdnn_ms: watch.sensors?.hrv_sdnn_ms ?? null, resting_hr: watch.sensors?.resting_hr ?? null, sleep_hours: watch.sensors?.sleep_hours_last_night ?? null },
@@ -1781,9 +1804,9 @@ function rebuildWordRecords() {
   const notes = sessions.reflection.notes;
   for (const note of notes) {
     const record = dayRec(todayKey(new Date(note.at))); record.mine += 1;
-    if (note.energySignal?.state === "low") record.energy.push({ word: note.energySignal.quote, id: note.id });
+    if (!note.sample && note.energySignal?.state === "low") record.energy.push({ word: note.energySignal.quote, id: note.id });
   }
-  life.energyLog = notes.filter(n => n.energySignal).map(n => ({ id: n.id, at: n.at, state: n.energySignal.state, word: n.energySignal.quote })).sort((a, b) => a.at.localeCompare(b.at));
+  life.energyLog = notes.filter(n => !n.sample && n.energySignal).map(n => ({ id: n.id, at: n.at, state: n.energySignal.state, word: n.energySignal.quote })).sort((a, b) => a.at.localeCompare(b.at));
   const latest = life.energyLog.at(-1);
   life.energy = latest ? { ...latest, text: latest.word } : null;
 }
@@ -2601,8 +2624,8 @@ function renderCareHealth() {
       el("div", { className: "hm-a", textContent: m?.avg != null ? `30-day avg ${careFmt(key, m.avg)}${unit ? ` ${unit}` : ""}` : "No history" })));
   }
   if (!tiles.length) {
-    $("care-health").replaceChildren(el("div", { className: "care-empty-health" }, el("p", { className: "caption", textContent: care.healthError || "Import your Apple Health export to see history." })));
-    $("care-import").open = true;
+    const values = Object.values(appSeed().demoHealth), last = values.at(-1);
+    $("care-health").replaceChildren(el("p", { className: "caption", textContent: "Example history · not device readings" }), ...[["Sleep", `${last.sleep_hours} h`], ["Steps", last.steps], ["Resting HR", `${last.resting_heart_rate} bpm`]].map(([label,value]) => el("div", { className: "hm" }, el("div", { className: "hm-k", textContent: label }), el("div", { className: "hm-v", textContent: String(value) }))));
   } else $("care-health").replaceChildren(...tiles);
   $("care-spark").replaceChildren(...[["Steps", "steps"], ["Sleep", "sleep_hours"], ["Resting HR", "resting_hr"]].map(([t, k]) => careSpark(t, norm[k]?.series || [], k)).filter(Boolean));
 }
@@ -2655,6 +2678,7 @@ function careContext() {
     routine: demoSeed().routine,
   };
   const bandLines = [...document.querySelectorAll("#live-lines li p")].map((p) => p.textContent.trim()).filter(Boolean);
+  const saved = contextNotes(sessions.reflection.notes).filter(n => !n.sample).slice(-10);
   const heard = care.lines.filter((l) => l.kind === "heard").map((l) => `Heard: ${l.text.trim()}`);
   const said = care.lines.filter((l) => l.kind === "said").map((l) => l.text.trim()).filter(Boolean);
   const w = careLiveWatch();
@@ -2663,7 +2687,7 @@ function careContext() {
   const src = { file: "file", upload: "file", files: "file", bridge: "gopro", gopro: "gopro", camera: "camera" }[care.src] || null;
   return {
     mode: accessMode,
-    transcript: [...bandLines, ...heard].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
+    transcript: [...saved.map(n => ({ at: n.at, speaker: n.speaker || "saved", text: n.text.slice(0,500) })), ...[...bandLines, ...heard].slice(-30).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) }))],
     observations: [...said.slice(-19).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
       ...(moodOf(todayKey()) ? [{ at: nowIso, text: `Care log today: mood ${moodOf(todayKey()).morningLabel} in the morning, ${moodOf(todayKey()).eveningLabel} in the evening; evening agitation ${["none", "mild", "moderate", "severe"][moodOf(todayKey()).agitation]}; ${moodOf(todayKey()).repeats} repeated questions; latest weekly CSDD ${ownerMood.weeks.at(-1)?.score ?? "n/a"}.` }] : [])],
     band: { activity: signals.activity || w?.activity || null, steps: Number.isFinite(signals.steps) && signals.steps > 0 ? Math.round(signals.steps) : null, taps_last_10min: care.taps.length, free_fall_last_10min: care.falls.length > 0, connected: Boolean(capture.band) },

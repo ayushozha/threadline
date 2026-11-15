@@ -40,9 +40,9 @@ export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHi
   const recorded = transcripts.filter(t => !t.sample && t.source !== "fictional").reduce((n, t) => n + (t.lines?.length || 0), 0);
   const fictional = transcripts.filter(t => t.sample || t.source === "fictional").reduce((n, t) => n + (t.lines?.length || 0), 0);
   if (recorded) insights.push({ big: String(recorded), text: "saved transcript lines · recorded or imported" });
-  if (fictional) insights.push({ big: String(fictional), text: "fictional dialogue lines · demonstration only" });
+  if (fictional) insights.push({ big: String(fictional), text: "example conversation lines" });
   const healthDays = H.filter(d => Object.values(d).some(v => typeof v === "number")).length;
-  if (healthDays) insights.push({ big: String(healthDays), text: synthetic ? "days of synthetic chart examples · not measurements" : "days with supplied Health measurements" });
+  if (healthDays) insights.push({ big: String(healthDays), text: synthetic ? "days include example chart values" : "days with supplied Health measurements" });
   const latest = careHistory.at(-1);
   if (latest) insights.push({ big: String(careHistory.length), text: "Care assessments in this session · review their evidence" });
   const actions = tasks.filter(t => !t.done).map(t => ({ who: "Caregiver", level: "low", text: `${t.sample || t.source === "fictional" ? "Fictional task: " : "Saved task: "}${t.title}` }));
@@ -94,12 +94,12 @@ export function reportText(m, audience, who = "this person") {
   const arrow = (x) => x.delta == null ? "" : ` (${x.delta >= 0 ? "▲" : "▼"} ${fmt(Math.abs(x.delta) * 100)}% vs prior 3 weeks)`;
   const acts = m.actions.filter((a) => audience === "Doctor" ? a.who === "Doctor" : audience === "Family" ? a.who !== "Doctor" : true).map((a) => `• ${a.text}`);
   const modeName = ACCESS_MODES[m.accessMode]?.label || "Memory";
-  const head = `${m.synthetic ? "FICTIONAL DEMO — SYNTHETIC CHART DATA\n" : ""}Threadline ${modeName} — ${audience === "Doctor" ? "30-day input summary" : audience === "Family" ? "weekly update" : "daily care report"} for ${who}\n${date}\n`;
+  const head = `${m.synthetic ? "INCLUDES EXAMPLE CHART VALUES — NOT DEVICE MEASUREMENTS\n" : ""}Threadline ${modeName} — ${audience === "Doctor" ? "30-day input summary" : audience === "Family" ? "weekly update" : "daily care report"} for ${who}\n${date}\n`;
   const core = [`Sleep ${t.Sleep.value}/night${arrow(t.Sleep)}`, `Steps ${t.Steps.value}/day${arrow(t.Steps)}`, `Mood ${t.Mood.value}${arrow(t.Mood)}`, `Agitated evenings ${t["Agitated evenings"].value} logged`, `Repeated questions ${t["Repeated questions"].value}/day`];
   const clinical = [`Resting HR ${t["Resting HR"].value} bpm${arrow(t["Resting HR"])}`, `HRV ${t.HRV.value} ms${arrow(t.HRV)}`, `SpO₂ ${fmt(avg(m.spo2.slice(-7)), 0)}%`, `Supplied weekly CSDD scores: ${m.weeks.map((w) => w.score).join(" → ") || "not provided"}`];
   const ins = m.insights.map((i) => `• ${i.big} ${i.text}`);
   return [head, "KEY NUMBERS (7-day average)", ...core.map((x) => `• ${x}`), ...(audience !== "Family" ? clinical.map((x) => `• ${x}`) : []), "", "WHAT WE NOTICED", ...ins, "", "ACTION ITEMS", ...acts, "",
-    "Prepared in Threadline from the available inputs. Missing values are shown as —. Fictional dialogue is labeled separately. No diagnosis or completed delivery is implied."].join("\n");
+    "Prepared in Threadline from the available inputs. Missing values are shown as —. Example conversations and chart values retain their source labels. No diagnosis or completed delivery is implied."].join("\n");
 }
 function reportCard(m, audience, icon, blurb, who) {
   const body = reportText(m, audience, who), subject = `Threadline Care — ${audience} report`;
@@ -124,7 +124,7 @@ export function renderDashboard(root, input) {
   const statusWord = { ok: "Last check: no concern flagged", needs_attention: "Last check: needs attention", urgent: "Last check: check in now", unknown: "No assessment yet" }[m.status];
   const today = m.H.at(-1) || {}, tm = m.M.at(-1) || {};
   root.replaceChildren(
-    ...(input.synthetic ? [h("p", {className:"demo-chart-label",textContent:"Fictional demonstration: conversation and chart values are synthetic. They are separate from real captures and are not clinical evidence."})] : []),
+    ...(input.synthetic ? [h("p", {className:"demo-chart-label",textContent:"Includes example chart history. Actual recordings retain their original source; example values are not device measurements."})] : []),
     h("p", {className:"caption",textContent:`${ACCESS_MODES[input.accessMode]?.label || "Memory"} mode · ${ACCESS_MODES[input.accessMode]?.description || ""}`}),
     h("section", { className: `dash-hero s-${m.status}` },
       h("div", {}, h("small", { textContent: new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" }) }),
@@ -137,7 +137,7 @@ export function renderDashboard(root, input) {
       spark(t.spark, t.good === false ? "bad" : "")))),
     h("section", { className: "dash-insights" }, ...m.insights.map((i) => h("div", {}, h("b", { textContent: i.big }), h("span", { textContent: i.text })))),
     h("section", { className: "dash-charts" },
-      frame("Sleep", input.synthetic ? "synthetic hours · 14 days" : "supplied hours · 30 days", barsLine(m.sleep, [])),
+      frame("Sleep", input.synthetic ? "includes example values · 14 days" : "supplied hours · 30 days", barsLine(m.sleep, [])),
       frame("Daily steps", "30 days", barsLine(m.steps, m.moodAvg, { barCls: "b3", lineCls: "l3" })),
       frame("Heart", "resting HR · HRV", twoLines(m.rhr, m.hrv)),
       frame("Mood calendar", "top: morning · bottom: evening", heat(m.M, m.keys)),

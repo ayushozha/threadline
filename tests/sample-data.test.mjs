@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sampleSeed, DEMO_QUESTION, DEMO_QUESTIONS } from '../app/static/sample-data.mjs';
+import { sampleSeed, seedForApp, SEED_VERSION, DEMO_QUESTION, DEMO_QUESTIONS } from '../app/static/sample-data.mjs';
 
 const NOW = new Date('2026-11-14T19:00:00Z');
 const MODES = ['memory', 'sight', 'hearing', 'mobility'];
@@ -45,7 +45,7 @@ test('the repeated question and interrupted plan have dated source evidence, not
   assert.ok(new Date(plan.at) < new Date(interruption.at));
   assert.ok(new Date(interruption.at) < new Date(unknown.at));
   assert.ok(seed.notes.filter(n => n.text === 'Where are my glasses?').length >= 3);
-  assert.ok(seed.notes.some(n => n.text.includes('Ask me first before sending Priya')));
+  assert.ok(seed.notes.some(n => n.text.includes('Ask me first before sending Emma')));
   assert.match(DEMO_QUESTION, /cannot confirm/);
 });
 
@@ -80,4 +80,42 @@ test('caller mutation cannot leak between modes or subsequent loads', () => {
   assert.notEqual(next.notes[0].text, 'changed');
   assert.ok(Object.values(next.demoHealth).every(d => d.steps >= 0));
   assert.throws(() => sampleSeed(NOW, 'invalid'), RangeError);
+});
+
+
+test('regular app seed combines all modes with stable non-colliding IDs and explicit provenance', () => {
+  const seed = seedForApp(NOW);
+  assert.equal(seed.version, SEED_VERSION);
+  assert.equal(seed.archive.length, 19);
+  assert.equal(seed.archive.reduce((n, session) => n + session.lines.length, 0), 111);
+  assert.equal(seed.notes.length, 77);
+  assert.deepEqual([...new Set(seed.notes.map(n => n.exampleMode))].sort(), [...MODES].sort());
+  assert.equal(new Set(seed.notes.map(n => n.id)).size, seed.notes.length);
+  assert.equal(new Set(seed.archive.map(n => n.id)).size, seed.archive.length);
+  assert.ok(seed.notes.every(n => n.source === 'seeded' && n.sample && n.seeded && n.context.includes(`${n.persona} · ${n.exampleMode}`)));
+  assert.ok(seed.archive.every(s => s.source === 'seeded' && s.lines.every(n => n.provider === 'seeded' && n.source === 'seeded' && n.exampleMode === s.exampleMode)));
+  assert.deepEqual(seed.actions, []); assert.deepEqual(seed.tasks, []);
+  assert.equal('answer' in seed, false);
+  assert.equal(Object.keys(seed.demoHealth).length, 14);
+  assert.ok(Object.values(seed.demoHealth).every(d => d.source === 'seeded' && d.seeded && d.provenance.includes('not device measurements')));
+  assert.deepEqual(seed.notes.map(n => n.id), seedForApp(NOW).notes.map(n => n.id));
+  assert.ok(!seed.notes.some(n => sampleSeed(NOW, n.exampleMode).notes.some(example => example.id === n.id)));
+});
+
+test('regular app seed does not share mutable records with later seeds or individual scenarios', () => {
+  const first = seedForApp(NOW), original = seedForApp(NOW);
+  first.notes[0].text = 'edited locally'; first.archive[0].lines[0].text = 'edited transcript';
+  first.demoHealth[Object.keys(first.demoHealth)[0]].steps = 99999;
+  first.questions.memory = 'edited question'; first.routines.memory.push('edited routine');
+  assert.deepEqual(seedForApp(NOW), original);
+});
+
+
+test('regular Memory history uses the chosen Evelyn and Emma names', () => {
+  const seed = seedForApp(NOW);
+  const memory = seed.notes.filter(n => n.exampleMode === 'memory');
+  assert.ok(memory.every(n => n.persona === 'Evelyn' && n.speaker === 'Evelyn'));
+  assert.ok(memory.some(n => n.text.includes('Emma')));
+  assert.ok(memory.every(n => !/Meera|Priya/.test(n.text + n.context)));
+  assert.ok(seed.archive.filter(s => s.exampleMode === 'memory').every(s => s.persona === 'Evelyn'));
 });

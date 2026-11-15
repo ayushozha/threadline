@@ -1,7 +1,7 @@
-// Opt-in fictional conversations for testing grounded assistance, never patient records.
+// Written example conversations for testing grounded assistance, never patient records.
 // Every response is produced by the app from these inputs; no decisions or sensor values are seeded.
 export const DEMO_QUESTIONS = {
-  memory: 'What was Meera doing before the phone call, where were her glasses last mentioned, and what is one small next step? Say what you cannot confirm.',
+  memory: 'What was Evelyn doing before the phone call, where were her glasses last mentioned, and what is one small next step? Say what you cannot confirm.',
   sight: 'What did Ravi ask you to help read, what can you establish from these words alone, and what image or clarification do you need next? Do not invent visible objects or safety guarantees.',
   hearing: 'What did Alex and Sam agree about the delivery and meeting, which name should the captions highlight, and what still needs confirmation?',
   mobility: 'What assistance did Jordan request, who may be contacted with permission, and what is the next small step? Separate reported events from observed facts.',
@@ -9,70 +9,70 @@ export const DEMO_QUESTIONS = {
 export const DEMO_QUESTION = DEMO_QUESTIONS.memory;
 
 const DATA = {
-  memory: { persona: 'Meera', routine: [
-    'Please give me one step at a time.', 'I am going to make tea in my blue mug, then water the plant.', 'Ask me first before sending Priya any update.',
+  memory: { persona: 'Evelyn', routine: [
+    'Please give me one step at a time.', 'I am going to make tea in my blue mug, then water the plant.', 'Ask me first before sending Emma any update.',
   ], scenes: [
-    { day: 6, time: '09:10', title: 'How Meera likes help', lines: [
-      ['Meera', 'Please give me one step at a time. Too many instructions are hard to follow.'],
-      ['Priya', 'Would you like me to call when you ask for company?'],
-      ['Meera', 'Yes. Ask me first before sending Priya any update.'],
-      ['Meera', 'I like tea in the blue mug, sitting by the window.'],
-      ['Priya', 'We can keep the tea tin beside the kettle.'],
-      ['Meera', 'If I ask the same question, please answer calmly without testing me.'],
-      ['Meera', 'Tell me what I said before, but ask if my plan has changed.'],
+    { day: 6, time: '09:10', title: 'How Evelyn likes help', lines: [
+      ['Evelyn', 'Please give me one step at a time. Too many instructions are hard to follow.'],
+      ['Emma', 'Would you like me to call when you ask for company?'],
+      ['Evelyn', 'Yes. Ask me first before sending Emma any update.'],
+      ['Evelyn', 'I like tea in the blue mug, sitting by the window.'],
+      ['Emma', 'We can keep the tea tin beside the kettle.'],
+      ['Evelyn', 'If I ask the same question, please answer calmly without testing me.'],
+      ['Evelyn', 'Tell me what I said before, but ask if my plan has changed.'],
     ] },
     { day: 5, time: '10:20', title: 'A useful place for glasses', lines: [
-      ['Meera', 'I was looking for my reading glasses this morning.'],
-      ['Priya', 'Would a small tray beside the blue mug be a good place?'],
-      ['Meera', 'Yes. I am putting my glasses in the tray by the blue mug now.'],
-      ['Meera', 'Remind me of the tray when I ask where I put them.'],
-      ['Priya', 'A note tells us the last mentioned place, not that they are still there.'],
-      ['Meera', 'Where are my glasses?'],
-      ['Priya', 'You said you placed them in the tray. We can look together.'],
+      ['Evelyn', 'I was looking for my reading glasses this morning.'],
+      ['Emma', 'Would a small tray beside the blue mug be a good place?'],
+      ['Evelyn', 'Yes. I am putting my glasses in the tray by the blue mug now.'],
+      ['Evelyn', 'Remind me of the tray when I ask where I put them.'],
+      ['Emma', 'A note tells us the last mentioned place, not that they are still there.'],
+      ['Evelyn', 'Where are my glasses?'],
+      ['Emma', 'You said you placed them in the tray. We can look together.'],
     ] },
     { day: 4, time: '15:00', title: 'The afternoon plan', lines: [
-      ['Priya', 'I can visit on Saturday at four.'],
-      ['Meera', 'Saturday at four. I would like to make tea when you come.'],
-      ['Meera', 'After tea I want to water the plant by the window.'],
-      ['Priya', 'We can check the soil together first.'],
-      ['Meera', 'Let us do the tea first.'],
-      ['Meera', 'Please do not mark the plant watered just because I said I would do it.'],
+      ['Emma', 'I can visit on Saturday at four.'],
+      ['Evelyn', 'Saturday at four. I would like to make tea when you come.'],
+      ['Evelyn', 'After tea I want to water the plant by the window.'],
+      ['Emma', 'We can check the soil together first.'],
+      ['Evelyn', 'Let us do the tea first.'],
+      ['Evelyn', 'Please do not mark the plant watered just because I said I would do it.'],
     ] },
     { day: 3, time: '11:05', title: 'Pause and resume', lines: [
-      ['Meera', 'I was folding the towels when the doorbell rang.'],
-      ['Priya', 'You said you wanted to put them on the shelf afterward.'],
-      ['Meera', 'That helps. I can return to one thing at a time.'],
-      ['Meera', 'Please ask me if I want help instead of taking over.'],
-      ['Priya', 'Of course. You choose what to do next.'],
-      ['Meera', 'I have folded the towels. I have not put them on the shelf yet.'],
+      ['Evelyn', 'I was folding the towels when the doorbell rang.'],
+      ['Emma', 'You said you wanted to put them on the shelf afterward.'],
+      ['Evelyn', 'That helps. I can return to one thing at a time.'],
+      ['Evelyn', 'Please ask me if I want help instead of taking over.'],
+      ['Emma', 'Of course. You choose what to do next.'],
+      ['Evelyn', 'I have folded the towels. I have not put them on the shelf yet.'],
     ] },
     { day: 2, time: '16:15', title: 'Preferred support', lines: [
-      ['Meera', 'A quiet seat by the window helps me take a break.'],
-      ['Priya', 'Do you want a long list for tomorrow?'],
-      ['Meera', 'No. Show me what I just said I wanted to do.'],
-      ['Meera', 'If we do not know whether I finished, ask me.'],
-      ['Priya', 'We will not mark it done from a plan alone.'],
-      ['Meera', 'I slept poorly last night. I would prefer a quiet afternoon today.'],
-      ['Priya', 'We can remember that preference without predicting how you will feel.'],
+      ['Evelyn', 'A quiet seat by the window helps me take a break.'],
+      ['Emma', 'Do you want a long list for tomorrow?'],
+      ['Evelyn', 'No. Show me what I just said I wanted to do.'],
+      ['Evelyn', 'If we do not know whether I finished, ask me.'],
+      ['Emma', 'We will not mark it done from a plan alone.'],
+      ['Evelyn', 'I slept poorly last night. I would prefer a quiet afternoon today.'],
+      ['Emma', 'We can remember that preference without predicting how you will feel.'],
     ] },
     { day: 1, time: '17:30', title: 'Preparing for a visit', lines: [
-      ['Meera', 'I am looking forward to Priya visiting tomorrow.'],
-      ['Meera', 'I want the blue mug for my tea.'],
-      ['Priya', 'We can talk about the plant when I arrive.'],
-      ['Meera', 'Please keep the glasses tray next to the mug.'],
-      ['Priya', 'All right. I will see you at four.'],
-      ['Meera', 'Where are my glasses?'],
-      ['Priya', 'The last place you mentioned was the tray beside the blue mug.'],
+      ['Evelyn', 'I am looking forward to Emma visiting tomorrow.'],
+      ['Evelyn', 'I want the blue mug for my tea.'],
+      ['Emma', 'We can talk about the plant when I arrive.'],
+      ['Evelyn', 'Please keep the glasses tray next to the mug.'],
+      ['Emma', 'All right. I will see you at four.'],
+      ['Evelyn', 'Where are my glasses?'],
+      ['Emma', 'The last place you mentioned was the tray beside the blue mug.'],
     ] },
     { day: 0, time: '15:45', title: 'The interrupted tea routine', lines: [
-      ['Meera', 'I am going to make tea in my blue mug, then water the plant.'],
-      ['Meera', 'I am putting my reading glasses in the tray beside the blue mug.'],
-      ['Meera', 'The phone is ringing. I will answer it before I start the tea.'],
-      ['Priya', 'Hi Mum, I am on my way. See you soon.'],
-      ['Meera', 'The call has ended. What was I doing before the phone rang?'],
-      ['Meera', 'Where are my glasses?'],
-      ['Meera', 'I do not remember whether I already made the tea. Can you help me with one step?'],
-      ['Meera', 'If you want to tell Priya that I asked for help, show me the message first.'],
+      ['Evelyn', 'I am going to make tea in my blue mug, then water the plant.'],
+      ['Evelyn', 'I am putting my reading glasses in the tray beside the blue mug.'],
+      ['Evelyn', 'The phone is ringing. I will answer it before I start the tea.'],
+      ['Emma', 'Hi Mum, I am on my way. See you soon.'],
+      ['Evelyn', 'The call has ended. What was I doing before the phone rang?'],
+      ['Evelyn', 'Where are my glasses?'],
+      ['Evelyn', 'I do not remember whether I already made the tea. Can you help me with one step?'],
+      ['Evelyn', 'If you want to tell Emma that I asked for help, show me the message first.'],
     ] },
   ] },
   sight: { persona: 'Ravi', routine: [
@@ -204,7 +204,7 @@ export function sampleSeed(now = new Date(), accessMode = 'memory') {
     question: DEMO_QUESTIONS[accessMode], routine: data.routine.map(text => `Fictional ${data.persona} preference: ${text}`) };
 }
 
-// Illustrative chart inputs, stored only in the opt-in fictional workspace.
+// Illustrative chart inputs; callers keep them separate from measured Health data.
 // They are not measurements, clinical scores, or predictions from conversations.
 function syntheticHealth(now) {
   const sleep = [7.2, 6.8, 7.6, 6.4, 7.1, 8.0, 7.5, 6.9, 7.8, 7.3, 6.7, 7.4, 8.1, 7.2];
@@ -218,4 +218,29 @@ function syntheticHealth(now) {
       resting_heart_rate: [64, 66, 63, 67, 65, 62, 64, 66, 63, 65, 67, 64, 62, 65][i],
       hrv_sdnn: [39, 36, 42, 34, 40, 44, 41, 37, 43, 40, 35, 41, 45, 38][i] }];
   }));
+}
+
+// Stable IDs allow the regular app to merge examples without replacing captured or edited items.
+export const SEED_VERSION = 4;
+export function seedForApp(now = new Date()) {
+  const examples = Object.keys(DEMO_QUESTIONS).map(mode => sampleSeed(now, mode));
+  const id = value => value.replace(/^fictional-/, 'seeded-');
+  const archive = examples.flatMap(seed => seed.archive.map(session => ({
+    ...session, id: id(session.id), sample: true, seeded: true, source: 'seeded',
+    exampleMode: seed.mode, persona: seed.persona, device: `${seed.persona} · ${seed.mode}`,
+    lines: session.lines.map(line => ({ ...line, id: id(line.id), sample: true, seeded: true,
+      source: 'seeded', provider: 'seeded', exampleMode: seed.mode, persona: seed.persona })),
+  }))).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || a.id.localeCompare(b.id));
+  const notes = examples.flatMap(seed => seed.notes.map(note => ({
+    ...note, id: id(note.id), sample: true, seeded: true, source: 'seeded',
+    exampleMode: seed.mode, persona: seed.persona,
+    context: `${seed.persona} · ${seed.mode} · ${note.context.split(' · ').slice(1).join(' · ')}`,
+  }))).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
+  const demoHealth = Object.fromEntries(Object.entries(syntheticHealth(now)).map(([day, value]) => [day, {
+    ...value, sample: true, seeded: true, source: 'seeded',
+    provenance: 'Seeded chart illustration — not device measurements',
+  }]));
+  return { version: SEED_VERSION, notes, archive, demoHealth, tasks: [], actions: [],
+    questions: { ...DEMO_QUESTIONS },
+    routines: Object.fromEntries(examples.map(seed => [seed.mode, [...seed.routine]])) };
 }

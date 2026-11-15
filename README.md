@@ -6,7 +6,7 @@
 
 [![Stage: hackathon prototype](https://img.shields.io/badge/stage-hackathon_prototype-52734b)](#status) [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab)](pyproject.toml) [![Hardware: Vexo](https://img.shields.io/badge/hardware-Vexo_band-242424)](#connect-the-hardware)
 
-[![Threadline four-mode concept film](assets/demo/accessibility/poster.jpg)](https://threadline.ayushojha.com/accessibility/)
+[![Threadline four-mode concept film](assets/demo/project/threadline-thumbnail.png)](https://threadline.ayushojha.com/accessibility/)
 
 Voice · visual context · accessible captions · personal memory · assistance drafts
 
@@ -46,8 +46,8 @@ All four use the existing Dashboard, transcript archive, Memory graph, saved not
 ## Try the demo
 
 1. Open the [live site](https://threadline.ayushojha.com/) and choose a support mode.
-2. Select **Load fictional [mode] demo**. This opens a separate workspace, leaving real recordings untouched.
-3. Explore the conversations, Memory graph and Dashboard. Allow fictional-demo processing, then select **Ask Gemini about this example** for a fresh response based on the supplied notes.
+2. Open **Thread**, **Transcripts** or **Memory**. The conversation history is included in the regular app; no separate demo screen is needed.
+3. Explore the conversations, Memory graph and Dashboard. With recording/processing consent, ask a question for a fresh response based on the selected mode’s notes. Examples retain source metadata and never replace recorded data.
 4. Follow its source links. Use **Back to my data** to return to the real workspace.
 
 The four scenarios contain **111 written dialogue lines across 19 conversations**: Memory has 48 lines, and each other mode has 21. Each scenario also supplies 14 days of clearly labeled synthetic chart values. They are illustrative inputs, not patient histories, device measurements or clinical evidence. Decisions and completed actions are not prefilled.
@@ -140,7 +140,7 @@ The principal endpoints are `GET /api/health`, `WS /api/live-transcribe`, `WS /a
 - Sight mode does not recommend a medication dose, replace mobility aids or determine when to cross a street.
 - Consent is required for live guidance. Audio and selected frames go to the configured providers when enabled.
 - Ordinary notes and transcripts are stored in the browser per band. The explicitly published owner's demo stream and imported Health history can use server SQLite. This public prototype is not a multi-user clinical records system.
-- Synthetic mode data stays separate from real captures. Empty data does not imply that someone is safe or unwell.
+- Example history appears alongside real captures with source labels. Example chart days fill missing history; actual Health days replace them entirely. Empty data does not imply that someone is safe or unwell.
 - A message draft, requested watch cue or opened sharing app is not confirmed delivery. Hardware latency, gesture recognition and watch cues require physical testing.
 
 ## Development
@@ -159,7 +159,7 @@ uv run python -m compileall -q app
 node --test tests/access-modes.test.mjs tests/band-capture.test.mjs tests/dashboard.test.mjs tests/sample-data.test.mjs tests/transcript-flow.test.mjs tests/vision.test.mjs
 ```
 
-Preserve consent and authorization boundaries, the official Vexo kit, source labels and separate fictional storage. Keep model selection in environment configuration. Only the authenticated `ayushozha` account may push directly to `main`; other contributors use reviewed pull requests. Never commit private recordings, personal Health data or secrets.
+Preserve consent and authorization boundaries, the official Vexo kit, source labels and the separation of example inputs from real patient assessments. Keep model selection in environment configuration. Only the authenticated `ayushozha` account may push directly to `main`; other contributors use reviewed pull requests. Never commit private recordings, personal Health data or secrets.
 
 ## License
 
