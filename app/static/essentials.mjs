@@ -71,10 +71,19 @@ export function mountEssentials(root, { el, request, contactName, onLog }) {
     summary: () => ({ items: [...cart].map(([id, q]) => ({ id, name: byId(id)?.name, qty: q })), total_usd: total() / 100, stripe_ready: stripe, wallet: wallet ? { saved: wallet.saved, limit_usd: wallet.limit_usd } : null }),
     walletSaved: () => Boolean(wallet?.saved),
     snapshot: () => [...cart].map(([id, qty]) => ({ id, qty })),
-    async buy(lines, approver) {
-      const d = await request("/api/essentials/buy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: lines, confirmed: true, approved_by: approver }) });
-      cart.clear(); render(); onLog?.(`Voice order paid: $${d.amount_usd.toFixed(2)} on ${d.card}`); return d;
+    async buy(lines, approver, requestId) {
+      const d = await request("/api/essentials/buy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: lines, confirmed: true, approved_by: approver, request_id: requestId }) });
+      if (d.status === "succeeded") { cart.clear(); render(); onLog?.(`${d.test_mode ? 'Test payment' : 'Payment'} succeeded: $${d.amount_usd.toFixed(2)} on ${d.card}`); }
+      else onLog?.(`Payment not confirmed: ${d.status || 'unknown status'}. Cart retained.`);
+      return d;
     },
     totalText: () => money(total()),
   };
+}
+
+// Ambiguous speech must never authorize a saved-card payment.
+export function purchaseReply(text) {
+  const value = String(text).normalize('NFKC').trim().toLocaleLowerCase().replace(/[.!?।]+$/u, '').trim();
+  if (/\b(no|not|cancel|stop|wait)\b|don['’]?t|होइन/u.test(value)) return 'cancel';
+  return /^(yes|yeah|yep|sure|confirm|buy it|go ahead|do it|please do|ok|okay|हो|हुन्छ|किन्नुहोस्)$/u.test(value) ? 'confirm' : 'clarify';
 }

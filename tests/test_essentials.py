@@ -54,10 +54,11 @@ def test_voice_buy_needs_confirmation_saved_card_and_limit(client, monkeypatch, 
 
     def handler(req: httpx.Request):
         calls.append(str(req.url))
+        assert req.headers["Idempotency-Key"] == "threadline:operator:c448fc15-a5a7-4ac4-8b24-142ee75e0246"
         return httpx.Response(200, json={"id": "pi_1", "status": "succeeded"})
     real = httpx.AsyncClient
     monkeypatch.setattr(essentials.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
-    body = {"items": [{"id": "milk", "qty": 1}], "confirmed": False, "approved_by": "Asha"}
+    body = {"items": [{"id": "milk", "qty": 1}], "confirmed": False, "approved_by": "Asha", "request_id": "c448fc15-a5a7-4ac4-8b24-142ee75e0246"}
     assert client.post("/api/essentials/buy", json=body, headers=H).status_code == 400
     body["confirmed"] = True
     assert client.post("/api/essentials/buy", json=body, headers=H).status_code == 409  # no saved card
@@ -68,3 +69,38 @@ def test_voice_buy_needs_confirmation_saved_card_and_limit(client, monkeypatch, 
     assert r.status_code == 200 and r.json()["status"] == "succeeded" and "payment_intents" in calls[-1]
     assert client.post("/api/essentials/buy", json={**body, "items": [{"id": "stoveoff", "qty": 2}]}, headers=H).status_code == 400  # over limit
     store.reset()
+
+
+@pytest.mark.parametrize("change,status", [
+    ({"metadata": {"owner": "guest:someone-else"}}, 403),
+    ({"mode": "payment"}, 400), ({"status": "open"}, 400),
+    ({"setup_intent": {"status": "processing"}}, 400),
+    ({"setup_intent": {"status": "succeeded", "payment_method": "pm_1", "customer": "cus_other"}}, 400),
+    ({"bad_pm": True}, 400), ({}, 200),
+])
+def test_setup_requires_completed_session_bound_to_owner_and_customer(client, monkeypatch, tmp_path, change, status):
+    from app import store
+    monkeypatch.setenv("THREADLINE_DB_PATH", str(tmp_path / "wallet.db")); store.reset()
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    session = {"mode": "setup", "status": "complete", "metadata": {"owner": "operator"}, "customer": "cus_1",
+               "setup_intent": {"status": "succeeded", "payment_method": "pm_1", "customer": "cus_1"}}
+    bad_pm = change.pop("bad_pm", False)
+    session.update(change)
+    async def stripe(method, path, data=None, **kwargs):
+        return session if path.startswith("checkout/") else {"customer": "cus_other" if bad_pm else "cus_1", "type": "card", "card": {"brand": "visa", "last4": "4242"}}
+    monkeypatch.setattr(essentials, "_stripe", stripe)
+    r = client.post("/api/essentials/setup/complete", json={"session_id": "cs_test_123456"}, headers=H)
+    assert r.status_code == status
+    assert client.get("/api/essentials/wallet", headers=H).json()["saved"] is (status == 200)
+    store.reset()
+
+
+def test_setup_attaches_server_owner_metadata(client, monkeypatch):
+    seen = []
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_x")
+    async def stripe(method, path, data=None, **kwargs):
+        seen.append((path, data))
+        return {"id": "cus_1"} if path == "customers" else {"url": "https://checkout.stripe.com/example"}
+    monkeypatch.setattr(essentials, "_stripe", stripe)
+    assert client.post("/api/essentials/setup", headers=H).status_code == 200
+    assert seen[1][1]["metadata[owner]"] == "operator"

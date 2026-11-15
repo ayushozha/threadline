@@ -6,6 +6,7 @@ for demos); without it the catalogue still shows and checkout returns 503.
 """
 
 import os
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -103,9 +104,10 @@ def _key() -> str:
     return key
 
 
-async def _stripe(method: str, path: str, data: dict | None = None) -> dict:
+async def _stripe(method: str, path: str, data: dict | None = None, *, idempotency_key: str | None = None) -> dict:
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.request(method, f"https://api.stripe.com/v1/{path}", data=data, auth=(_key(), ""))
+        r = await client.request(method, f"https://api.stripe.com/v1/{path}", data=data, auth=(_key(), ""),
+                                 headers={"Idempotency-Key": idempotency_key} if idempotency_key else {})
     if r.status_code >= 400:
         msg = (r.json().get("error") or {}).get("message", "") if r.headers.get("content-type", "").startswith("application/json") else ""
         raise HTTPException(402 if r.status_code == 402 else 502, f"Stripe: {msg or 'request failed'}"[:200])
@@ -127,7 +129,7 @@ async def setup(request: Request):
     origin = os.environ.get("APP_PUBLIC_ORIGIN") or str(request.base_url).rstrip("/")
     cus = await _stripe("POST", "customers", {"description": "Threadline essentials (caregiver)"})
     sess = await _stripe("POST", "checkout/sessions", {"mode": "setup", "customer": cus["id"], "currency": "usd",
-                                                      "payment_method_types[0]": "card",
+                                                      "payment_method_types[0]": "card", "metadata[owner]": _owner(request),
                                                       "success_url": f"{origin}/?setup={{CHECKOUT_SESSION_ID}}#essentials",
                                                       "cancel_url": f"{origin}/#essentials"})
     return {"url": sess["url"]}
@@ -140,11 +142,18 @@ class SetupDone(BaseModel):
 @router.post("/api/essentials/setup/complete", dependencies=[Depends(authorize)])
 async def setup_complete(body: SetupDone, request: Request):
     sess = await _stripe("GET", f"checkout/sessions/{body.session_id}?expand[]=setup_intent")
+    if (sess.get("metadata") or {}).get("owner") != _owner(request):
+        raise HTTPException(403, "This card setup belongs to a different session.")
     si = sess.get("setup_intent") or {}
+    if (sess.get("mode") != "setup" or sess.get("status") != "complete"
+            or not isinstance(si, dict) or si.get("status") != "succeeded"):
+        raise HTTPException(400, "Card setup has not completed.")
     pm_id, cus = si.get("payment_method"), sess.get("customer")
-    if not pm_id or not cus:
+    if not pm_id or not cus or si.get("customer") != cus:
         raise HTTPException(400, "The card wasn't saved.")
     pm = await _stripe("GET", f"payment_methods/{pm_id}")
+    if pm.get("customer") != cus or pm.get("type") != "card":
+        raise HTTPException(400, "The payment method does not belong to this setup.")
     card = pm.get("card") or {}
     s = _db()
     with s.lock:
@@ -154,6 +163,7 @@ async def setup_complete(body: SetupDone, request: Request):
 
 
 class BuyRequest(BaseModel):
+    request_id: UUID
     items: list[Line] = Field(min_length=1, max_length=30)
     confirmed: bool
     approved_by: str = Field(min_length=1, max_length=60)
@@ -179,6 +189,7 @@ async def buy(body: BuyRequest, request: Request):
         raise HTTPException(409, "No card saved for voice orders yet. Save one on Essentials first.")
     pi = await _stripe("POST", "payment_intents", {"amount": str(total), "currency": "usd", "customer": row[0], "payment_method": row[1],
                                                    "off_session": "true", "confirm": "true", "description": "; ".join(names)[:400],
-                                                   "metadata[approved_by]": body.approved_by[:60], "metadata[channel]": "voice"})
+                                                   "metadata[approved_by]": body.approved_by[:60], "metadata[channel]": "voice"},
+                       idempotency_key=f"threadline:{_owner(request)}:{body.request_id}")
     return {"status": pi.get("status"), "id": pi.get("id"), "amount_usd": total / 100, "card": f"{row[2] or 'card'} •••• {row[3] or ''}".strip(),
             "test_mode": _key().startswith("sk_test_")}

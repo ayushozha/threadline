@@ -38,7 +38,7 @@ You can act by adding actions:
 - log_checkin {period: morning|evening, mood: very_low|low|neutral|content|happy, agitation: none|mild|moderate|severe, repeats: number, note}: when they (or the caregiver) describe how they feel, their mood, restlessness/agitation, or how many times a question was repeated today. Include only the fields they said. Confirm what you logged.
 - log_energy {state: low|steady|positive, word}: when they describe their energy (tired, exhausted, great, okay); word = their own word.
 - set_mode {mode}: memory, sight, hearing or mobility.
-- emergency {reason}: ONLY if they say they fell, are hurt, can't breathe, have chest pain, or ask for emergency help. Then tell them help is being called and to stay still.
+- emergency {reason}: ONLY if they say they fell, are hurt, can't breathe, have chest pain, or ask for emergency help. Explain that the app opens contact options and a phone dialer; the person must place the call. Never claim help was called or is on the way.
 Rules: never diagnose; never say medication was taken (suggest checking the pill organiser with the caregiver); never identify people by face; if unsure, ask one short question.
 Reply in the SAME language they spoke (for example Nepali, Hindi, Spanish). Reply with ONE JSON object only:
 {"heard_language": "language they spoke, in English, e.g. Nepali", "heard_en": "English translation of what they said (same text if English)",
@@ -143,11 +143,14 @@ async def speak(body: SpeakRequest):
     key = os.environ.get("ELEVENLABS_API_KEY")
     if not key:
         raise HTTPException(503, "Voice is not configured on this server.")
-    voice = os.environ.get("ASSISTANT_VOICE_ID") or "EXAVITQu4vr4xnSDxMaL"
+    voice = os.environ.get("ASSISTANT_VOICE_ID") or os.environ.get("ELEVENLABS_VOICE_ID")
+    model = (os.environ.get("ASSISTANT_MULTILINGUAL_MODEL") if re.search(r"[^\x00-\x7F]", body.text) else None) or os.environ.get("ELEVENLABS_MODEL")
+    if not voice or not model:
+        raise HTTPException(503, "Configure the assistant voice and speech model first.")
     async with SLOTS, httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_64",
                               headers={"xi-api-key": key},
-                              json={"text": body.text, "model_id": "eleven_v3" if re.search(r"[^\x00-\x7F]", body.text) else (os.environ.get("ELEVENLABS_MODEL") or "eleven_flash_v2_5"),
+                              json={"text": body.text, "model_id": model,
                                     "voice_settings": {"stability": 0.5, "similarity_boost": 0.8, "style": 0.25}})
     if r.status_code != 200:
         raise HTTPException(502, "The voice service didn't answer.")

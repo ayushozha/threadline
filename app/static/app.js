@@ -8,7 +8,7 @@ import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 import { mountLibrary } from './library.mjs';
 import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
-import { mountEssentials } from './essentials.mjs';
+import { mountEssentials, purchaseReply } from './essentials.mjs';
 import { mountAssistant } from './assistant.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
@@ -2868,11 +2868,8 @@ async function assistantActionRun(a) {
     openEssentials(); const lines = shop?.snapshot() || [];
     if (!lines.length) return null;
     if (!shop.walletSaved()) { location.hash = "essentials"; return "No saved card yet: order opened for caregiver checkout"; }
-    if (a.confirmed === true) {  // OpenAI Realtime: the model calls buy only after the person said yes out loud
-      const who = loadContacts().name, d = await shop.buy(lines, who || "Caregiver (voice)");
-      return `Paid $${d.amount_usd.toFixed(2)} · ${d.card}${d.test_mode ? " · test mode" : ""}`;
-    }
-    pendingBuy = { lines, at: Date.now() }; return `Waiting for your OK · ${shop.totalText()}`;
+    // A model-generated confirmation is not the person's consent to charge a card.
+    pendingBuy = { lines, at: Date.now(), requestId: crypto.randomUUID() }; return `Waiting for your OK · ${shop.totalText()}`;
   }
   if (a.type === "checkout") { openEssentials(); location.hash = "essentials"; return `Order ready for caregiver approval · ${shop?.totalText() || ""}`; }
   if (a.type === "open_view") { location.hash = a.view; return `Opened ${VIEW_TITLES[a.view] || a.view}`; }
@@ -2890,13 +2887,16 @@ const bandPcm = {  // decoded band PCM for the OpenAI Realtime engine (band only
 let pendingBuy = null;
 async function assistantIntercept(text) {
   if (!pendingBuy || Date.now() - pendingBuy.at > 120000) { pendingBuy = null; return null; }
-  if (/^\s*(no|cancel|stop|don'?t|wait)\b/i.test(text)) { pendingBuy = null; return { say: "Okay, I won't buy it. The items are still in your cart.", done: "Order not placed" }; }
-  if (!/\b(yes|yeah|yep|sure|confirm|buy it|go ahead|do it|please do|ok(ay)?)\b|हो|हुन्छ|किन्नुहोस्/i.test(text)) return null;
-  const lines = pendingBuy.lines; pendingBuy = null;
+  const reply = purchaseReply(text);
+  if (reply === "cancel") { pendingBuy = null; return { say: "Okay, I won't buy it. The items are still in your cart.", done: "Order not placed" }; }
+  if (reply !== "confirm") return { say: "Please say just yes to confirm this purchase, or no to cancel.", done: null };
+  const pending = pendingBuy;
   try {
-    const who = loadContacts().name, d = await shop.buy(lines, who || "Caregiver (voice)");
-    return { say: `Done. I paid $${d.amount_usd.toFixed(2)} on the ${d.card}.${who ? ` ${who.split(" ")[0]} will see the receipt.` : ""}`, done: `Paid $${d.amount_usd.toFixed(2)} · ${d.card}${d.test_mode ? " · test mode" : ""}` };
-  } catch (e) { return { say: `I couldn't place the order: ${e.message}`, done: null }; }
+    const who = loadContacts().name, d = await shop.buy(pending.lines, who || "Caregiver (voice)", pending.requestId);
+    pendingBuy = null;
+    if (d.status !== "succeeded") return { say: "Payment is not confirmed. Please review the order on Essentials.", done: null };
+    return { say: d.test_mode ? "The test payment succeeded. No real charge was made." : `Payment of $${d.amount_usd.toFixed(2)} succeeded on the ${d.card}.`, done: `${d.test_mode ? 'Test payment' : 'Payment'} succeeded · $${d.amount_usd.toFixed(2)}` };
+  } catch (e) { return { say: `Payment could not be confirmed: ${e.message}. Say yes to retry the same request, or no to cancel.`, done: null }; }
 }
 const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
