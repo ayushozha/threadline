@@ -854,3 +854,11 @@ li.flash{animation:taskflash 2.2s ease-out}@keyframes taskflash{0%{background:#f
 .db-list h3{display:flex;justify-content:space-between;margin:0 0 8px;font-size:16px}.db-list h3 em{font-style:normal;font-size:12px;background:var(--paper);border-radius:10px;padding:2px 8px}
 .db-list ol{list-style:none;margin:0;padding:0;display:grid;gap:6px}.db-list li{display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;font-size:13px;padding:6px 8px;border-radius:10px;background:var(--paper)}
 .db-list time{color:var(--muted);font-size:12px}.db-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:9px;background:#e8e8dc}.t-voice{background:#fde7e1;color:#9d2e1c}.t-calendar{background:#dde8f3;color:#2e4f73}.t-done{background:#e3f1e6;color:#2f6b45}.t-care-agent{background:#efe7f8;color:#5b3d8a}.t-suggestion{background:#fbeccd;color:#7a5a1d}
+
+/* ---------- voice navigation + comfort mode ---------- */
+.voice-focus{outline:4px solid #e8452c!important;outline-offset:6px;border-radius:14px;animation:vfocus 1.4s ease-out 2}
+@keyframes vfocus{0%{box-shadow:0 0 0 0 rgba(232,69,44,.45)}100%{box-shadow:0 0 0 22px rgba(232,69,44,0)}}
+.as-comfort{display:none;margin-left:10px;vertical-align:middle;font:700 12px/1 ui-sans-serif,system-ui;padding:5px 10px;border-radius:12px;background:#f9d77e;color:#3b2b00}
+body.comfort-mode .as-comfort{display:inline-block}
+body.comfort-mode .as-card{background:linear-gradient(135deg,#3b2f4a,#5a4a6e)!important}
+body.comfort-mode .as-orb{background:radial-gradient(circle at 35% 35%,#fff3c4,#f2c94c 60%,#a8792a)!important}

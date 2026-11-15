@@ -2953,13 +2953,16 @@ function assistantContext() {
     health_30d_days: ownerHealth.days, last_care_check: last ? { status: last.status, summary: last.summary, at: last.at } : null,
     tasks: (life.tasks || []).filter((t) => !t.done).map((t) => t.title).slice(0, 12), suggested_tasks: (life.taskDrafts || []).map((d) => d.title).slice(0, 8),
     cart: shop?.summary() || null, emergency_contact: c.name || null, band_connected: Boolean(capture.band),
+    conversation_mode: typeof assistantMode !== "undefined" ? assistantMode : "normal", energy_now: life.energy ? { state: life.energy.state, word: life.energy.word } : null,
     mood_today: moodOf(todayKey()) || null, current_view: (location.hash || "#dashboard").slice(1),
     scenarios: (typeof scenarioCache !== "undefined" && scenarioCache ? scenarioCache : []).map((x) => ({ id: x.id, title: x.title, mode: x.mode })) };
 }
+const VOICE_SECTIONS = {assistant: ["dashboard", "#assistant"], calendar: ["dashboard", "#calendar-card"], phone_camera: ["dashboard", "#phonecam-card"], reports: ["dashboard", ".dash-reports"], health_charts: ["dashboard", ".dash-charts"], modes: ["dashboard", ".access-picker"], live_guidance: ["care", "#care-live"], care_agent: ["care", "#care-agent"], emergency_contacts: ["care", "#ec-form"], routine: ["care", "#care-routine"], health_card: ["care", "#care-health"], video_source: ["care", "#care-src-h"], checkin_form: ["energy", "#mood-checkin"], mood_chart: ["energy", "#mood-chart"], wellbeing_today: ["energy", "#wb-today"], music: ["energy", ".music-card"], cart: ["essentials", ".ess-cart"], suggested_items: ["essentials", ".ess-sug"], saved_card: ["essentials", ".ess-wallet"], task_list: ["tasks", "#tasks-today"], task_calendar: ["tasks", ".tasks-cal"], add_task_form: ["tasks", "#task-form"], task_suggestions: ["tasks", "#task-banner"], day_board: ["today", "#day-board"], todo_list: ["today", ".db-list.todo"], done_list: ["today", ".db-list.done"], daily_table: ["days", ".days-wrap"], what_happened: ["days", ".dl-actions"], health_summary: ["days", "#days-summary"], memory_graph: ["graph", "#memory-graph"], transcripts: ["transcripts", "#archive"], scenario_grid: ["library", ".lib-grid"], band_connect: ["live", "#pair"], live_transcript: ["live", "#live-lines"]};
+let assistantMode = "normal";
 async function assistantAction(a) {
   const result = await assistantActionRun(a);
   const chip = result && typeof result === "object" ? result.chip : result;
-  if (chip && !["add_task", "emergency", "add_note", "get_dashboard", "recall", "get_calendar"].includes(a.type)) { try { logAction(`Voice · ${chip}`); } catch { /* */ } }
+  if (chip && !["add_task", "emergency", "add_note", "get_dashboard", "recall", "get_calendar", "open_section", "open_view", "set_conversation_mode", "list_tasks"].includes(a.type)) { try { logAction(`Voice · ${chip}`); } catch { /* */ } }
   return result;
 }
 const MOOD_VALUE = { very_low: -0.8, low: -0.4, neutral: 0, content: 0.4, happy: 0.8 }, AGI_VALUE = { none: 0, mild: 1, moderate: 2, severe: 3 };
@@ -3017,6 +3020,8 @@ async function assistantActionRun(a) {
     rebuildMood(); renderMood(); renderDays(); drawDashboard(); renderToday();
     return `Logged ${[a.mood ? `${period} mood: ${a.mood.replace("_", " ")}` : "", a.agitation ? `agitation: ${a.agitation}` : "", a.repeats != null ? `${a.repeats} repeated questions` : ""].filter(Boolean).join(" · ")}`;
   }
+  if (a.type === "log_energy" && a.state === "low") { document.body.classList.add("comfort-mode"); assistantMode = "comfort"; }
+  if (a.type === "log_checkin" && ["low", "very_low"].includes(a.mood)) { document.body.classList.add("comfort-mode"); assistantMode = "comfort"; }
   if (a.type === "log_energy") {
     const at = new Date().toISOString();
     // Energy is derived from saved statements, so keep the voice report as one (it survives reloads and shows on every screen).
@@ -3047,6 +3052,18 @@ async function assistantActionRun(a) {
     const t = (life.tasks || []).filter((x) => !x.done).map((x) => ({ x, n: words.filter((w) => x.title.toLowerCase().includes(w)).length })).sort((p, q) => q.n - p.n)[0];
     if (!t || !t.n) return { data: { error: "No open task matches that." } };
     t.x.done = true; t.x.doneAt = new Date().toISOString(); saveThread(); renderTasks(); logAction(`Task done by voice: ${t.x.title}`); return `Done: ${t.x.title}`;
+  }
+  if (a.type === "open_section") {
+    const [view, sel] = VOICE_SECTIONS[a.section] || []; if (!view) return null;
+    location.hash = view;
+    if (view === "essentials") openEssentials(); if (view === "library") openLibrary();
+    setTimeout(() => { const node = document.querySelector(sel); if (!node) return; node.scrollIntoView({ behavior: "smooth", block: "center" }); node.classList.remove("voice-focus"); void node.offsetWidth; node.classList.add("voice-focus"); setTimeout(() => node.classList.remove("voice-focus"), 3200); }, 450);
+    return `Showing ${a.section.replace(/_/g, " ")}`;
+  }
+  if (a.type === "set_conversation_mode") {
+    const on = a.mode === "comfort"; document.body.classList.toggle("comfort-mode", on); assistantMode = on ? "comfort" : "normal";
+    if (on) logAction(`Comfort mode on${a.reason ? ` · ${a.reason}` : ""}`);
+    return on ? "💛 Comfort mode" : "Back to normal";
   }
   if (a.type === "open_scenario") {
     location.hash = "library"; openLibrary(); setTimeout(() => library?.open?.(a.id), 400);

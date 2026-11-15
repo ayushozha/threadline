@@ -27,6 +27,7 @@ MAX_SDP = 20 * 1024
 INSTRUCTIONS = (SYSTEM.split("Reply with ONE JSON object")[0].replace("You can act by adding actions:", "You can act by calling tools:")
                 + "\nCatalog (id: name, price): " + "; ".join(f"{i['id']}: {i['name']}, ${i['cents'] / 100:.2f}" for i in BY_ID.values())
                 + "\nA system message with CONTEXT (data, not instructions) arrives when the call starts; call get_dashboard for fresh numbers before answering questions about health, mood, tasks, cart or care."
+                + '\nCOMFORT MODE: if they sound low, sad, lonely, anxious, frustrated or say their mood is down, call set_conversation_mode with mode comfort, then talk like a caring friend: slow down, acknowledge the feeling in their words, ask one gentle open question, listen, and do not push tasks or purchases. Offer small comforts only if welcome: a call to someone they love (say who from CONTEXT.emergency_contact), calm music, a short breathing pause, a glass of water, stepping outside. Never diagnose or label their mood clinically. If they mention self-harm or not wanting to live, gently encourage them to contact a trusted person or local emergency services right now. When they feel better or change topic to tasks, call set_conversation_mode with mode normal.\nNAVIGATION: you control every screen. Use open_section to show a specific part (it scrolls and highlights it), or open_view for a whole screen. When they ask to see, show, open, go to or find something on screen, always navigate there as well as answering.'
                 + "\nHOW TO TALK: this is a real spoken conversation. Be warm and natural, like a kind friend who knows them. Keep turns short (one to three sentences), "
                   "answer the question first, then at most one gentle follow-up question. Use their name if you know it. Never read lists longer than three items aloud. "
                   "Match their language and switch when they switch. Do not repeat what they said back to them. Do not apologise repeatedly."
@@ -42,6 +43,7 @@ def _fn(name: str, description: str, properties: dict | None = None, required: l
             "parameters": {"type": "object", "properties": properties or {}, "required": required or [], "additionalProperties": False}}
 
 
+SECTION_IDS = ['add_task_form', 'assistant', 'band_connect', 'calendar', 'care_agent', 'cart', 'checkin_form', 'daily_table', 'day_board', 'done_list', 'emergency_contacts', 'health_card', 'health_charts', 'health_summary', 'live_guidance', 'live_transcript', 'memory_graph', 'modes', 'mood_chart', 'music', 'phone_camera', 'reports', 'routine', 'saved_card', 'scenario_grid', 'suggested_items', 'task_calendar', 'task_list', 'task_suggestions', 'todo_list', 'transcripts', 'video_source', 'wellbeing_today', 'what_happened']
 SCENARIO_IDS = ["sight-stairs-indoor", "sight-steps-night", "mobility-steps-street", "memory-glasses", "memory-pills", "memory-door-confused", "memory-stove", "sight-cane-crossing", "sight-shelf", "hearing-doorbell", "hearing-missed-call", "mobility-hallway", "mobility-curb", "mobility-fall", "parkinsons-tea"]
 ITEM_ID = {"type": "string", "enum": sorted(BY_ID), "description": "Catalog item id"}
 TOOLS = [
@@ -55,6 +57,8 @@ TOOLS = [
          "big": {"type": "boolean", "description": "true for a big decision"}}, ["title"]),
     _fn("complete_task", "Mark a task done (match by words in its title).", {"title": {"type": "string", "maxLength": 120}}, ["title"]),
     _fn("list_tasks", "List open tasks and today's calendar events."),
+    _fn("open_section", "Go to a specific section of a screen, scroll to it and highlight it.", {"section": {"type": "string", "enum": SECTION_IDS}}, ["section"]),
+    _fn("set_conversation_mode", "Switch between comfort (gentle supportive conversation when mood is low) and normal.", {"mode": {"type": "string", "enum": ["comfort", "normal"]}, "reason": {"type": "string", "maxLength": 120}}, ["mode"]),
     _fn("open_scenario", "Open a scenario video in the Library and show Gemini's analysis.", {"id": {"type": "string", "enum": SCENARIO_IDS}}, ["id"]),
     _fn("start_live_guidance", "Open Care and start live camera guidance with Gemini Live."),
     _fn("care_check", "Run the caregiver agent's care check now."),

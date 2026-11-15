@@ -79,7 +79,7 @@ def test_forwards_offer_and_returns_answer(client, openai):
     assert session["audio"]["output"]["voice"]
     assert "JSON object" not in session["instructions"] and "never diagnose" in session["instructions"]
     names = {t["name"] for t in session["tools"]}
-    assert names == {"add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency", "buy", "log_checkin", "log_energy", "get_dashboard", "remember", "recall", "get_calendar", "add_calendar_event", "add_routine_step", "set_emergency_contact", "add_note", "complete_task", "list_tasks", "open_scenario", "start_live_guidance"}
+    assert names == {"add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency", "buy", "log_checkin", "log_energy", "get_dashboard", "remember", "recall", "get_calendar", "add_calendar_event", "add_routine_step", "set_emergency_contact", "add_note", "complete_task", "list_tasks", "open_scenario", "start_live_guidance", "open_section", "set_conversation_mode"}
     cart = next(t for t in session["tools"] if t["name"] == "add_to_cart")
     assert "milk" in cart["parameters"]["properties"]["id"]["enum"]
 

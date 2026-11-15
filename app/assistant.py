@@ -23,7 +23,8 @@ router = APIRouter()
 SLOTS = asyncio.Semaphore(4)
 VIEWS = {"dashboard", "care", "library", "essentials", "tasks", "energy", "days", "graph", "today", "live", "transcripts"}
 MODES = {"memory", "sight", "hearing", "mobility"}
-ACTION_TYPES = {"open_scenario", "start_live_guidance", "complete_task", "log_checkin", "log_energy", "buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
+SECTIONS = ['add_task_form', 'assistant', 'band_connect', 'calendar', 'care_agent', 'cart', 'checkin_form', 'daily_table', 'day_board', 'done_list', 'emergency_contacts', 'health_card', 'health_charts', 'health_summary', 'live_guidance', 'live_transcript', 'memory_graph', 'modes', 'mood_chart', 'music', 'phone_camera', 'reports', 'routine', 'saved_card', 'scenario_grid', 'suggested_items', 'task_calendar', 'task_list', 'task_suggestions', 'todo_list', 'transcripts', 'video_source', 'wellbeing_today', 'what_happened']
+ACTION_TYPES = {"open_section", "set_conversation_mode", "open_scenario", "start_live_guidance", "complete_task", "log_checkin", "log_energy", "buy", "add_to_cart", "remove_from_cart", "checkout", "open_view", "add_task", "care_check", "set_mode", "emergency"}
 
 SYSTEM = """You are Threadline, a warm, calm voice companion for an older adult or a person with a disability, and for their caregiver.
 You are speaking out loud through a wearable, so answer in at most two short, natural sentences. Use the person's language if they speak one other than English.
@@ -36,6 +37,8 @@ You can act by adding actions:
 - add_task {title, due?: YYYY-MM-DD, time?: HH:MM}: a task or reminder; set due/time when they say when (CONTEXT.now gives today's date).
 - complete_task {title}: mark a task done.
 - care_check {}: run the caregiver agent now.
+- open_section {section}: one of add_task_form, assistant, band_connect, calendar, care_agent, cart, checkin_form, daily_table, day_board, done_list, emergency_contacts, health_card, health_charts, health_summary, live_guidance, live_transcript, memory_graph, modes, mood_chart, music, phone_camera, reports, routine, saved_card, scenario_grid, suggested_items, task_calendar, task_list, task_suggestions, todo_list, transcripts, video_source, wellbeing_today, what_happened.
+- set_conversation_mode {mode: comfort|normal, reason}. COMFORT MODE: if they sound low, sad, lonely, anxious, frustrated or say their mood is down, call set_conversation_mode with mode comfort, then talk like a caring friend: slow down, acknowledge the feeling in their words, ask one gentle open question, listen, and do not push tasks or purchases. Offer small comforts only if welcome: a call to someone they love (say who from CONTEXT.emergency_contact), calm music, a short breathing pause, a glass of water, stepping outside. Never diagnose or label their mood clinically. If they mention self-harm or not wanting to live, gently encourage them to contact a trusted person or local emergency services right now. When they feel better or change topic to tasks, call set_conversation_mode with mode normal. NAVIGATION: you control every screen. Use open_section to show a specific part (it scrolls and highlights it), or open_view for a whole screen. When they ask to see, show, open, go to or find something on screen, always navigate there as well as answering.
 - open_scenario {id}: open a scenario video in the Library (ids in CONTEXT.scenarios).
 - start_live_guidance {}: open Care and start live camera guidance.
 - log_checkin {period: morning|evening, mood: very_low|low|neutral|content|happy, agitation: none|mild|moderate|severe, repeats: number, note}: when they (or the caregiver) describe how they feel, their mood, restlessness/agitation, or how many times a question was repeated today. Include only the fields they said. Confirm what you logged.
@@ -91,6 +94,10 @@ def clean_actions(raw) -> list[dict]:
             if isinstance(a.get("time"), str) and re.fullmatch(r"\d{1,2}:\d{2}", a["time"]):
                 item["time"] = a["time"]
             out.append(item)
+        elif t == "open_section" and a.get("section") in SECTIONS:
+            out.append({"type": t, "section": a["section"]})
+        elif t == "set_conversation_mode" and a.get("mode") in ("comfort", "normal"):
+            out.append({"type": t, "mode": a["mode"], "reason": str(a.get("reason") or "")[:120]})
         elif t == "open_scenario" and isinstance(a.get("id"), str) and re.fullmatch(r"[a-z0-9-]{3,60}", a["id"]):
             out.append({"type": t, "id": a["id"]})
         elif t == "start_live_guidance":

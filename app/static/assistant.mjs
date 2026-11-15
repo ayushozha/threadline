@@ -37,7 +37,7 @@ export function mountAssistant(root, { el, request, getContext, runAction, bandO
     status.textContent = st.engine === "realtime" ? (bandPcmOn() ? "Tap Talk and speak through the Vexo band." : NO_BAND) : "Tap Talk, then speak.";
   });
   root.replaceChildren(el("section", { className: "as-card" },
-    el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", { textContent: "Talk to Threadline" }), status), el("div", { className: "as-head-actions" }, talk, sos)),
+    el("div", { className: "as-head" }, orb, el("div", {}, label, el("h2", {}, "Talk to Threadline", el("span", { className: "as-comfort", textContent: "💛 Comfort mode" })), status), el("div", { className: "as-head-actions" }, talk, sos)),
     el("label", { className: "as-engine-row" }, el("span", { textContent: "Voice engine" }), engine),
     live, log, chips, form));
   form.addEventListener("submit", (e) => {
