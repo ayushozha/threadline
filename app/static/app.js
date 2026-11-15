@@ -1758,8 +1758,9 @@ async function lhListCameras() {
   try {
     const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
     const cur = $("lh-camera").value;
-    $("lh-camera").replaceChildren(el("option", { value: "", textContent: "Default camera" }), ...cams.map((c, i) => el("option", { value: c.deviceId, textContent: c.label || `Camera ${i + 1}`, selected: c.deviceId === cur })));
-    const gopro = cams.find((c) => /gopro/i.test(c.label)); if (gopro && !cur) $("lh-camera").value = gopro.deviceId;
+    $("lh-camera").replaceChildren(el("option", { value: "bridge", textContent: "GoPro (via bridge)" }), el("option", { value: "", textContent: "This computer's camera" }), ...cams.map((c, i) => el("option", { value: c.deviceId, textContent: c.label || `Camera ${i + 1}`, selected: c.deviceId === cur })));
+    const gopro = cams.find((c) => /gopro/i.test(c.label));
+    if (!cur) $("lh-camera").value = gopro ? gopro.deviceId : (lh.bridgeLive ? "bridge" : "");
   } catch { /* no list */ }
 }
 function lhLog(kind, text) {
@@ -1816,14 +1817,19 @@ $("lh-start").addEventListener("click", async () => {
   lhSetState("busy", "Starting the camera…");
   try {
     if (typeof ensureService === "function") { try { await ensureService(); } catch { /* local */ } }
-    const id = $("lh-camera").value;
-    lh.stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id }, width: { ideal: 1280 } } : { width: { ideal: 1280 } } });
-    await lhListCameras();
-    $("lh-video").srcObject = lh.stream; $("lh-video").hidden = false; await $("lh-video").play().catch(() => {});
+    const id = $("lh-camera").value; lh.bridge = id === "bridge";
+    if (lh.bridge) {  // the GoPro bridge sends frames to the server; show them here and let the server feed Gemini
+      $("lh-bridge").hidden = false;
+      lh.bridgeTimer = setInterval(() => { $("lh-bridge").src = `/api/vision/latest.jpg?t=${Date.now()}`; }, 1000);
+    } else {
+      lh.stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id }, width: { ideal: 1280 } } : { width: { ideal: 1280 } } });
+      await lhListCameras();
+      $("lh-video").srcObject = lh.stream; $("lh-video").hidden = false; await $("lh-video").play().catch(() => {});
+    }
     lh.out = new AudioContext({ sampleRate: 24000 }); lh.playAt = 0;
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
     ws.binaryType = "arraybuffer"; lh.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory" }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory", ...(lh.bridge ? { vision: "bridge" } : {}) }));
     ws.onmessage = async (event) => {
       if (event.data instanceof ArrayBuffer) return lhPlay(event.data);
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
@@ -1831,14 +1837,15 @@ $("lh-start").addEventListener("click", async () => {
         const notes = (sessions.reflection?.notes || []).slice(-20).map((n) => `${new Date(n.at).toLocaleString()}: ${n.text}`);
         if (notes.length) ws.send(JSON.stringify({ type: "context", notes }));
         const where = await lhStartAudio().catch((e) => { lhLog("said", `(No microphone: ${e.message})`); return "no microphone"; });
-        lhStartFrames();
-        lhSetState("live", `Live with ${msg.model || "Gemini"} · camera ${lh.stream.getVideoTracks()[0]?.label || "on"} · listening through ${where}. Ask “What was I doing?”`);
+        if (!lh.bridge) lhStartFrames();
+        lhSetState("live", `Live with ${msg.model || "Gemini"} · camera ${lh.bridge ? "GoPro (bridge)" : (lh.stream?.getVideoTracks()[0]?.label || "on")} · listening through ${where}. Ask “What was I doing?”`);
         if (typeof logAction === "function") logAction("Started Gemini Live memory help");
       } else if (msg.type === "heard") lhLog("heard", msg.text);
       else if (msg.type === "said") lhLog("said", msg.text);
       else if (msg.type === "turn_complete") { const l = $("lh-log").lastElementChild; if (l) l.dataset.done = "1"; }
       else if (msg.type === "interrupted") lhInterrupt();
       else if (msg.type === "error") { lhSetState("live", msg.message); }
+      else if (msg.type === "vision") { $("lh-status").textContent = msg.live ? `Seeing through ${msg.camera || "the GoPro"}.` : "Waiting for GoPro frames from the bridge…"; }
     };
     ws.onclose = () => { if (lh.ws === ws) lhStop(lh.ws ? "Live help ended." : undefined); };
   } catch (e) { lhStop(`Couldn't start: ${e.message}`); }
@@ -1851,6 +1858,7 @@ function lhStop(text = "Stopped.") {
   if (capture.band && !capture.active) capture.band.configure({ audio: false }).catch(() => {});
   try { lh.micNode?.disconnect(); lh.mic?.close(); } catch { /* */ } lh.micNode = null; lh.mic = null; lh.micStream?.getTracks().forEach((t) => t.stop());
   lh.stream?.getTracks().forEach((t) => t.stop()); lh.stream = null; $("lh-video").srcObject = null; $("lh-video").hidden = true;
+  clearInterval(lh.bridgeTimer); $("lh-bridge").hidden = true; $("lh-bridge").removeAttribute("src");
   try { lh.out?.close(); } catch { /* */ } lh.out = null;
   lhSetState("idle", text);
 }
@@ -1858,6 +1866,7 @@ $("lh-stop").addEventListener("click", () => lhStop());
 $("lh-ask").addEventListener("submit", (e) => { e.preventDefault(); const t = $("lh-text").value.trim(); if (!t || lh.ws?.readyState !== 1) return; lh.ws.send(JSON.stringify({ type: "text", text: t })); lhLog("heard", t); $("lh-log").lastElementChild.dataset.done = "1"; $("lh-text").value = ""; });
 lhListCameras();
 navigator.mediaDevices?.addEventListener?.("devicechange", lhListCameras);
+setInterval(async () => { try { const s = await (await fetch("/api/vision/status")).json(); lh.bridgeLive = Boolean(s.live); } catch { lh.bridgeLive = false; } }, 5000);
 
 
 /* ---------- Public live transcript: the owner's band recording, streamed to everyone and kept in the database ---------- */

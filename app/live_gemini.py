@@ -15,7 +15,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 router = APIRouter()  # defined before importing main, which registers it
 
-from app import main  # noqa: E402
+from app import main, vision_bridge  # noqa: E402
 
 GEMINI_LIVE_URL = ("wss://generativelanguage.googleapis.com/ws/"
                    "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
@@ -24,6 +24,7 @@ MAX_AUDIO_CHUNK = 64 * 1024  # one browser chunk; 16 kHz PCM16 is 32 KB/s
 MAX_AUDIO_BYTES = 16000 * 2 * MAX_SECONDS
 MAX_FRAME_BYTES = 300 * 1024  # decoded JPEG
 FRAME_INTERVAL = 0.5  # at most 2 frames per second
+BRIDGE_INTERVAL = 1.0  # how often the relay checks the camera bridge for a newer frame
 MAX_TEXT = 1000
 MAX_NOTES, MAX_NOTE_CHARS = 20, 300
 
@@ -88,13 +89,32 @@ async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: i
                     return await fail("Live conversation could not start. Please try again.", 1011)
                 await gemini.send(json.dumps(initial_history(clean_notes(hello.get("notes")))))
                 await client.send_json({"type": "ready", "model": model})
-                await pump(client, gemini, max_seconds, max_bytes)
+                await pump(client, gemini, max_seconds, max_bytes, bridge=hello.get("vision") == "bridge")
         except (OSError, asyncio.TimeoutError, WebSocketException, ValueError):
             await fail("Live conversation was interrupted. Please try again.", 1011)
 
 
-async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int) -> None:
+async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int, bridge: bool = False) -> None:
     state = {"bytes": 0, "last_frame": 0.0}
+
+    async def from_bridge():
+        """Forward the camera bridge's latest frame (only newer ones, at most FRESH_SECONDS old) about once a
+        second, and tell the browser when bridge frames start or stop."""
+        sent_seq, live = 0, False
+        while True:
+            frame = vision_bridge.fresh()
+            if frame is not None and frame.seq != sent_seq:
+                state["bytes"] += len(frame.jpeg)
+                if state["bytes"] > max_bytes:
+                    await client.send_json({"type": "error", "message": "Session limit reached."})
+                    return
+                sent_seq = frame.seq
+                await gemini.send(json.dumps({"realtimeInput": {"video": {
+                    "data": b64(frame.jpeg), "mimeType": "image/jpeg"}}}))
+            if (frame is not None) != live:
+                live = frame is not None
+                await client.send_json({"type": "vision", "live": live, "camera": frame.camera if frame else None})
+            await asyncio.sleep(BRIDGE_INTERVAL)
 
     async def from_browser():
         while True:
@@ -173,6 +193,8 @@ async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int) ->
                 await client.send_json({"type": "error", "message": "Live session is ending soon; start again."})
 
     tasks = [asyncio.create_task(from_browser()), asyncio.create_task(to_browser())]
+    if bridge:
+        tasks.append(asyncio.create_task(from_bridge()))
     try:
         done, _ = await asyncio.wait(tasks, timeout=max_seconds, return_when=asyncio.FIRST_COMPLETED)
         if not done:
