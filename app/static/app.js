@@ -2924,7 +2924,7 @@ async function autoConnectBand() {
     let devices = [];
     try { devices = await navigator.bluetooth.getDevices(); } catch { devices = []; }
     const wanted = bandLabel();
-    const dev = devices.find((d) => d.name === wanted) || devices.find((d) => (d.name || "").startsWith("Vexo"));
+    const dev = devices.find((d) => d.name === wanted);
     if (!dev) return;
     if (dev.watchAdvertisements && !dev.__threadlineWatching) {  // wake the GATT link once the band is heard nearby
       dev.__threadlineWatching = true;
