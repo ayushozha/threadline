@@ -1302,6 +1302,12 @@ async def index():
     return FileResponse(ROOT / "static" / "index.html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(ROOT / "static" / "icons" / "favicon.ico", media_type="image/x-icon",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
 from app import watch_claim  # noqa: E402  (device-code pairing; imports this module)
 
 app.include_router(watch_claim.router)

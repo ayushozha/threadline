@@ -1309,7 +1309,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations" };
+const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
@@ -1318,7 +1318,7 @@ function showView(name) {
   if (name === "watch") {  // Apple Watch pairing lives at #watch; the redesign keeps it out of the menu
     document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== "devices"; });
     document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", "false"));
-    $("view-title").textContent = "Apple Watch"; return;
+    $("view-title").textContent = "Apple Watch"; careOnView("watch"); return;
   }
   if (!VIEW_TITLES[name] || name === "devices" || name === "integrations") name = "live";
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
@@ -1326,6 +1326,7 @@ function showView(name) {
   $("view-title").textContent = VIEW_TITLES[name];
   if (name === "graph" && typeof drawGraph === "function") { drawGraph(); scheduleGraph(0); }
   if (name === "today") renderToday(); if (name === "transcripts") renderArchive();
+  careOnView(name);
   if (name === "energy") renderEnergy(); if (name === "integrations") renderIntegrations(); if (name === "tasks") renderTasks();
 }
 window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
@@ -1772,26 +1773,35 @@ function lhLog(kind, text) {
   while ($("lh-log").children.length > 40) $("lh-log").firstChild.remove();
 }
 function lhSetState(state, text) { $("live-help").dataset.state = state; $("lh-status").textContent = text; $("lh-start").hidden = state !== "idle"; $("lh-stop").hidden = state === "idle"; $("lh-ask").hidden = state !== "live"; }
-function lhPlay(buf) {  // PCM16 24 kHz from Gemini → speakers, queued in order
-  if (!lh.out) return;
+/* Shared Gemini Live audio helpers (used by memory help and the Care view). st = { out: AudioContext(24 kHz), playAt, sources, muted } */
+function livePlayPcm24(st, buf) {  // PCM16 24 kHz from Gemini → speakers, queued in order
+  if (!st.out || st.muted) return;
   const pcm = new Int16Array(buf), f = new Float32Array(pcm.length);
   for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
-  const ab = lh.out.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
-  const src = lh.out.createBufferSource(); src.buffer = ab; src.connect(lh.out.destination);
-  lh.playAt = Math.max(lh.playAt, lh.out.currentTime + 0.05); src.start(lh.playAt); lh.playAt += ab.duration;
-  lh.sources.push(src); src.onended = () => { lh.sources = lh.sources.filter((x) => x !== src); };
+  const ab = st.out.createBuffer(1, f.length, 24000); ab.copyToChannel(f, 0);
+  const src = st.out.createBufferSource(); src.buffer = ab; src.connect(st.out.destination);
+  st.playAt = Math.max(st.playAt, st.out.currentTime + 0.05); src.start(st.playAt); st.playAt += ab.duration;
+  st.sources.push(src); src.onended = () => { st.sources = st.sources.filter((x) => x !== src); };
 }
-function lhInterrupt() { lh.sources.forEach((s) => { try { s.stop(); } catch { /* done */ } }); lh.sources = []; lh.playAt = 0; }
+function liveInterrupt(st) { st.sources.forEach((s) => { try { s.stop(); } catch { /* done */ } }); st.sources = []; st.playAt = 0; }
+function floatToPcm16(f, fromRate = 16000) {  // float samples at fromRate → PCM16 at 16 kHz (linear resample)
+  const ratio = fromRate / 16000, n = Math.floor(f.length / ratio), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) { const x = i * ratio, j = Math.floor(x), t = x - j, v = f[j] * (1 - t) + (f[j + 1] ?? f[j]) * t; out[i] = Math.max(-1, Math.min(1, v)) * 0x7fff; }
+  return out;
+}
+async function liveBandAudio(onPcm) {  // the band's microphone → PCM16 16 kHz; returns a cleanup function
+  kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
+  let ba = new kit.BandAudio((samples) => onPcm(kit.toInt16(samples)), { rate: 16000 });
+  const off = capture.band.on("audio", (a) => ba?.push(a));
+  try { if (!capture.active) await capture.band.configure({ audio: true }); } catch (e) { off?.(); try { ba.close(); } catch { /* */ } throw e; }
+  return () => { off?.(); try { ba?.close(); } catch { /* */ } ba = null; if (capture.band && !capture.active) capture.band.configure({ audio: false }).catch(() => {}); };
+}
+function lhPlay(buf) { livePlayPcm24(lh, buf); }
+function lhInterrupt() { liveInterrupt(lh); }
 function lhSendPcm16(int16) { if (lh.ws?.readyState === 1) lh.ws.send(int16.buffer); }
 async function lhStartAudio() {
   if (capture.band) {  // the band's own microphone, decoded to 16 kHz samples by the Vexo kit
-    try {
-      kit = kit || await import("/static/vendor/vexo-open/js/src/index.js");
-      lh.bandAudio = new kit.BandAudio((samples) => lhSendPcm16(kit.toInt16(samples)), { rate: 16000 });
-      lh.offBand = capture.band.on("audio", (a) => lh.bandAudio?.push(a));
-      if (!capture.active) await capture.band.configure({ audio: true });
-      return "the Vexo band's microphone";
-    } catch (e) { lh.bandAudio = null; lh.offBand?.(); lh.offBand = null; }
+    try { lh.offBand = await liveBandAudio(lhSendPcm16); return "the Vexo band's microphone"; } catch { lh.offBand = null; }
   }
   lh.mic = new AudioContext({ sampleRate: 16000 });
   const media = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
@@ -1854,8 +1864,7 @@ function lhStop(text = "Stopped.") {
   const ws = lh.ws; lh.ws = null;
   try { ws?.readyState === 1 && ws.send(JSON.stringify({ type: "stop" })); ws?.close(); } catch { /* closed */ }
   clearInterval(lh.frameTimer); lhInterrupt();
-  lh.offBand?.(); lh.offBand = null; try { lh.bandAudio?.close(); } catch { /* */ } lh.bandAudio = null;
-  if (capture.band && !capture.active) capture.band.configure({ audio: false }).catch(() => {});
+  lh.offBand?.(); lh.offBand = null;
   try { lh.micNode?.disconnect(); lh.mic?.close(); } catch { /* */ } lh.micNode = null; lh.mic = null; lh.micStream?.getTracks().forEach((t) => t.stop());
   lh.stream?.getTracks().forEach((t) => t.stop()); lh.stream = null; $("lh-video").srcObject = null; $("lh-video").hidden = true;
   clearInterval(lh.bridgeTimer); $("lh-bridge").hidden = true; $("lh-bridge").removeAttribute("src");
@@ -1905,6 +1914,452 @@ async function loadDemoTranscript() {
   } catch { /* older server */ }
 }
 function setDemoRecording(live) { $("demo-rec-badge").hidden = !live; if (live && !capture.active) $("live-source").textContent = "Vexo band · live demo"; }
+
+
+/* ---------- Care view: video source, Gemini Live guidance, caregiver agent, routine, health ---------- */
+const care = { src: "file", files: [], idx: 0, camStream: null, bridgeTimer: 0, bridgeStatusTimer: 0, bridgeLive: false,
+  ws: null, out: null, playAt: 0, sources: [], muted: false, frameTimer: 0, audioStop: null, vctx: null, vsrc: null, noSoundWarned: false,
+  lines: [], visible: false, agentTimer: 0, agentBusy: false, history: [], lastStatus: null, lastTapAt: 0,
+  health: null, healthAt: 0, taps: [], falls: [], bandSeen: new WeakSet(), routineKey: "" };
+const CARE_SRC_LABEL = { file: "Recorded video, played as a live stream", bridge: "GoPro (via bridge)", camera: "This computer's camera" };
+function careSrcStatus(text) { $("care-src-status").textContent = text; }
+function careLiveStatus(text) { $("care-live-status").textContent = text; }
+function careLiveState(state, text) {
+  $("care-live").dataset.state = state; if (text != null) careLiveStatus(text);
+  $("care-start").hidden = state !== "idle"; $("care-stop").hidden = state === "idle";
+}
+function careShowMedia() {
+  const v = $("care-video"), img = $("care-bridge");
+  const hasVideo = (care.src === "file" && care.files.length) || (care.src === "camera" && care.camStream);
+  v.hidden = !hasVideo; img.hidden = care.src !== "bridge";
+  v.controls = care.src === "file";
+  $("care-stage-empty").hidden = Boolean(hasVideo) || care.src === "bridge";
+  $("care-file-row").hidden = care.src !== "file";
+  $("care-files-clear").hidden = !care.files.length;
+  const badge = $("care-live-badge");
+  let label = "", live = false;
+  if (care.src === "file" && care.files.length) { label = "Recorded video · played as a live stream"; live = true; }
+  else if (care.src === "camera" && care.camStream) { label = "This computer's camera · live"; live = true; }
+  else if (care.src === "bridge") { label = care.bridgeLive ? "GoPro (via bridge) · live" : "GoPro (via bridge) · waiting"; live = care.bridgeLive; }
+  badge.hidden = !label; badge.textContent = label; badge.dataset.live = String(live);
+}
+function careSourceLive() { return care.src === "file" ? care.files.length > 0 : care.src === "camera" ? Boolean(care.camStream) : care.bridgeLive; }
+/* uploaded videos: object URLs only (never uploaded), looped as a playlist */
+function careRevokeFiles() { care.files.forEach((f) => { try { URL.revokeObjectURL(f.url); } catch { /* */ } }); care.files = []; care.idx = 0; }
+function careRenderPlaylist() {
+  $("care-playlist").replaceChildren(...care.files.map((f, i) => el("li", { className: i === care.idx && care.src === "file" ? "on" : "", textContent: `${i === care.idx ? "▶ " : ""}${f.name} · ${(f.size / 1048576).toFixed(1)} MB` })));
+}
+async function carePlayIndex(i) {
+  const v = $("care-video");
+  if (!care.files.length) return;
+  care.idx = ((i % care.files.length) + care.files.length) % care.files.length;
+  v.srcObject = null; v.loop = care.files.length === 1; v.src = care.files[care.idx].url;
+  careRenderPlaylist();
+  try { await v.play(); careSrcStatus(`Playing ${care.idx + 1} of ${care.files.length}: ${care.files[care.idx].name}. Recorded video, played as a live stream (loops).`); }
+  catch { careSrcStatus("The browser blocked autoplay. Press play on the video (or Start live guidance) to begin."); }
+}
+$("care-video").addEventListener("ended", () => { if (care.src === "file" && care.files.length > 1) carePlayIndex(care.idx + 1); });
+$("care-video").addEventListener("error", () => {
+  if (care.src !== "file" || !care.files.length) return;
+  careSrcStatus(`Can't play ${care.files[care.idx]?.name || "this file"} in this browser. Skipping.`);
+  if (care.files.length > 1) setTimeout(() => carePlayIndex(care.idx + 1), 800);
+});
+$("care-files").addEventListener("change", () => {
+  const picked = [...($("care-files").files || [])].filter((f) => /^video\//.test(f.type) || /\.(mp4|mov|m4v|webm)$/i.test(f.name));
+  if (!picked.length) { careSrcStatus("Choose mp4, mov or webm video files."); return; }
+  careRevokeFiles();
+  care.files = picked.map((f) => ({ name: f.name, size: f.size, url: URL.createObjectURL(f) }));
+  $("care-files").value = ""; care.noSoundWarned = false;
+  careSetSource("file"); carePlayIndex(0);
+});
+$("care-files-clear").addEventListener("click", () => {
+  const v = $("care-video"); v.pause(); v.removeAttribute("src"); v.load();
+  careRevokeFiles(); careRenderPlaylist(); careShowMedia(); careSrcStatus("Videos cleared.");
+  if (care.ws && care.src === "file") careStop("Stopped: no video left to watch.");
+});
+/* camera */
+async function careStartCamera() {
+  if (care.camStream) return true;
+  try {
+    care.camStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } });
+    const v = $("care-video"); v.removeAttribute("src"); v.loop = false; v.srcObject = care.camStream; v.muted = true;
+    await v.play().catch(() => {});
+    careSrcStatus(`Camera on: ${care.camStream.getVideoTracks()[0]?.label || "this computer's camera"}.`); careShowMedia(); return true;
+  } catch (e) { careSrcStatus(`Camera unavailable (${e.name === "NotAllowedError" ? "permission denied" : e.message}).`); careShowMedia(); return false; }
+}
+function careStopCamera() {
+  care.camStream?.getTracks().forEach((t) => t.stop()); care.camStream = null;
+  const v = $("care-video"); if (v.srcObject) { v.srcObject = null; }
+}
+/* GoPro bridge */
+async function careBridgeStatus() {
+  try { const s = await (await fetch("/api/vision/status")).json(); care.bridgeLive = Boolean(s.live); careSrcStatus(care.bridgeLive ? `GoPro bridge live${s.camera ? ` · ${s.camera}` : ""}.` : "Waiting for the GoPro bridge to send frames…"); }
+  catch { care.bridgeLive = false; careSrcStatus("GoPro bridge unavailable on this server."); }
+  careShowMedia();
+}
+function careBridgeOn() {
+  if (care.bridgeTimer) return;
+  const img = $("care-bridge");
+  img.onerror = () => { img.removeAttribute("src"); };
+  const tick = () => { if (!document.hidden) img.src = `/api/vision/latest.jpg?t=${Date.now()}`; };
+  tick(); care.bridgeTimer = setInterval(tick, 1000);
+  careBridgeStatus(); care.bridgeStatusTimer = setInterval(careBridgeStatus, 5000);
+}
+function careBridgeOff() { clearInterval(care.bridgeTimer); clearInterval(care.bridgeStatusTimer); care.bridgeTimer = 0; care.bridgeStatusTimer = 0; $("care-bridge").removeAttribute("src"); }
+function careSetSource(src) {
+  if (care.ws && src !== care.src) careStop("Stopped because the video source changed. Press Start to continue.");
+  care.src = src;
+  document.querySelectorAll("input[name=care-src]").forEach((r) => { r.checked = r.value === src; });
+  const v = $("care-video");
+  if (src !== "camera") careStopCamera();
+  if (src !== "bridge") careBridgeOff();
+  if (src === "file") { if (care.files.length) { if (!v.src || v.srcObject) carePlayIndex(care.idx); } else { v.removeAttribute("src"); careSrcStatus("Upload one or more videos. They stay on this computer and play in a loop like a live stream."); } }
+  else { v.pause(); v.removeAttribute("src"); }
+  if (src === "camera") careStartCamera();
+  if (src === "bridge" && care.visible) careBridgeOn();
+  careRenderPlaylist(); careShowMedia();
+}
+document.querySelectorAll("input[name=care-src]").forEach((r) => r.addEventListener("change", () => { if (r.checked) careSetSource(r.value); }));
+
+/* Gemini Live guidance */
+function careSendPcm(int16) { if (care.ws?.readyState === 1 && int16.length) care.ws.send(int16.buffer); }
+function careLog(kind, text, done = false) {
+  if (!text) return;
+  const box = $("care-log"), last = care.lines[care.lines.length - 1];
+  if (last && last.kind === kind && !last.done) { last.text += text; box.lastElementChild.querySelector("p").textContent = last.text; }
+  else {
+    care.lines.push({ kind, text, done: false, at: new Date().toISOString() });
+    box.append(el("li", { className: `lh-${kind}` }, el("b", { textContent: kind === "said" ? "Threadline" : kind === "note" ? "Note" : "Heard" }), el("p", { textContent: text })));
+  }
+  if (done) care.lines[care.lines.length - 1].done = true;
+  while (care.lines.length > 120) { care.lines.shift(); box.firstChild?.remove(); }
+  box.scrollTop = box.scrollHeight;
+}
+function careVideoAudio() {
+  const v = $("care-video");
+  if (!care.vctx) { care.vctx = new AudioContext(); care.vsrc = care.vctx.createMediaElementSource(v); care.vsrc.connect(care.vctx.destination); }
+  care.vctx.resume().catch(() => {});
+  v.muted = false;
+  const rate = care.vctx.sampleRate, proc = care.vctx.createScriptProcessor(4096, 1, 1), sink = care.vctx.createGain();
+  sink.gain.value = 0; let silent = 0;
+  proc.onaudioprocess = (ev) => {
+    const f = ev.inputBuffer.getChannelData(0); let peak = 0;
+    for (let i = 0; i < f.length; i += 8) peak = Math.max(peak, Math.abs(f[i]));
+    if (!v.paused && peak < 0.0005) { silent += f.length / rate; if (silent > 8 && !care.noSoundWarned) { care.noSoundWarned = true; careLog("note", "This clip seems to have no sound. Gemini still sees the video; type nothing, it will describe what it sees.", true); } } else silent = 0;
+    careSendPcm(floatToPcm16(f, rate));
+  };
+  care.vsrc.connect(proc); proc.connect(sink); sink.connect(care.vctx.destination);
+  care.audioStop = () => { proc.onaudioprocess = null; try { care.vsrc.disconnect(proc); } catch { /* */ } try { proc.disconnect(); sink.disconnect(); } catch { /* */ } v.muted = true; care.vctx?.suspend().catch(() => {}); };
+  return "the video's own sound";
+}
+async function careMicAudio() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  const ctx = new AudioContext(), rate = ctx.sampleRate, srcNode = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), sink = ctx.createGain();
+  sink.gain.value = 0;
+  proc.onaudioprocess = (ev) => careSendPcm(floatToPcm16(ev.inputBuffer.getChannelData(0), rate));
+  srcNode.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+  care.audioStop = () => { proc.onaudioprocess = null; try { srcNode.disconnect(); proc.disconnect(); } catch { /* */ } stream.getTracks().forEach((t) => t.stop()); ctx.close().catch(() => {}); };
+  return "this computer's microphone";
+}
+async function careStartAudio() {
+  if (capture.band) { try { care.audioStop = await liveBandAudio(careSendPcm); return "the Vexo band's microphone"; } catch { care.audioStop = null; } }
+  if (care.src === "file" && care.files.length) return careVideoAudio();
+  return careMicAudio();
+}
+function careStartFrames() {
+  const c = $("care-canvas"), ctx = c.getContext("2d");
+  care.frameTimer = setInterval(() => {
+    const v = $("care-video");
+    if (care.ws?.readyState !== 1 || document.hidden || care.src === "bridge" || !v.videoWidth || v.hidden) return;
+    c.width = 640; c.height = Math.round(640 * v.videoHeight / v.videoWidth);
+    try { ctx.drawImage(v, 0, 0, c.width, c.height); } catch { return; }
+    const data = c.toDataURL("image/jpeg", 0.6).split(",")[1];
+    if (data.length < 290000) care.ws.send(JSON.stringify({ type: "frame", jpeg: data }));
+  }, 1000);
+}
+async function careStart() {
+  if (care.ws) return;
+  if (lh.ws) lhStop("Paused: live guidance on the Care page is using Gemini Live.");
+  if (care.src === "file" && !care.files.length) return careLiveStatus("Upload a video first, or choose the GoPro or this computer's camera.");
+  if (care.src === "camera" && !(await careStartCamera())) return careLiveStatus("Camera unavailable. Pick another source.");
+  careLiveState("busy", "Connecting to Gemini Live…");
+  try {
+    if (care.src === "file") { const v = $("care-video"); if (v.paused) await v.play().catch(() => {}); }
+    if (care.src === "bridge") careBridgeOn();
+    care.out = new AudioContext({ sampleRate: 24000 }); care.playAt = 0; care.out.resume().catch(() => {});
+    const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
+    ws.binaryType = "arraybuffer"; care.ws = ws;
+    const bridge = care.src === "bridge";
+    const openTimer = setTimeout(() => { if (care.ws === ws && $("care-live").dataset.state === "busy") careStop("Gemini Live didn't answer. It may be unavailable right now."); }, 15000);
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory", ...(bridge ? { vision: "bridge" } : {}) }));
+    ws.onmessage = async (event) => {
+      if (care.ws !== ws) return;
+      if (event.data instanceof ArrayBuffer) return livePlayPcm24(care, event.data);
+      let msg; try { msg = JSON.parse(event.data); } catch { return; }
+      if (msg.type === "ready") {
+        clearTimeout(openTimer);
+        const notes = ["This person lives with dementia. Speak calmly, in short sentences, one step at a time; reassure, never rush.",
+          ...careRoutine().map((r) => `Usual routine: ${r}`)];
+        ws.send(JSON.stringify({ type: "context", notes }));
+        const where = await careStartAudio().catch((e) => { careLog("note", `No audio input (${e.message}). Gemini still sees the video.`, true); return "no microphone"; });
+        if (care.ws !== ws) { care.audioStop?.(); care.audioStop = null; return; }
+        if (!bridge) careStartFrames();
+        careLiveState("live", `Live with ${msg.model || "Gemini"} · watching ${CARE_SRC_LABEL[care.src]} · listening through ${where}.`);
+        if (typeof logAction === "function") logAction("Started Care live guidance");
+      } else if (msg.type === "heard") careLog("heard", msg.text);
+      else if (msg.type === "said") careLog("said", msg.text);
+      else if (msg.type === "turn_complete") { const l = care.lines[care.lines.length - 1]; if (l) l.done = true; }
+      else if (msg.type === "interrupted") liveInterrupt(care);
+      else if (msg.type === "error") { careLiveStatus(msg.message || "Gemini Live reported an error."); if ($("care-live").dataset.state === "busy") careStop(`Gemini Live unavailable: ${msg.message || "error"}`); }
+      else if (msg.type === "vision") careLiveStatus(msg.live ? `Seeing through ${msg.camera || "the GoPro"}.` : "Waiting for GoPro frames from the bridge…");
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => { clearTimeout(openTimer); if (care.ws === ws) careStop($("care-live").dataset.state === "busy" ? "Gemini Live is unavailable right now." : "Live guidance ended."); };
+  } catch (e) { careStop(`Couldn't start: ${e.message}`); }
+}
+function careStop(text = "Stopped.") {
+  const ws = care.ws; care.ws = null;
+  try { ws?.readyState === 1 && ws.send(JSON.stringify({ type: "stop" })); ws?.close(); } catch { /* closed */ }
+  clearInterval(care.frameTimer); care.frameTimer = 0;
+  liveInterrupt(care);
+  try { care.audioStop?.(); } catch { /* */ } care.audioStop = null;
+  try { care.out?.close(); } catch { /* */ } care.out = null;
+  if (care.src === "camera") { careStopCamera(); careSrcStatus("Camera off. Choose the camera again to turn it on."); }
+  if (care.src === "bridge" && !care.visible) careBridgeOff();
+  careShowMedia(); careLiveState("idle", text);
+}
+$("care-start").addEventListener("click", careStart);
+$("care-stop").addEventListener("click", () => careStop());
+$("care-mute").addEventListener("change", () => { care.muted = $("care-mute").checked; if (care.muted) liveInterrupt(care); });
+$("lh-start").addEventListener("click", () => { if (care.ws) careStop("Paused: memory help on Your band is using Gemini Live."); }, true);
+
+/* Band events the agent should know about */
+function careWatchBand() {
+  const b = capture.band;
+  if (b && !care.bandSeen.has(b)) {
+    care.bandSeen.add(b);
+    b.on("tap", () => care.taps.push(Date.now()));
+    b.on("free-fall", () => { care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
+  }
+  const cut = Date.now() - 10 * 60000;
+  care.taps = care.taps.filter((t) => t > cut); care.falls = care.falls.filter((t) => t > cut);
+  if (careRoutineKey() !== care.routineKey) renderCareRoutine();
+}
+setInterval(careWatchBand, 2000);
+
+/* Routine (per band, kept in this browser) */
+const CARE_ROUTINE_DEFAULT = ["Breakfast 8:00", "Pills with breakfast", "Short walk 10:30", "Lunch 12:30", "Call with family 17:00"];
+function careRoutineKey() { return `threadline.care.routine.v1.${bandNumber || "default"}`; }
+function careRoutine() { try { const v = JSON.parse(localStorage.getItem(careRoutineKey()) || "null"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : CARE_ROUTINE_DEFAULT.slice(); } catch { return CARE_ROUTINE_DEFAULT.slice(); } }
+function careSaveRoutine(items) { try { localStorage.setItem(careRoutineKey(), JSON.stringify(items.slice(0, 40))); } catch { /* storage off */ } }
+function renderCareRoutine() {
+  care.routineKey = careRoutineKey();
+  const items = careRoutine();
+  $("care-routine").replaceChildren(...(items.length ? items.map((text, i) => {
+    const input = el("input", { type: "text", value: text, maxLength: 120, "aria-label": `Routine item ${i + 1}` });
+    input.addEventListener("change", () => { const all = careRoutine(); const t = input.value.trim(); if (t) all[i] = t; else all.splice(i, 1); careSaveRoutine(all); renderCareRoutine(); });
+    const rm = el("button", { type: "button", className: "text-button", textContent: "Remove" });
+    rm.addEventListener("click", () => { const all = careRoutine(); all.splice(i, 1); careSaveRoutine(all); renderCareRoutine(); });
+    return el("li", {}, input, rm);
+  }) : [el("li", { className: "care-empty", textContent: "No routine yet. Add what the day usually looks like." })]));
+}
+$("care-routine-form").addEventListener("submit", (e) => {
+  e.preventDefault(); const t = $("care-routine-text").value.trim(); if (!t) return;
+  careSaveRoutine([...careRoutine(), t]); $("care-routine-text").value = ""; renderCareRoutine();
+});
+
+/* Health: Apple Health summary + live watch readings */
+const CARE_HM = [
+  ["heart_rate", "Heart rate", "bpm", ["heart_rate", "hr", "heart_rate_avg"]],
+  ["resting_hr", "Resting HR", "bpm", ["resting_hr", "resting_heart_rate"]],
+  ["hrv", "HRV", "ms", ["hrv_sdnn", "hrv", "hrv_sdnn_ms", "hrv_ms", "heart_rate_variability"]],
+  ["spo2", "SpO₂", "%", ["spo2", "oxygen_saturation", "blood_oxygen"]],
+  ["respiratory_rate", "Breathing", "/min", ["respiratory_rate", "resp_rate"]],
+  ["sleep_hours", "Sleep", "h", ["sleep_hours", "sleep_hours_last_night", "sleep"]],
+  ["steps", "Steps", "", ["steps", "step_count"]],
+  ["exercise_min", "Exercise", "min", ["exercise_min", "exercise_minutes", "exercise_min_today"]],
+  ["wrist_temp", "Wrist temp", "°C", ["wrist_temp", "wrist_temperature", "wrist_temp_c", "wrist_temperature_c"]],
+  ["mindful_min", "Mindful", "min", ["mindful_min", "mindful_minutes", "mindful_min_today"]],
+  ["mood", "Mood", "", ["mood", "state_of_mind"]],
+];
+const careNum = (v) => { if (v && typeof v === "object") v = v.value ?? v.avg ?? v.mean ?? v.average ?? v.today ?? null; return v == null || v === "" ? null : v; };
+function carePick(obj, aliases) { if (!obj || typeof obj !== "object") return null; for (const a of aliases) { const v = careNum(obj[a]); if (v != null) return v; } return null; }
+function careHealthNorm(d) {
+  const out = {}; if (!d || typeof d !== "object") return out;
+  const today = d.today || d.latest || {}, avg = d.averages || d.average || d.avg || d.mean || {};
+  const rows = Array.isArray(d.days) ? d.days : Array.isArray(d.series) ? d.series : Array.isArray(d.daily) ? d.daily : [];
+  const metrics = d.metrics && typeof d.metrics === "object" && !Array.isArray(d.metrics) ? d.metrics : {};
+  for (const [key, , , aliases] of CARE_HM) {
+    const m = aliases.map((a) => metrics[a]).find((x) => x != null);
+    let series = rows.map((r) => ({ date: r.date || r.day, v: carePick(r, aliases) })).filter((x) => typeof x.v === "number");
+    if (!series.length && m && Array.isArray(m.series || m.days)) series = (m.series || m.days).map((x) => ({ date: x.date || x.day, v: careNum(x.value ?? x.v ?? x) })).filter((x) => typeof x.v === "number");
+    let t = carePick(today, aliases); if (t == null && m && typeof m === "object") t = careNum(m.today ?? m.latest);
+    if (t == null && rows.length) { const last = rows[rows.length - 1]; if ((last.date || last.day) === localDate(new Date())) t = carePick(last, aliases); }
+    let a = carePick(avg, aliases); if (a == null && m && typeof m === "object") a = careNum(m.avg ?? m.average ?? m.mean ?? m.avg_30d);
+    if (a == null && series.length) a = series.reduce((s, x) => s + x.v, 0) / series.length;
+    if (t != null || a != null || series.length) out[key] = { today: t, avg: a, series };
+  }
+  return out;
+}
+function careFmt(key, v) {
+  if (v == null) return "—"; if (typeof v !== "number") return String(v);
+  if (key === "spo2" && v <= 1) v *= 100;
+  if (key === "steps") return Math.round(v).toLocaleString();
+  if (key === "sleep_hours" || key === "wrist_temp" || key === "respiratory_rate") return v.toFixed(1);
+  return String(Math.round(v));
+}
+function careLiveWatch() { return watch.sensors && Date.now() - watch.sensorsAt < 120000 ? watch.sensors : null; }
+function careHealthToday() {
+  const norm = care.health || {}, live = careLiveWatch(), out = {};
+  for (const [key, , , aliases] of CARE_HM) {
+    const lv = live ? carePick(live, aliases) : null;
+    const v = lv ?? norm[key]?.today ?? null;
+    if (v != null) out[key] = v;
+    if (norm[key]?.avg != null) out[`${key}_30d_avg`] = Math.round(norm[key].avg * 10) / 10;
+  }
+  return out;
+}
+function careSpark(title, series, key) {
+  const vals = series.slice(-30).map((x) => x.v); if (vals.length < 2) return null;
+  const NS = "http://www.w3.org/2000/svg", w = 140, h = 40, min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - 4 - ((v - min) / span) * (h - 8)}`).join(" ");
+  const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${title}, last ${vals.length} days, from ${careFmt(key, min)} to ${careFmt(key, max)}`);
+  const line = document.createElementNS(NS, "polyline"); line.setAttribute("points", pts); line.setAttribute("fill", "none"); line.setAttribute("stroke", "#5E9C7A"); line.setAttribute("stroke-width", "2"); line.setAttribute("vector-effect", "non-scaling-stroke");
+  svg.append(line);
+  return el("figure", {}, el("figcaption", { textContent: `${title} · ${vals.length} days · latest ${careFmt(key, vals[vals.length - 1])}` }), svg);
+}
+function renderCareHealth() {
+  const norm = care.health || {}, live = careLiveWatch(), tiles = [];
+  for (const [key, label, unit, aliases] of CARE_HM) {
+    const lv = live ? carePick(live, aliases) : null, m = norm[key];
+    if (lv == null && !m) continue;
+    const v = lv ?? m?.today;
+    tiles.push(el("div", { className: "hm" }, el("div", { className: "hm-k" }, label, lv != null ? el("span", { className: "hm-live", textContent: "live" }) : null),
+      el("div", { className: "hm-v", textContent: v == null ? "—" : `${careFmt(key, v)}${unit && typeof v === "number" ? ` ${unit}` : ""}` }),
+      el("div", { className: "hm-a", textContent: m?.avg != null ? `30-day avg ${careFmt(key, m.avg)}${unit ? ` ${unit}` : ""}` : "No history" })));
+  }
+  if (!tiles.length) {
+    $("care-health").replaceChildren(el("div", { className: "care-empty-health" }, el("p", { className: "caption", textContent: care.healthError || "Import your Apple Health export to see history." })));
+    $("care-import").open = true;
+  } else $("care-health").replaceChildren(...tiles);
+  $("care-spark").replaceChildren(...[["Steps", "steps"], ["Sleep", "sleep_hours"], ["Resting HR", "resting_hr"]].map(([t, k]) => careSpark(t, norm[k]?.series || [], k)).filter(Boolean));
+}
+async function loadCareHealth(force = false) {
+  if (!force && Date.now() - care.healthAt < 5 * 60000) return renderCareHealth();
+  care.healthAt = Date.now();
+  try {
+    const r = await fetch("/api/health/summary?days=30");
+    if (!r.ok) throw new Error(r.status === 404 ? "missing" : `HTTP ${r.status}`);
+    care.health = careHealthNorm(await r.json()); care.healthError = "";
+  } catch (e) { care.health = null; care.healthError = e.message === "missing" ? "Health history isn't available on this server yet. Import your Apple Health export to see history." : "Couldn't load health history. Import your Apple Health export to see history."; }
+  renderCareHealth();
+}
+$("care-health-upload").addEventListener("click", () => {
+  const f = $("care-health-file").files?.[0], msg = $("care-health-msg"), bar = $("care-health-progress");
+  if (!f) { msg.textContent = "Choose the export.zip (or export.xml) first."; return; }
+  const key = publishKey();
+  if (!key) { msg.textContent = "Only the owner can import. Save the owner key under Your band → Connect a device → Owner first."; return; }
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/health/import");
+  xhr.setRequestHeader("X-Publish-Key", key);
+  xhr.setRequestHeader("Content-Type", /\.xml$/i.test(f.name) ? "application/xml" : "application/zip");
+  bar.hidden = false; bar.value = 0; $("care-health-upload").disabled = true; msg.textContent = `Uploading ${(f.size / 1048576).toFixed(1)} MB…`;
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) { bar.value = Math.round((e.loaded / e.total) * 100); if (bar.value >= 100) msg.textContent = "Uploaded. Reading the export (this can take a minute)…"; } };
+  xhr.onload = () => {
+    $("care-health-upload").disabled = false; bar.hidden = true;
+    if (xhr.status === 401 || xhr.status === 403) { msg.textContent = "Only the owner can import."; return; }
+    if (xhr.status === 404) { msg.textContent = "Health import isn't available on this server yet."; return; }
+    if (xhr.status === 409) { msg.textContent = "Another import is already running. Try again in a minute."; return; }
+    if (xhr.status === 415) { msg.textContent = "Choose the export.zip or export.xml from the Health app."; return; }
+    if (xhr.status === 400) { msg.textContent = "That file isn't an Apple Health export."; return; }
+    if (xhr.status === 503) { msg.textContent = "Health storage is off on this server."; return; }
+    if (xhr.status < 200 || xhr.status >= 300) { let d = ""; try { d = JSON.parse(xhr.responseText).detail || ""; } catch { /* */ } msg.textContent = `Import failed (${xhr.status}${d ? `: ${d}` : ""}).`; return; }
+    let d = {}; try { d = JSON.parse(xhr.responseText); } catch { /* */ }
+    const range = Array.isArray(d.range) ? d.range.join(" to ") : d.range && typeof d.range === "object" ? `${d.range.start || d.range.from || ""} to ${d.range.end || d.range.to || ""}` : (d.range || "");
+    const metrics = Array.isArray(d.metrics) ? d.metrics.length : d.metrics;
+    msg.textContent = `Imported ${d.records ?? "?"} records · ${d.days ?? "?"} days · ${metrics ?? "?"} metrics${range ? ` · ${range}` : ""}.`;
+    $("care-health-file").value = ""; loadCareHealth(true);
+  };
+  xhr.onerror = () => { $("care-health-upload").disabled = false; bar.hidden = true; msg.textContent = "Upload failed. Check the connection and try again."; };
+  xhr.send(f);
+});
+
+/* Caregiver agent */
+function careContext() {
+  const bandLines = [...document.querySelectorAll("#live-lines li p")].map((p) => p.textContent.trim()).filter(Boolean);
+  const heard = care.lines.filter((l) => l.kind === "heard").map((l) => `Heard: ${l.text.trim()}`);
+  const said = care.lines.filter((l) => l.kind === "said").map((l) => l.text.trim()).filter(Boolean);
+  const w = careLiveWatch();
+  // Shapes match POST /api/care/assess exactly (objects, booleans, enum source).
+  const nowIso = new Date().toISOString();
+  const src = { file: "file", upload: "file", files: "file", bridge: "gopro", gopro: "gopro", camera: "camera" }[care.src] || null;
+  return {
+    transcript: [...bandLines, ...heard].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
+    observations: said.slice(-20).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
+    band: { activity: signals.activity || w?.activity || null, steps: Number.isFinite(signals.steps) && signals.steps > 0 ? Math.round(signals.steps) : null, taps_last_10min: care.taps.length, free_fall_last_10min: care.falls.length > 0, connected: Boolean(capture.band) },
+    health: careHealthToday(),
+    video: { source: src, live: Boolean(careSourceLive()) },
+    routine: careRoutine().map(String).slice(0, 10),
+  };
+}
+const CARE_STATUS_WORD = { ok: "All calm", needs_attention: "Needs attention", urgent: "Please check in now" };
+function careRenderAssessment(d) {
+  const status = ["ok", "needs_attention", "urgent"].includes(d.status) ? d.status : "needs_attention";
+  $("care-agent").dataset.status = status;
+  $("care-agent-h").textContent = CARE_STATUS_WORD[status];
+  $("care-agent-summary").textContent = d.summary || "";
+  $("care-next").textContent = d.next_step || "—";
+  $("care-note").textContent = d.caregiver_note || "—";
+  $("care-reasons").replaceChildren(...[...(d.reasons || []), ...(d.observations || []).map((o) => `Seen: ${o}`)].slice(0, 12).map((r) => el("li", { textContent: String(r) })));
+  const at = d.at ? new Date(d.at) : new Date();
+  care.history.push({ status, summary: d.summary || CARE_STATUS_WORD[status], at });
+  if (care.history.length > 60) care.history.shift();
+  const box = $("care-history");
+  box.replaceChildren(...care.history.slice().reverse().map((h) => el("li", {}, el("span", { className: `dotk ${h.status}`, "aria-hidden": "true" }), el("time", { textContent: h.at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: `${CARE_STATUS_WORD[h.status]} · ${h.summary}` }))));
+  box.scrollTop = 0;
+  $("care-agent-state").textContent = `Checked ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${d.engine ? ` · ${d.engine}` : ""}.`;
+  if (status === "urgent" && (care.lastStatus !== "urgent" || Date.now() - care.lastTapAt > 5 * 60000)) {
+    care.lastTapAt = Date.now();
+    sendHaptic("notification", (d.next_step || d.summary || "Please check in").slice(0, 80));
+    try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline · please check in", { body: d.caregiver_note || d.summary || d.next_step || "" }); } catch { /* not allowed */ }
+    if (typeof logAction === "function") logAction("Caregiver agent: urgent, tapped the watch");
+  }
+  care.lastStatus = status;
+}
+async function careAssess(manual) {
+  if (care.agentBusy) { if (manual) $("care-agent-state").textContent = "A check is already running…"; return; }
+  care.agentBusy = true; $("care-check").disabled = true; $("care-agent-state").textContent = "Checking…";
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 30000);
+  try {
+    const r = await fetch("/api/care/assess", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ context: careContext(), engine: "gemini" }), signal: ctl.signal });
+    if (r.status === 404 || r.status === 405) throw new Error("unavailable");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    careRenderAssessment(await r.json());
+  } catch (e) {
+    $("care-agent-state").textContent = e.message === "unavailable" ? "Caregiver agent unavailable." : `Caregiver agent unavailable (${e.name === "AbortError" ? "timed out" : e.message}). Trying again in 30 s.`;
+  } finally { clearTimeout(timer); care.agentBusy = false; $("care-check").disabled = false; }
+}
+$("care-check").addEventListener("click", async () => {
+  if ("Notification" in window && Notification.permission === "default") { try { await Notification.requestPermission(); } catch { /* ignored */ } }
+  careAssess(true);
+});
+
+function careOnView(name) {
+  const was = care.visible; care.visible = name === "care";
+  if (care.visible && !was) {
+    renderCareRoutine(); loadCareHealth(); careShowMedia(); careRenderPlaylist();
+    if (care.src === "bridge") careBridgeOn();
+    clearInterval(care.agentTimer);
+    care.agentTimer = setInterval(() => { if (!document.hidden) { careAssess(false); renderCareHealth(); } }, 30000);
+    setTimeout(() => { if (care.visible && !care.history.length) careAssess(false); }, 1500);
+  } else if (!care.visible && was) {
+    clearInterval(care.agentTimer); care.agentTimer = 0;
+    if (!care.ws) careBridgeOff();
+  }
+}
+window.addEventListener("pagehide", () => { careStop(); careStopCamera(); careRevokeFiles(); });
+careSetSource("file");
 
 render();
 showView(location.hash.slice(1) || "live");

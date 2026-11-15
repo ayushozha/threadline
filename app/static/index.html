@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f4f1">
   <title>Threadline — a little context, kept close</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" type="module"></script>
 </head>
@@ -17,6 +21,7 @@
       </a>
       <div class="nav-list">
         <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Your band</span><span class="nav-live" id="nav-live" hidden></span></a>
+        <a href="#care" class="nav-item" data-view-link="care"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path></svg><span>Care</span></a>
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
         <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Energy</span></a>
@@ -205,6 +210,85 @@
         </div>
       </section>
 
+      <section class="view" data-view="care" hidden>
+        <div class="care-grid">
+          <div class="stack">
+            <section class="card care-card" aria-labelledby="care-src-h">
+              <p class="agent-eyebrow">Video source</p>
+              <h2 id="care-src-h">What Threadline is watching</h2>
+              <div class="care-tabs" role="radiogroup" aria-label="Video source">
+                <label class="care-tab"><input type="radio" name="care-src" value="file" checked> Upload videos</label>
+                <label class="care-tab"><input type="radio" name="care-src" value="bridge"> GoPro (via bridge)</label>
+                <label class="care-tab"><input type="radio" name="care-src" value="camera"> This computer's camera</label>
+              </div>
+              <div id="care-file-row" class="row tight">
+                <label class="visually-hidden" for="care-files">Video files</label>
+                <input id="care-files" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" multiple>
+                <button type="button" id="care-files-clear" class="text-button" hidden>Clear videos</button>
+              </div>
+              <div class="care-stage">
+                <video id="care-video" class="care-media" playsinline muted controls hidden></video>
+                <img id="care-bridge" class="care-media" alt="Live view from the GoPro" hidden>
+                <p id="care-stage-empty" class="care-empty">No video yet. Upload clips, use the GoPro bridge, or this computer's camera.</p>
+                <span id="care-live-badge" class="care-badge" hidden></span>
+              </div>
+              <canvas id="care-canvas" width="640" height="360" hidden></canvas>
+              <p id="care-src-status" class="caption" role="status">Nothing playing.</p>
+              <ol id="care-playlist" class="care-playlist"></ol>
+            </section>
+
+            <section class="card care-card live-help" id="care-live" data-state="idle" aria-labelledby="care-live-h">
+              <p class="agent-eyebrow">Gemini Live · live guidance</p>
+              <h2 id="care-live-h">Gentle guidance, out loud</h2>
+              <p class="caption">Sees the chosen video, hears through the Vexo band (or the video's own sound, or this computer's mic) and speaks calm, short guidance.</p>
+              <div class="row tight">
+                <button type="button" id="care-start" class="primary-sm">Start live guidance</button>
+                <button type="button" id="care-stop" class="secondary" hidden>Stop</button>
+                <label class="check inline"><input type="checkbox" id="care-mute"> Mute speech</label>
+              </div>
+              <p id="care-live-status" class="caption" role="status">Not running.</p>
+              <ol id="care-log" class="lh-log care-log" aria-live="polite"></ol>
+            </section>
+          </div>
+
+          <div class="stack">
+            <section class="card care-card care-agent" id="care-agent" data-status="none" aria-labelledby="care-agent-h">
+              <p class="agent-eyebrow">Caregiver agent · checks every 30 s while this page is open</p>
+              <div class="care-status-row">
+                <div><h2 id="care-agent-h" class="care-status-word">Not checked yet</h2><p id="care-agent-summary" class="care-summary">The agent reads the transcript, what Gemini sees, the band, the watch and the routine.</p></div>
+                <button type="button" id="care-check" class="secondary">Check now</button>
+              </div>
+              <div class="care-next"><b>Next step</b><p id="care-next">—</p></div>
+              <div class="care-note"><b>For the family</b><p id="care-note">—</p></div>
+              <ul id="care-reasons" class="care-reasons"></ul>
+              <p id="care-agent-state" class="caption" role="status"></p>
+              <h3 class="care-sub">Earlier checks</h3>
+              <ol id="care-history" class="care-history"><li class="care-empty">No checks yet.</li></ol>
+            </section>
+
+            <section class="card care-card" aria-labelledby="care-routine-h">
+              <p class="agent-eyebrow">Routine</p>
+              <h2 id="care-routine-h">What the day usually looks like</h2>
+              <ol id="care-routine" class="care-routine"></ol>
+              <form id="care-routine-form" class="row tight"><label class="visually-hidden" for="care-routine-text">Routine item</label><input id="care-routine-text" type="text" maxlength="120" placeholder="e.g. Breakfast 8:00"><button type="submit" class="secondary">Add</button></form>
+            </section>
+
+            <section class="card care-card" aria-labelledby="care-health-h">
+              <p class="agent-eyebrow">Health · Apple Health and the watch</p>
+              <h2 id="care-health-h">Today and the last 30 days</h2>
+              <div id="care-health" class="care-health"><p class="caption">Loading…</p></div>
+              <div id="care-spark" class="care-spark"></div>
+              <details class="care-import" id="care-import">
+                <summary>Import an Apple Health export (owner only)</summary>
+                <ol class="steps"><li>On the iPhone open Health, tap your profile picture.</li><li>Tap “Export All Health Data” and wait.</li><li>Share the zip to this computer (AirDrop or Files).</li><li>Choose it here.</li></ol>
+                <div class="row tight"><label class="visually-hidden" for="care-health-file">Health export</label><input id="care-health-file" type="file" accept=".zip,.xml,application/zip,application/xml,text/xml"><button type="button" id="care-health-upload" class="secondary">Import</button></div>
+                <progress id="care-health-progress" max="100" value="0" hidden></progress>
+                <p id="care-health-msg" class="caption" role="status"></p>
+              </details>
+            </section>
+          </div>
+        </div>
+      </section>
       <section class="view" data-view="thread" hidden>
         <div class="two-col">
           <div><section class="block thread" aria-labelledby="notes-heading">
