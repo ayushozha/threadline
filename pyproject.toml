@@ -9,6 +9,8 @@ dependencies = [
   "httpx>=0.28,<1",
   "python-dotenv>=1,<2",
   "websockets>=13,<16",
+  "pipecat-ai[deepgram,elevenlabs,websocket]>=1.16,<2",
+  "tzdata>=2026.6",
 ]
 
 [dependency-groups]
