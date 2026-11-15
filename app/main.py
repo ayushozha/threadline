@@ -22,13 +22,14 @@ from websockets.asyncio.client import connect as ws_connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.agent import DecideRequest, decide
 from app.music import MusicRequest, generate_music
 from app.graph import GraphRequest, gemini_graph, local_graph, validate_request
+from app import affect, caldav, live_detect, recordings, voice
 from app.schedule import BookRequest, SlotRequest, book, find_slot
 from app.vision import VisionRequest, analyze as analyze_vision
 
@@ -248,9 +249,14 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
+    # Google sign-in and the Calendar API are allowed only when a client ID is configured.
+    g = bool(os.getenv("GOOGLE_OAUTH_CLIENT_ID"))
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; "
-        "img-src 'self' data:; connect-src 'self'; media-src 'self' blob:; "
+        f"default-src 'self'; script-src 'self'{' https://accounts.google.com/gsi/client' if g else ''}; "
+        f"style-src 'self'{' https://accounts.google.com/gsi/style' if g else ''}; "
+        "img-src 'self' data:; "
+        f"connect-src 'self'{' https://www.googleapis.com https://accounts.google.com/gsi/' if g else ''}; "
+        f"{'frame-src https://accounts.google.com/gsi/; ' if g else ''}media-src 'self' blob:; "
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     )
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=()"
@@ -263,11 +269,14 @@ async def health():
 
 
 @app.get("/api/config", dependencies=[Depends(authorize)])
-async def config():
+async def config(request: Request):
     return {
         "reflection_ready": bool(os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_MODEL")),
         "transcription_ready": bool(os.getenv("DEEPGRAM_API_KEY") and os.getenv("DEEPGRAM_MODEL")),
         "wearable_connected": False,
+        "google_client_id": os.getenv("GOOGLE_OAUTH_CLIENT_ID", ""),  # public by design; no secret is used
+        # The paid voice loop (TTS + Gemini) is for the operator or a trusted laptop, not anonymous guest sessions.
+        "voice_ready": voice.voice_missing(os.environ) is None and not getattr(request.state, "guest_session", None),
     }
 
 
@@ -466,6 +475,36 @@ async def transcribe_fallback(request: Request):
 async def music_generate(body: MusicRequest):
     """Generate a short instrumental track with MiniMax. The prompt is built from the mood only."""
     return await generate_music(body, provider_slots)
+
+
+class AffectWindow(BaseModel):
+    """One observation window of pre-extracted features. State is owned by the client."""
+    features: dict[str, float] = Field(default_factory=dict, max_length=32)
+    quality: dict[str, float] = Field(default_factory=dict, max_length=32)
+    text: str = Field(default="", max_length=4000)
+    state: dict | None = None
+
+
+@app.post("/api/affect/update", dependencies=[Depends(authorize)])
+async def affect_update(body: AffectWindow):
+    features = dict(body.features)
+    if body.text:
+        features = {**affect.lexicon_text_features(body.text), **features}
+    if len(json.dumps(body.state or {})) > 20000:
+        raise HTTPException(413, "Affect state too large")
+    return affect.update(body.state, features, body.quality)
+
+
+@app.post("/api/apple/events", dependencies=[Depends(authorize)])
+async def apple_events(body: caldav.AppleRange):
+    """Read iCloud events. The app-specific password is used for this request only."""
+    return await caldav.list_events(body)
+
+
+@app.post("/api/apple/create", dependencies=[Depends(authorize)])
+async def apple_create(body: caldav.AppleCreate):
+    """Create one iCloud event. The page only calls this after the person taps to approve."""
+    return await caldav.create_event(body)
 
 
 @app.post("/api/schedule/find-slot")
@@ -702,7 +741,8 @@ async def close_cleanly(client: WebSocket, sent: int | None) -> None:
 
 @app.websocket("/api/live-transcribe")
 async def live_transcribe(client: WebSocket):
-    """Relay one consented audio stream to Deepgram. The key stays on the server; nothing is stored."""
+    """Relay one consented audio stream to Deepgram. The key stays on the server. Nothing is stored unless
+    an operator (access code) asks for it with save=true; then audio and finals go to app.recordings."""
     await client.accept()
     fail = socket_fail(client)
     if (hello := await socket_hello(client, fail)) is None:
@@ -713,26 +753,114 @@ async def live_transcribe(client: WebSocket):
     if source not in {"vexo", "browser"}:
         return await fail("Unknown audio source.")
     session = getattr(client.state, "guest_session", None)
+    detector = live_detect.LiveDetector(hello.get("affect"))
+    recording = None
+    if hello.get("save"):
+        if session:
+            return await fail("Saving to the server needs the access code.")
+        try:
+            await asyncio.to_thread(recordings.purge_expired)
+            recording = await asyncio.to_thread(recordings.Recording, source, str(hello.get("device", "")))
+        except OSError as exc:
+            return await fail(str(exc), 1013)
+    receive = socket_receiver(client)
+
+    async def detecting_receive():
+        data = await receive()
+        if recording and isinstance(data, bytes):
+            recording.audio(data)
+        return data
+
+    async def detecting_send(message: dict):
+        if recording:
+            recording.final(message)
+        await client.send_json(message)
+        for extra in detector.feed(message):  # emotion and wording detections, from the transcript, on the server
+            if recording:
+                recording.event(extra)
+            await client.send_json(extra)
+
     if not session:
-        return await close_cleanly(client, await relay_audio(source, socket_receiver(client), client.send_json, fail))
+        try:
+            if recording:
+                await client.send_json({"type": "saved", "id": recording.id})
+            return await close_cleanly(client, await relay_audio(source, detecting_receive, detecting_send, fail))
+        finally:
+            if recording:
+                recording.close()
     try:
         max_seconds, max_bytes = start_guest_stream(session)
     except HTTPException as exc:
         return await fail(exc.detail, 1013)
     started = time.monotonic()
-    receive = socket_receiver(client)
 
     async def guest_receive():
-        data = await receive()
+        data = await detecting_receive()
         if isinstance(data, bytes):
             session.stream_bytes += len(data)
         return data
 
     try:
-        sent = await relay_audio(source, guest_receive, client.send_json, fail,
+        sent = await relay_audio(source, guest_receive, detecting_send, fail,
                                  max_seconds=max_seconds, max_bytes=max_bytes)
     finally:
         end_guest_stream(session, started)
+    await close_cleanly(client, sent)
+
+
+@app.get("/api/recordings", dependencies=[Depends(authorize_operator)])
+async def recordings_list():
+    await asyncio.to_thread(recordings.purge_expired)
+    return {"recordings": recordings.list_recordings(), "retention_days": recordings.retention_days(),
+            "used_bytes": recordings.store_size(), "limit_bytes": recordings.max_store_bytes()}
+
+
+@app.get("/api/recordings/{rid}", dependencies=[Depends(authorize_operator)])
+async def recordings_get(rid: str):
+    if (found := recordings.read_recording(rid)) is None:
+        raise HTTPException(404, "No such recording.")
+    return found
+
+
+@app.get("/api/recordings/{rid}/audio", dependencies=[Depends(authorize_operator)])
+async def recordings_audio(rid: str):
+    meta = recordings.read_recording(rid) if recordings.valid_id(rid) else None
+    if not meta:
+        raise HTTPException(404, "No such recording.")
+    path = recordings.data_dir() / f"{rid}.{meta['audio']}"
+    if not path.exists():
+        raise HTTPException(404, "This recording has no audio.")
+    if meta["audio"] == "pkt":
+        return Response(recordings.packets_to_ogg(path.read_bytes()), media_type="audio/ogg")
+    return FileResponse(path, media_type="audio/webm" if meta["audio"] == "webm" else "application/octet-stream")
+
+
+@app.delete("/api/recordings/{rid}", dependencies=[Depends(authorize_operator)])
+async def recordings_delete(rid: str):
+    if not recordings.delete(rid):
+        raise HTTPException(404, "No such recording.")
+    return {"deleted": rid}
+
+
+@app.websocket("/api/voice")
+async def voice_socket(client: WebSocket):
+    """Always-on voice assistant (Pipecat). Binary in: 16 kHz PCM16 from the band; binary out: 24 kHz PCM16 speech;
+    text frames are JSON events. Nothing is stored."""
+    await client.accept()
+    fail = socket_fail(client)
+    if (hello := await socket_hello(client, fail)) is None:
+        return
+    if not socket_token_ok(client, hello):
+        return await fail("Enter the project access token to use live providers.")
+    if missing := voice.voice_missing(os.environ):
+        return await fail(f"Set {missing} to enable the voice assistant.", 1011)
+    if stream_slots.locked():
+        return await fail("Too many live sessions are running. Stop one first.", 1013)
+    async with stream_slots:
+        try:
+            sent = await voice.run_voice(client, os.environ, provider_slots)
+        except (WebSocketDisconnect, RuntimeError):
+            return  # the browser left
     await close_cleanly(client, sent)
 
 
