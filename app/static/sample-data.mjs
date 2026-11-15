@@ -57,3 +57,48 @@ export function sampleSeed(now = new Date()) {
   }
   return { archive, notes, tasks, energyLog, actions, days, energy: { state: "positive", at: at(now, 0, 16, 10), text: "Calling Priya on Sundays makes me happy.", word: "happy", sample: true } };
 }
+
+/* ---------- Mood tracking (demo profile) ----------
+   Modelled on instruments used in dementia care, driven by the person's real Apple Health days:
+   - Daily mood on Apple Health's State of Mind valence scale (-1 very unpleasant … +1 very pleasant), morning and evening.
+   - Evening agitation on the NPI-Q severity scale (0 none, 1 mild, 2 moderate, 3 severe); late-day agitation
+     ("sundowning") is more likely after short sleep and low daytime activity, and less after an active day.
+   - Repeated questions per day, a behavioural marker that rises with agitation.
+   - Weekly Cornell Scale for Depression in Dementia (CSDD, caregiver-rated, 19 items, 0–38):
+     under 6 no significant depressive symptoms, 6–10 mild, 11–17 probable major depression, 18+ definite.
+   Values are deterministic per date so the screens stay stable across reloads. */
+const rand = (seed) => { let x = Math.sin(seed) * 10000; return x - Math.floor(x); };
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const LABELS = { pos: ["calm", "content", "happy", "peaceful", "hopeful"], neu: ["calm", "indifferent", "content"], neg: ["anxious", "irritated", "drained", "worried", "confused"] };
+export const CSDD_BANDS = [[0, 5, "No significant depressive symptoms"], [6, 10, "Mild symptoms — keep watching"], [11, 17, "Probable major depression — talk to the GP"], [18, 38, "Definite major depression — talk to the GP soon"]];
+export const csddBand = (score) => CSDD_BANDS.find(([lo, hi]) => score >= lo && score <= hi)?.[2] || "";
+
+export function moodSeries(healthByDay = {}, days = 30, now = new Date()) {
+  const out = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const k = key(now, i), h = healthByDay[k] || {}, seed = Number(k.replaceAll("-", ""));
+    const sleep = h.sleep_hours ?? 6.5 + rand(seed) * 1.5, steps = h.steps ?? 5000 + rand(seed + 1) * 4000;
+    const hrvDip = h.hrv_sdnn != null ? clamp((32 - h.hrv_sdnn) / 20, -0.5, 0.5) : 0;
+    const dow = new Date(`${k}T12:00:00`).getDay();
+    const family = dow === 0 ? 0.12 : 0;  // Sunday family visit
+    const morning = clamp(0.1 + 0.11 * (sleep - 7) + 0.07 * (Math.min(steps, 12000) / 6000 - 1) - 0.1 * hrvDip + family + (rand(seed + 2) - 0.5) * 0.3, -1, 1);
+    let agitation = 1 + (sleep < 6 ? 1 : 0) + (steps < 3500 ? 0.6 : 0) - (steps > 8500 ? 0.8 : 0) + (rand(seed + 3) - 0.5) * 1.2;
+    agitation = Math.round(clamp(agitation, 0, 3));
+    const evening = clamp(morning - 0.18 * agitation + 0.1 + (rand(seed + 4) - 0.5) * 0.2, -1, 1);
+    const repeats = Math.max(0, Math.round(2 + agitation * 2.2 + (sleep < 6 ? 1.5 : 0) + rand(seed + 5) * 2));
+    const pick = (v, s) => { const set = v > 0.2 ? LABELS.pos : v < -0.2 ? LABELS.neg : LABELS.neu; return set[Math.floor(rand(s) * set.length)]; };
+    out.push({ date: k, morning: Math.round(morning * 100) / 100, evening: Math.round(evening * 100) / 100, morningLabel: pick(morning, seed + 6), eveningLabel: pick(evening, seed + 7), agitation, repeats, sleep, steps });
+  }
+  // Weekly CSDD from the week's days: low mood, irritability/agitation, sleep disturbance and loss of interest items.
+  const weeks = [];
+  for (let end = out.length - 1; end >= 6; end -= 7) {
+    const wk = out.slice(end - 6, end + 1), avg = (f) => wk.reduce((s, d) => s + f(d), 0) / wk.length;
+    const lowMood = clamp(Math.round(-avg((d) => (d.morning + d.evening) / 2) * 6 + 2), 0, 6);
+    const agit = clamp(Math.round(avg((d) => d.agitation) * 2), 0, 6);
+    const sleepItems = clamp(Math.round(wk.filter((d) => d.sleep < 6).length * 0.9), 0, 6);
+    const interest = clamp(Math.round(wk.filter((d) => d.steps < 4000).length * 0.7), 0, 4);
+    const score = clamp(lowMood + agit + sleepItems + interest + 1, 0, 38);
+    weeks.unshift({ weekEnding: wk.at(-1).date, score, band: csddBand(score), items: { lowMood, agitation: agit, sleep: sleepItems, interest } });
+  }
+  return { days: out, weeks };
+}

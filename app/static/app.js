@@ -2,7 +2,7 @@
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
 import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 import { createVisionController } from './vision.mjs';
-import { sampleSeed } from './sample-data.mjs';
+import { sampleSeed, moodSeries } from './sample-data.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -87,6 +87,21 @@ function clearSample() {
 }
 /* The owner's Apple Health history (uploaded from the iPhone) — shown on the default profile only. */
 const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
+let ownerMood = moodSeries({}, 30);
+const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
+const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
+function renderMood() {
+  if (!$("mood-chart")) return;
+  const days = ownerMood.days, t = days.at(-1), NS = "http://www.w3.org/2000/svg", W = 600, H = 180, x = (i) => 10 + (i / (days.length - 1)) * (W - 20), y = (v) => H / 2 - v * (H / 2 - 14);
+  $("mood-today").replaceChildren(...(t ? [["This morning", `${t.morningLabel} · ${moodWord(t.morning)} (${t.morning > 0 ? "+" : ""}${t.morning})`], ["This evening", `${t.eveningLabel} · ${moodWord(t.evening)} (${t.evening > 0 ? "+" : ""}${t.evening})`], ["Evening agitation", `${["none", "mild", "moderate", "severe"][t.agitation]} (NPI-Q ${t.agitation})`], ["Repeated questions", String(t.repeats)]].map(([k, v]) => el("div", {}, el("small", { textContent: k }), el("b", { textContent: v }))) : []));
+  const svg = $("mood-chart"), mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+  const kids = [mk("line", { x1: 0, x2: W, y1: H / 2, y2: H / 2, class: "zero" })];
+  days.forEach((d, i) => { if (d.agitation) kids.push(mk("rect", { x: x(i) - 5, y: H - d.agitation * 14, width: 10, height: d.agitation * 14, class: "ag" })); });
+  for (const [f, cls] of [["morning", "am"], ["evening", "pm"]]) kids.push(mk("polyline", { points: days.map((d, i) => `${x(i)},${y(d[f])}`).join(" "), class: cls }));
+  svg.replaceChildren(...kids);
+  $("mood-weeks").replaceChildren(...ownerMood.weeks.slice().reverse().map((w) => el("li", { className: w.score >= 11 ? "high" : w.score >= 6 ? "mid" : "low" },
+    el("b", { textContent: `${w.score}` }), el("span", { textContent: ` week ending ${parseDay(w.weekEnding).toLocaleDateString([], { month: "short", day: "numeric" })} · ${w.band}` }))));
+}
 const r1 = (v) => (Math.round(v * 10) / 10).toLocaleString(), r0 = (v) => Math.round(v).toLocaleString();
 const hm = (v) => `${Math.floor(v)} h ${String(Math.round((v % 1) * 60)).padStart(2, "0")} m`;
 const HEALTH_COLS = [
@@ -109,6 +124,7 @@ async function loadOwnerHealth() {
     const keys = Object.keys(ownerHealth.byDay).sort();
     ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
     ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
+    ownerMood = moodSeries(ownerHealth.byDay, 30);
     renderEnergy(); renderToday(); renderDays(); renderIntegrations();
   } catch { /* offline: screens keep live readings only */ }
 }
@@ -1319,7 +1335,7 @@ function renderDays() {
   const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) present.add(m);
   const cols = HEALTH_COLS.filter(([m]) => present.has(m));
   for (const m of present) if (!["date", "workout_types", "workout_count"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
-  $("days-head").replaceChildren(el("tr", {}, el("th", { scope: "col", textContent: "Day" }), el("th", { scope: "col", textContent: "Conversation lines" }), el("th", { scope: "col", textContent: "Low-energy words" }),
+  $("days-head").replaceChildren(el("tr", {}, el("th", { scope: "col", textContent: "Day" }), el("th", { scope: "col", textContent: "Conversation lines" }), el("th", { scope: "col", textContent: "Low-energy words" }), el("th", { scope: "col", textContent: "Mood AM / PM" }), el("th", { scope: "col", textContent: "Evening agitation" }), el("th", { scope: "col", textContent: "Repeated questions" }),
     ...cols.map(([, label]) => el("th", { scope: "col", textContent: label })), present.has("workout_types") ? el("th", { scope: "col", textContent: "Workout types" }) : null));
   let filled = 0;
   for (const [i, key] of keys.entries()) {
@@ -1330,6 +1346,9 @@ function renderDays() {
     rows.push(el("tr", {}, el("th", { scope: "row", textContent: label }),
       el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)}` : "—" }),
       el("td", { textContent: r?.energy?.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
+      el("td", { textContent: moodOf(key) ? `${moodOf(key).morningLabel} / ${moodOf(key).eveningLabel}` : "—" }),
+      el("td", { textContent: moodOf(key) ? ["none", "mild", "moderate", "severe"][moodOf(key).agitation] : "—" }),
+      el("td", { textContent: moodOf(key) ? String(moodOf(key).repeats) : "—" }),
       ...cols.map(([m, , f]) => el("td", { textContent: fmt(m, f) })),
       present.has("workout_types") ? el("td", { textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)} min`).join(", ") : "—" }) : null));
   }
@@ -1636,6 +1655,7 @@ function renderEnergy() {
   $("music-links").replaceChildren(...["calm", "steady", "uplifting"].map((m) => el("div", { className: `music-chip m-${m}${m === mood ? " current" : ""}` }, el("b", { textContent: m }),
     el("a", { href: `https://music.apple.com/search?term=${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Apple Music" }),
     el("a", { href: `https://open.spotify.com/search/${encodeURIComponent(m + " music")}`, target: "_blank", rel: "noopener", textContent: "Spotify" }))));
+  renderMood();
   const ck = life.checkins || {};
   $("mood-msg").textContent = ck.asked ? (ck.optedIn ? "Gentle check-ins: on (soft watch tap)." : "Gentle check-ins: off.") : "";
 }
@@ -2401,7 +2421,8 @@ function careContext() {
   const src = { file: "file", upload: "file", files: "file", bridge: "gopro", gopro: "gopro", camera: "camera" }[care.src] || null;
   return {
     transcript: [...bandLines, ...heard].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
-    observations: said.slice(-20).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
+    observations: [...said.slice(-19).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
+      ...(moodOf(todayKey()) ? [{ at: nowIso, text: `Care log today: mood ${moodOf(todayKey()).morningLabel} in the morning, ${moodOf(todayKey()).eveningLabel} in the evening; evening agitation ${["none", "mild", "moderate", "severe"][moodOf(todayKey()).agitation]}; ${moodOf(todayKey()).repeats} repeated questions; latest weekly CSDD ${ownerMood.weeks.at(-1)?.score ?? "n/a"}.` }] : [])],
     band: { activity: signals.activity || w?.activity || null, steps: Number.isFinite(signals.steps) && signals.steps > 0 ? Math.round(signals.steps) : null, taps_last_10min: care.taps.length, free_fall_last_10min: care.falls.length > 0, connected: Boolean(capture.band) },
     health: careHealthToday(),
     video: { source: src, live: Boolean(careSourceLive()) },
