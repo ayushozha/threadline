@@ -1,5 +1,6 @@
 "use strict";
 import { claimBandAudio, queueBandAudio, pcmWav } from './band-capture.mjs';
+import { createUtteranceCollector, createSerialQueue } from './transcript-flow.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -21,7 +22,7 @@ const MODES = {
 };
 const day = tomorrow();
 
-let mode = "reflection", busy = false;
+let mode = "reflection", busy = false, workspaceVersion = 0;
 // Everything below starts empty and holds only what this person captured, typed or saved.
 const emptyThread = () => ({ reflection: { question: "", notes: [], prefs: [] }, routine: { question: "", notes: [], prefs: [] } });
 let sessions = emptyThread();
@@ -34,6 +35,10 @@ const life = { days: {}, cycle: { starts: [], notify: false, haptic: false, noti
 const todayKey = (d = new Date()) => localDate(d);
 function dayRec(key = todayKey()) { return (life.days[key] ||= { energy: [], others: 0, mine: 0, hrSum: 0, hrN: 0, hrMin: null, hrMax: null, watchSteps: null, bandSteps: 0 }); }
 function loadThread(key) {
+  workspaceVersion += 1;
+  decisions.clear();
+  $("agent-feed").replaceChildren(el("li", { className: "agent-empty", textContent: "Ready for your next thought. Suggestions appear here as you talk." }));
+  for (const id of ["today-summary-out", "day-summary-out"]) $(id).replaceChildren(el("p", { className: "caption", textContent: "Your summary updates from your saved words." }));
   threadKey = key; threadLoaded = false;
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(`threadline.thread.v1.${key}`) || "null"); } catch { saved = null; }
@@ -43,6 +48,7 @@ function loadThread(key) {
   life.days = saved?.days || {}; life.cycle = { starts: [], notify: false, haptic: false, notifiedFor: "", ...(saved?.cycle || {}) };
   life.energyWords = saved?.energyWords || DEFAULT_ENERGY_WORDS;
   Object.assign(life, { positiveWords: saved?.positiveWords || "", energy: saved?.energy || null, tasks: saved?.tasks || [], energyLog: saved?.energyLog || [], actions: saved?.actions || [], checkins: saved?.checkins || { asked: false, optedIn: false, lastTap: 0 }, voice: saved?.voice || null });
+  life.taskDrafts = saved?.taskDrafts || [];
   threadLoaded = true;
 }
 function saveThread() {
@@ -52,11 +58,33 @@ function saveThread() {
       reflection: { notes: sessions.reflection.notes, prefs: sessions.reflection.prefs },
       routine: { notes: sessions.routine.notes }, events: agent.events,
       days: life.days, cycle: life.cycle, energyWords: life.energyWords,
-      positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, energyLog: life.energyLog, actions: life.actions, checkins: life.checkins, voice: life.voice,
+      positiveWords: life.positiveWords, energy: life.energy, tasks: life.tasks, taskDrafts: life.taskDrafts, energyLog: life.energyLog, actions: life.actions, checkins: life.checkins, voice: life.voice,
     }));
   } catch { message("This browser blocked storage, so notes will be lost on refresh.", true); }
 }
 const capture = { active: false, band: null, ws: null, recorder: null, stream: null, startedAt: null, timer: 0, review: null, finals: [] };
+const utterances = createUtteranceCollector();
+function flushUtterance() {
+  clearTimeout(capture.utteranceTimer);
+  const statement = utterances.flush();
+  if (statement) acceptUtterance(statement);
+}
+function acceptUtterance(statement) {
+  delete statement.speaker;
+  if (statement.speaker_confirmed) {
+    addNotes([statement]);
+    for (const line of capture.finals) if (statement.lineIds.includes(line.id)) line.saved = true;
+    $("agent-status").textContent = "Your words saved. Updating your day…";
+  } else agentDecide(statement);
+}
+function collectUtterance(msg, at, speaker) {
+  const source = capture.vexo ? "vexo" : "mic";
+  const statement = { id: newId("n"), text: msg.transcript, at: at.toISOString(), source,
+    speaker, speaker_confirmed: capture.solo, lineIds: [msg.id] };
+  for (const ready of utterances.push(statement, msg.speech_final || msg.provider === "gemini")) acceptUtterance(ready);
+  clearTimeout(capture.utteranceTimer);
+  capture.utteranceTimer = setTimeout(flushUtterance, 1200);
+}
 
 function message(text, error = false) { $("status").textContent = text; $("status").classList.toggle("error", error); }
 function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; }
@@ -65,7 +93,7 @@ function newId(prefix) { return `${prefix}-${crypto.randomUUID().slice(0, 8)}`; 
 function renderTimeline() {
   const session = sessions[mode];
   if (typeof scheduleGraph === "function") scheduleGraph();
-  saveThread();
+  rebuildWordRecords(); saveThread(); renderEnergy(); renderDays(); renderToday(); scheduleDaySummary();
   $("sample-label").textContent = `Your statements only — stored in this browser${threadKey.startsWith("band-") ? ` for Vexo-HACK-${threadKey.slice(5).padStart(2, "0")}` : ""}. Nothing is stored on the server.`;
   $("timeline").replaceChildren();
   for (const note of session.notes) {
@@ -78,7 +106,7 @@ function renderTimeline() {
       const edit = el("button", { type: "button", className: "text-button", textContent: "Correct" });
       const del = el("button", { type: "button", className: "text-button", textContent: "Delete" });
       edit.addEventListener("click", () => editNote(li, note));
-      del.addEventListener("click", () => { session.notes = session.notes.filter((n) => n !== note); renderTimeline(); message("Note deleted from this session."); });
+      del.addEventListener("click", () => { session.notes = session.notes.filter((n) => n !== note); removeNoteSuggestions(note.id); renderTimeline(); message("Note deleted from this session."); });
       li.append(el("div", { className: "row tight" }, edit, del));
     }
     $("timeline").append(li);
@@ -88,20 +116,14 @@ function renderTimeline() {
 function editNote(li, note) {
   const area = el("textarea", { value: note.text, rows: 2, maxLength: 4000 });
   const save = el("button", { type: "button", className: "secondary", textContent: "Save correction" });
-  save.addEventListener("click", () => { const value = area.value.trim(); if (value) { note.text = value; note.corrected = true; } renderTimeline(); message("Correction saved."); });
+  save.addEventListener("click", () => { const value = area.value.trim(); if (value) { note.text = value; note.corrected = true; delete note.energySignal; } removeNoteSuggestions(note.id); renderTimeline(); agentDecide({ ...note, speaker_confirmed: true }); message("Correction saved."); });
   li.querySelector("p").replaceWith(area); li.querySelector(".row.tight").replaceWith(el("div", { className: "row tight" }, save)); area.focus();
 }
 function addNotes(items) {
   const session = sessions[mode];
-  const added = items.map((item) => ({ id: newId("n"), context: "", ...item }));
+  const added = items.filter(item => !item.id || !session.notes.some(n => n.id === item.id)).map((item) => ({ id: newId("n"), context: "", ...item }));
   session.notes.push(...added);
-  const words = life.energyWords.split(",").map((w) => w.trim().toLowerCase()).filter(Boolean);
-  for (const n of added) {
-    const hit = words.find((w) => n.text.toLowerCase().includes(w));
-    if (hit) dayRec(todayKey(new Date(n.at))).energy.push({ word: hit, id: n.id });
-  }
   renderTimeline(); renderDays();
-  for (const note of added) noteEnergy(note);
   for (const note of added) agentDecide({ id: note.id, text: note.text, at: note.at, source: note.source, speaker_confirmed: true });
   return added;
 }
@@ -119,7 +141,7 @@ function renderPrefs() {
       el("p", { className: "caption", textContent: `Matches: ${pref.triggers.join(", ")} · ${pref.action === "schedule" ? "offers schedule help" : pref.action === "update" ? `offers your update${pref.updateTo ? ` to ${pref.updateTo}` : ""}` : "shows earlier notes only"} · saved ${fmtDate(pref.at)}` }),
       remove));
   }
-  if (!sessions[mode].prefs.length) list.append(el("li", { className: "empty", textContent: "No preferences saved. Threadline will not offer help on its own." }));
+  if (!sessions[mode].prefs.length) list.append(el("li", { className: "empty", textContent: "Task drafts and self-reported energy update automatically. Add preferences for other kinds of support." }));
 }
 $("pref-action").addEventListener("change", () => { $("pref-update-fields").hidden = $("pref-action").value !== "update"; });
 $("pref-save").addEventListener("click", () => {
@@ -376,7 +398,7 @@ function setRecUI() {
   const live = capture.active, vexo = isVexo();
   $("rec-start").disabled = busy || live || (vexo && (!capture.band || capture.band.reconnecting));
   $("rec-stop").disabled = !live;
-  $("source").disabled = live; $("cam-on").disabled = live;
+  $("source").disabled = live; $("cam-on").disabled = live; $("capture-identity").disabled = live;
   $("band-disconnect").disabled = live;
   $("rec-start").classList.toggle("recording", live);
   renderPair();
@@ -512,7 +534,8 @@ $("rec-start").addEventListener("click", async () => {
   }
   Object.assign(capture, { active: true, source, vexo, stream, startedAt: new Date(), finals: [], stopping: false, packets: 0, chunks: 0,
     warnedSilent: false, lastError: "", reconnects: 0, audioStarted: Date.now(), lastPacketAt: Date.now(), audioQueue: [], droppedPackets: 0, audioClaimed: false,
-    pcmChunks: [], lastSpeechAt: 0, lastTextAt: Date.now(), lastFallbackAt: Date.now(), fallbackBusy: false, fallbackPending: null, finishing: false, interimCount: 0, archiveId: newId("t") });
+    pcmChunks: [], lastSpeechAt: 0, lastTextAt: Date.now(), lastFallbackAt: Date.now(), fallbackBusy: false, fallbackPending: null, finishing: false, interimCount: 0, firstTextMs: null, archiveId: newId("t") });
+  capture.solo = $("capture-identity").value === "solo"; utterances.reset();
   if (vexo && await kit.canDecodeAudio()) capture.decoder = new kit.BandAudio((samples) => {
     if (!capture.active || capture.stopping) return;
     capture.pcmChunks.push(samples.slice());
@@ -543,7 +566,7 @@ function tick() {
   if (capture.vexo) flushBandAudio();
   if (capture.vexo && capture.packets) {
     const age = Math.round((Date.now() - capture.lastTextAt) / 1000);
-    $("speech-status").textContent = `${capture.interimCount} speech updates · ${capture.finals.length} finished lines${capture.rmsDb != null ? ` · mic ${Math.round(capture.rmsDb)} dBFS` : ""}${age > 10 ? ` · last text ${age}s ago` : ""}`;
+    $("speech-status").textContent = `${capture.interimCount} speech updates · ${capture.finals.length} finished lines${capture.firstTextMs != null ? ` · first text ${(capture.firstTextMs / 1000).toFixed(1)}s after stream start` : ""}${capture.rmsDb != null ? ` · mic ${Math.round(capture.rmsDb)} dBFS` : ""}${age > 10 ? ` · last text ${age}s ago` : ""}`;
     if (!capture.fallbackBusy && capture.decoder && capture.lastSpeechAt > capture.lastTextAt && Date.now() - capture.lastTextAt > 8000 && Date.now() - capture.lastFallbackAt > 8000) recoverSpeech();
   }
   if (capture.vexo && capture.ws?.providerReady && Date.now() - (capture.lastPacketAt || capture.audioStarted) > 5000 && !capture.warnedSilent && !capture.band?.reconnecting) {
@@ -561,6 +584,7 @@ function openSocket() {
     if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
     if (msg.type === "ready") {
+      capture.streamReadyAt = performance.now();
       ws.providerReady = true; capture.lastError = "";
       ws.offset = (Date.now() - capture.startedAt) / 1000;  // Deepgram times restart at 0 for each socket
       if (capture.vexo) {
@@ -578,6 +602,7 @@ function openSocket() {
       if (capture.recorder && capture.recorder.state === "inactive") capture.recorder.start(250);
       recState(capture.vexo ? "● Listening through the band's microphone (solid blue light). Streaming to Deepgram." : "● Listening through this browser's microphone. Streaming to Deepgram.");
     } else if (msg.type === "result") {
+      if (msg.transcript?.trim() && capture.firstTextMs == null) capture.firstTextMs = Math.round(performance.now() - capture.streamReadyAt);
       if (msg.is_final && msg.transcript?.trim()) capture.lastTextAt = Date.now();
       if (!msg.is_final && msg.transcript?.trim()) capture.interimCount += 1;
       if (msg.is_final) {
@@ -590,11 +615,13 @@ function openSocket() {
         }
         $("live-interim").textContent = "";
       } else $("live-interim").textContent = msg.transcript;
-    } else if (msg.type === "error") { capture.lastError = msg.message; recState(msg.message, true); }
+    } else if (msg.type === "utterance_end") flushUtterance();
+    else if (msg.type === "error") { capture.lastError = msg.message; recState(msg.message, true); }
     else if (msg.type === "closed") ws.closedCleanly = true;
   };
   ws.onclose = () => {
     if (ws !== capture.ws) return;
+    flushUtterance();
     ws.providerReady = false;
     if (capture.active && !capture.stopping) {
       // Unexpected drop (network, provider limit): keep recording on a fresh socket.
@@ -608,6 +635,7 @@ function openSocket() {
   };
 }
 function addLiveLine(msg) {
+  msg.id ||= newId("line");
   const speakers = [...new Set(msg.words.map((w) => w.speaker).filter((x) => x != null))];
   const who = speakers.length ? speakers[0] : null;
   const at = new Date(capture.startedAt.getTime() + msg.start * 1000);
@@ -618,9 +646,11 @@ function addLiveLine(msg) {
       el("div", { className: "line-meta" }, el("b", { textContent: who == null ? "Speaker ?" : `Speaker ${who}` }),
         el("span", { textContent: ` · ${at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}${msg.activity ? ` · ${msg.activity}` : ""}${msg.hr ? ` · ♥ ${msg.hr}` : ""}` })),
       el("p", { textContent: msg.transcript }))));
-  $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
+  if (location.hash === "#live" || !location.hash) $("live-lines").lastChild.scrollIntoView({ block: "nearest" });
   archiveSession(capture.finals, { startedAt: capture.startedAt, source: capture.source, marks: capture.marks || [], id: capture.archiveId });
-  if (typeof agentDecide === "function") agentDecide({ id: newId("live"), text: msg.transcript, at: at.toISOString(), source: capture.vexo ? "vexo" : "mic", speaker_confirmed: false });
+  const voice = voiceMetrics(capture.finals); if (voice) life.voice = voice;
+  renderEnergy(); renderToday();
+  collectUtterance(msg, at, who);
 }
 async function stopLive(reason) {
   if (!capture.active || capture.stopping) return;
@@ -653,6 +683,7 @@ async function finishLive() {
     recState("Checking the last words before opening your transcript…");
     await recoverSpeech();
   }
+  flushUtterance();
   clearInterval(capture.timer); $("live-timer").textContent = `stopped · ${$("live-timer").textContent.replace("● live · ", "")}`;
   const { finals, source, startedAt } = capture;
   if (finals.length) { archiveSession(finals, { startedAt, source, marks: capture.marks || [], id: capture.archiveId }); const vm = voiceMetrics(finals); if (vm) { life.voice = vm; saveThread(); renderEnergy(); } }
@@ -665,10 +696,11 @@ async function finishLive() {
   setRecUI();
   if (!capture.vexo) $("signals").hidden = true;
   if (!finals.length) { const err = capture.lastError; capture.lastError = ""; return recState(err ? `Capture ended: ${err}` : "Capture ended. No speech was transcribed; nothing was saved.", Boolean(err)); }
-  const segments = finals.flatMap(f => segmentsFromWords(f.words, f.transcript).map(s => ({ ...s, offset: f.words?.length ? s.offset : f.start, provider: f.provider || "deepgram" })));
+  const segments = finals.filter(f => !f.saved).flatMap(f => segmentsFromWords(f.words, f.transcript).map(s => ({ ...s, offset: f.words?.length ? s.offset : f.start, provider: f.provider || "deepgram" })));
+  if (!segments.length) { recState("Recording stopped. Your words are saved and your day is up to date."); return; }
   openReview(segments, source === "vexo" ? "vexo" : "mic", startedAt,
     `${SOURCE_LABELS_LIVE[source]} · ${transcriptProviders(finals)} · ${finals.length} lines. Speaker labels separate voices; they do not prove identity.`);
-  recState("Capture stopped. Review below: choose which speaker is you before anything is saved.");
+  recState("Recording stopped. Review the remaining conversation to add it to your personal thread.");
 }
 
 /* Camera: explicit opt-in, previewed live, recorded only in this browser (never uploaded). */
@@ -743,13 +775,13 @@ function renderWhoButtons() {
 function renderReviewSummary() {
   const r = capture.review; if (!r) return;
   const mine = r.segments.filter((x) => x.who === "me").length, other = r.segments.filter((x) => x.who === "other").length, unsure = r.segments.length - mine - other;
-  $("review-summary").replaceChildren(...[el("span", {}, el("b", { textContent: String(mine) }), ` your line${mine === 1 ? "" : "s"}`), el("span", {}, el("b", { textContent: String(other) }), " dropped, not stored"), unsure ? el("span", {}, el("b", { textContent: String(unsure) }), " not sure — won't be saved") : null].filter(Boolean));
+  $("review-summary").replaceChildren(...[el("span", {}, el("b", { textContent: String(mine) }), ` your line${mine === 1 ? "" : "s"}`), el("span", {}, el("b", { textContent: String(other) }), " excluded from your thread"), unsure ? el("span", {}, el("b", { textContent: String(unsure) }), " not sure — excluded from your thread") : null].filter(Boolean));
   $("review-save").textContent = mine ? `Save ${mine} statement${mine > 1 ? "s" : ""}` : "Save my statements";
 }
 function renderSegments() {
   const r = capture.review; $("segments").replaceChildren(); renderReviewSummary();
   r.segments.forEach((seg, i) => {
-    const who = el("select", { "aria-label": `Who said segment ${i + 1}` }, ...[["unsure", "Not sure — don't save"], ["me", "Me"], ["other", "Someone else — don't save"]].map(([v, t]) => el("option", { value: v, textContent: t, selected: seg.who === v })));
+    const who = el("select", { "aria-label": `Who said segment ${i + 1}` }, ...[["unsure", "Not sure — exclude"], ["me", "Me"], ["other", "Someone else — exclude"]].map(([v, t]) => el("option", { value: v, textContent: t, selected: seg.who === v })));
     const text = el("textarea", { value: seg.text, rows: 2, maxLength: 4000, "aria-label": `Text of segment ${i + 1}` });
     who.addEventListener("change", () => { seg.who = who.value; renderSegments(); });
     text.addEventListener("input", () => { seg.text = text.value; });
@@ -768,9 +800,9 @@ $("review-save").addEventListener("click", () => {
   const rec = dayRec(todayKey(r.startedAt)); rec.others += r.segments.filter((x) => x.who === "other").length; rec.mine += mine.length;
   addNotes(mine.map((s) => ({ text: s.text.trim(), at: new Date(r.startedAt.getTime() + s.offset * 1000).toISOString(), source: r.source })));
   capture.review = null; $("review").hidden = true;
-  message(`Saved ${mine.length} statement${mine.length > 1 ? "s" : ""} as yours.${dropped ? ` ${dropped} other segment${dropped > 1 ? "s were" : " was"} dropped, not stored.` : ""}`);
+  message(`Saved ${mine.length} statement${mine.length > 1 ? "s" : ""} as yours.${dropped ? ` ${dropped} other segments excluded from your thread.` : ""} The original transcript remains in Transcripts until deleted.`);
 });
-$("review-discard").addEventListener("click", () => { capture.review = null; $("review").hidden = true; message("Transcript discarded. Nothing was saved."); });
+$("review-discard").addEventListener("click", () => { capture.review = null; $("review").hidden = true; message("Nothing added to your personal thread. Delete the original in Transcripts if you no longer want it."); });
 
 /* ---------- Ask ---------- */
 function showAnswer(answer, sources = [], provenance = "") {
@@ -814,6 +846,7 @@ $("note-form").addEventListener("submit", (event) => {
 $("clear").addEventListener("click", () => {
   if (busy || !confirm("Delete every note in this mode for this band? This cannot be undone.")) return;
   Object.assign(sessions[mode], { notes: [] }); $("note").value = ""; $("audio").value = "";
+  life.taskDrafts = [];
   if (mode === "reflection") Object.assign(agent, { offer: null, proposal: null, skip: [], log: [], created: null });
   render(); showAnswer("Your session notes have been cleared."); message("Fresh session · no saved notes");
 });
@@ -891,6 +924,7 @@ function archiveSession(finals, meta) {
   const entry = { id: meta.id || newId("t"), startedAt: meta.startedAt.toISOString(), endedAt: new Date().toISOString(), source: meta.source, device: meta.device || capture.band?.name || (meta.source === "browser" ? "Browser microphone" : bandNumber ? bandLabel() : ""), marks: meta.marks.length, lines };
   const ok = saveArchive([entry, ...loadArchive().filter(item => item.id !== entry.id)]);
   renderArchive();
+  renderToday();
   return ok;
 }
 function renderArchive() {
@@ -934,23 +968,24 @@ $("archive-clear").addEventListener("click", () => { if (confirm("Delete every s
 const graph = { timer: 0, version: 0, data: null, selected: null, signature: "" };
 const TYPE_COLORS = { person: "#0E7C86", feeling: "#E8452C", time: "#D99A1E", place: "#6B5BD6", commitment: "#16161A", preference: "#3B4BDB", topic: "#8A8A92" };
 function graphEngine() { return service.reflection && $("rec-consent").checked ? "gemini" : "local"; }
-function scheduleGraph(delay = 1500) {
+function scheduleGraph(delay = 8000) {
   if (mode !== "reflection") { $("graph-panel").hidden = true; return; }
   $("graph-panel").hidden = false;
-  clearTimeout(graph.timer); graph.timer = setTimeout(buildGraph, delay);
+  if (graph.timer && delay) return;
+  clearTimeout(graph.timer); graph.timer = setTimeout(() => { graph.timer = 0; buildGraph(); }, delay);
 }
 async function buildGraph() {
   const notes = sessions.reflection.notes.slice(-60).map(({ id, text, at, source, context }) => ({ id, text, at, source, context, speaker: "me", device: source === "vexo" && bandNumber ? bandLabel() : "" }));
   const engine = graphEngine(), signature = engine + "|" + notes.map((n) => n.id + n.text).join("|");
-  if (!notes.length) { graph.data = null; drawGraph(); $("graph-status").textContent = "No saved statements yet"; return; }
+  const version = ++graph.version, scope = workspaceVersion;
+  if (!notes.length) { graph.data = null; graph.signature = ""; drawGraph(); $("graph-status").textContent = "No saved statements yet"; return; }
   if (signature === graph.signature && graph.data) return;
-  const version = ++graph.version;
   $("graph-status").textContent = engine === "gemini" ? "Updating with Gemini…" : "Updating…";
   try {
     await ensureService();
     if (engine === "gemini") liveHeaders();
     const data = await request("/api/graph", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: engine, notes }) });
-    if (version !== graph.version) return;
+    if (version !== graph.version || scope !== workspaceVersion || !notes.every(n => sessions.reflection.notes.some(current => current.id === n.id && current.text === n.text))) { scheduleGraph(); return; }
     graph.data = data; graph.signature = signature;
     $("graph-status").textContent = `${data.engine === "gemini" ? "Gemini" : "Keywords · no AI"} · ${data.nodes.length} nodes · ${notes.length} statements · ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
     drawGraph();
@@ -1170,26 +1205,44 @@ $("cycle-notify").addEventListener("change", async () => {
 });
 $("cycle-haptic").addEventListener("change", () => { life.cycle.haptic = $("cycle-haptic").checked; if (life.cycle.haptic && !watch.ws) message("Pair the Apple Watch (Devices) so it can tap your wrist.", true); renderDays(); });
 $("energy-words").addEventListener("change", () => { life.energyWords = $("energy-words").value; saveThread(); });
-$("day-summary").addEventListener("click", () => summarizeToday($("day-summary-out")));
-async function summarizeToday(out) {
+const daySummary = { timer: null, running: false, signature: "", scope: -1 };
+function scheduleDaySummary() {
+  if (daySummary.timer) return;
+  daySummary.timer = setTimeout(() => { daySummary.timer = null; summarizeToday(); }, 10000);
+}
+$("day-summary").addEventListener("click", () => summarizeToday());
+async function summarizeToday() {
+  if (daySummary.running) { scheduleDaySummary(); return; }
   const key = todayKey(), r = life.days[key];
   const notes = sessions.reflection.notes.filter((n) => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context }));
-  if (!notes.length) { out.hidden = false; out.replaceChildren(el("p", { textContent: "Nothing saved today yet — capture or type a statement first." })); return; }
+  const outputs = [$("today-summary-out"), $("day-summary-out")];
+  const signature = JSON.stringify(notes), scope = workspaceVersion;
+  if (!notes.length) { for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "caption", textContent: "Your summary will update automatically as your words are saved." })); } daySummary.signature = signature; return; }
+  if (signature === daySummary.signature && scope === daySummary.scope) return;
+  if (!service.reflection || !$("rec-consent").checked) return;
   const info = cycleInfo();
   const readings = [r?.energy.length ? `${r.energy.length} low-energy words` : "", r?.others ? `${r.others} lines from other people in reviewed conversations` : "",
     r?.watchSteps != null ? `${r.watchSteps} steps on the watch` : "", r?.hrN ? `average heart rate ${Math.round(r.hrSum / r.hrN)}` : "", info.dayOf ? `self-reported cycle day ${info.dayOf(key)}` : ""].filter(Boolean).join("; ");
   try {
-    const headers = liveHeaders(); setBusy(true);
+    daySummary.running = true;
+    const headers = liveHeaders();
     const data = await request("/api/reflect", { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ mode: "reflection", question: `Summarize my day in 3 short bullet points using my own statements. Device readings for context (numbers only, not feelings): ${readings || "none"}.`, notes }) });
-    out.hidden = false; out.replaceChildren(el("p", { className: "provenance", textContent: "Gemini summary · check the sources" }), el("p", { textContent: data.answer }));
-  } catch (e) { out.hidden = false; out.replaceChildren(el("p", { className: "error", textContent: e.message })); }
-  finally { setBusy(false); }
+    if (scope !== workspaceVersion || !notes.every(n => sessions.reflection.notes.some(current => current.id === n.id && current.text === n.text))) { scheduleDaySummary(); return; }
+    for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "provenance", textContent: "Updated automatically · Gemini · from your saved words" }), el("p", { textContent: data.answer }), el("div", { className: "sources" }, ...(data.sources || []).filter(id => notes.some(n => n.id === id)).map(sourceLink))); }
+    daySummary.signature = signature; daySummary.scope = scope;
+    if (signature !== JSON.stringify(sessions.reflection.notes.filter(n => todayKey(new Date(n.at)) === key).slice(-30).map(({ id, text, at, source, context }) => ({ id, text, at, source, context })))) scheduleDaySummary();
+  } catch { if (scope === workspaceVersion) for (const out of outputs) { out.hidden = false; out.replaceChildren(el("p", { className: "caption", textContent: "Summary update unavailable. Your transcript and saved words are still here." })); } }
+  finally { daySummary.running = false; }
 }
 
 
 /* ---------- Views (sidebar) ---------- */
 const VIEW_TITLES = { today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations" };
 function showView(name) {
+  if (name.startsWith("note-")) {
+    const target = name; showView("thread");
+    requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: "center" })); return;
+  }
   if (name === "watch") {  // Apple Watch pairing lives at #watch; the redesign keeps it out of the menu
     document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== "devices"; });
     document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", "false"));
@@ -1199,7 +1252,7 @@ function showView(name) {
   document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
   document.querySelectorAll("[data-view-link]").forEach((a) => a.setAttribute("aria-current", a.dataset.viewLink === name ? "page" : "false"));
   $("view-title").textContent = VIEW_TITLES[name];
-  if (name === "graph" && typeof drawGraph === "function") drawGraph();
+  if (name === "graph" && typeof drawGraph === "function") { drawGraph(); scheduleGraph(0); }
   if (name === "today") renderToday(); if (name === "transcripts") renderArchive();
   if (name === "energy") renderEnergy(); if (name === "integrations") renderIntegrations(); if (name === "tasks") renderTasks();
 }
@@ -1218,7 +1271,6 @@ function pushWave(level) {
 
 
 /* ---------- Agent: Gemini Decisions API chooses what would help; rules are enforced on the server ---------- */
-const agentState = { busyUntil: 0, pending: null, lastOfferPref: "" };
 function agentEngine() { return service.reflection && $("rec-consent").checked ? "gemini" : "local"; }
 function agentPayload(statement) {
   const info = cycleInfo(), r = life.days[todayKey()];
@@ -1235,28 +1287,44 @@ function agentPayload(statement) {
     engine: agentEngine(),
   };
 }
-async function agentDecide(statement) {
-  if (mode !== "reflection" || [...statement.text.trim()].length < 4) return;
-  // one decision at a time; if lines arrive faster, decide on the newest when free
-  if (Date.now() < agentState.busyUntil) { agentState.pending = statement; return; }
-  agentState.busyUntil = Date.now() + 2500;
-  let d = null;
+const decisions = createSerialQueue(async ({ statement, scope }) => {
+  if (scope !== workspaceVersion) return;
+  $("agent-status").textContent = `Reading your words${decisions.length ? ` · ${decisions.length} queued` : ""}…`;
   try {
     await ensureService();
-    d = await request("/api/agent/decide", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(agentPayload(statement)) });
+    const d = await request("/api/agent/decide", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(agentPayload(statement)) });
+    if (scope !== workspaceVersion) return;
+    if (statement.speaker_confirmed && !sessions.reflection.notes.some(n => n.id === statement.id && n.text === statement.text)) return;
+    if (d.energy_signal && statement.speaker_confirmed) applyEnergySignal(d.energy_signal, statement);
+    actOnDecision(d, statement);
+    $("agent-status").textContent = decisions.length ? `${decisions.length} thoughts waiting · transcript stays live` : "Up to date with your words.";
   } catch {
-    if (statement.speaker_confirmed) checkPreferences(sessions.reflection.notes.find((n) => n.id === statement.id) || statement);  // local fallback
-  } finally {
-    agentState.busyUntil = 0;
-    if (agentState.pending) { const next = agentState.pending; agentState.pending = null; setTimeout(() => agentDecide(next), 50); }
+    if (scope !== workspaceVersion) return;
+    $("agent-status").textContent = "Couldn't analyze that thought. Its transcript is saved; new speech continues.";
+    if (statement.speaker_confirmed) checkPreferences(sessions.reflection.notes.find(n => n.id === statement.id) || statement);
   }
-  if (d) actOnDecision(d, statement);
+}, { max: 100 });
+function agentDecide(statement) {
+  if ([...statement.text.trim()].length < 4) return;
+  if (!decisions.enqueue({ statement, scope: workspaceVersion })) $("agent-status").textContent = "Analysis queue full. Speech is still being saved; review the transcript for pending actions.";
 }
 function actOnDecision(d, statement) {
-  const feed = $("agent-feed"); feed.querySelector(".agent-empty")?.remove();
+  const feed = $("agent-feed");
+  if (d.energy_signal && !statement.speaker_confirmed) {
+    feed.querySelector(".agent-empty")?.remove();
+    const confirm = el("button", { type: "button", className: "secondary", textContent: "That was me — use this self-report" });
+    const card = el("li", { className: "act" }, el("div", {}, el("b", { textContent: "A self-report in the conversation" }), el("p", { textContent: statement.text }), el("p", { className: "caption", textContent: "Confirm the speaker before adding this to your energy history." }), confirm));
+    confirm.addEventListener("click", () => {
+      addNotes([statement]); applyEnergySignal(d.energy_signal, statement);
+      card.replaceChildren(el("p", { className: "done", textContent: "Added your self-report to Energy." }));
+    });
+    feed.prepend(card);
+    while (feed.children.length > 12) feed.lastChild.remove();
+  }
   const engine = d.engine === "gemini" ? `Gemini${d.confidence != null ? ` · ${Math.round(d.confidence * 100)}%` : ""}` : `local rules${d.fallback_reason ? " (Gemini unavailable)" : ""}`;
   const label = { none: "Just listening", create_task: "Task from your conversation", offer_schedule: "Offer: make space in your schedule", offer_update: "Offer: send your pre-approved update", show_evidence: "Showing what you said before", watch_tap: "Tapped your watch", ask_checkin: "Asking how you'd like support", hold_decision: "Suggest: hold a big decision", move_to_today: "Suggest: move a task to today", calendar_note: "Suggest: add a calendar note", music: "Suggest: music for your energy" }[d.action] || d.action;
   if (d.action === "none") return; // Background conversation is not an action to announce.
+  feed.querySelector(".agent-empty")?.remove();
   feed.prepend(el("li", { className: d.action === "none" ? "" : d.auto ? "auto" : "act" },
     el("div", {}, el("b", { textContent: label }), el("div", { textContent: d.message || "" }),
       el("div", { className: "why-line", textContent: `${d.reason || ""}${d.reason ? " · " : ""}${engine}${statement.speaker_confirmed ? "" : " · speaker not yet confirmed"}` }))));
@@ -1265,15 +1333,11 @@ function actOnDecision(d, statement) {
   const li = feed.firstChild;
   const btn = (label, fn) => { const b = el("button", { type: "button", className: "secondary", textContent: label }); b.addEventListener("click", () => { if (fn() === false) return; b.closest(".row")?.replaceChildren(el("span", { className: "done", textContent: "Done ✓" })); }); return b; };
   if (d.action === "create_task" && d.draft_task) {
-    const draft = d.draft_task;
-    const title = el("input", { type: "text", value: draft.title, maxLength: 200, "aria-label": "Task from your words" });
-    li.firstChild.append(title, el("div", { className: "row tight" }, btn("That was me — save task", () => {
-      const value = title.value.trim(); if (!value) { title.focus(); return false; }
-      if (!(life.tasks || []).some(t => t.title.toLowerCase() === value.toLowerCase() && !t.done)) {
-        (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: false, done: false, note: `From your confirmed words: ${statement.text}` });
-        renderTasks(); logAction(`Saved task: ${value}`);
-      }
-    })));
+    const existing = (life.taskDrafts || []).find(x => x.title.toLocaleLowerCase() === d.draft_task.title.toLocaleLowerCase());
+    const draft = existing || { ...d.draft_task, id: newId("draft"), statement };
+    if (!existing) { (life.taskDrafts ||= []).push(draft); life.taskDrafts = life.taskDrafts.slice(-30); }
+    li.firstChild.append(draftControls(draft));
+    renderTasks(); saveThread();
   }
   if (d.action === "hold_decision" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Hold “${task.title}”`, () => holdTask(task, d.note || `Held — you said “${statement.text.slice(0, 60)}”`)), el("a", { className: "secondary ics", href: gcalLink(`Decide: ${task.title}`, `Held by Threadline on a low-energy day. ${d.reason || ""}`, todayKey(new Date(Date.now() + 3 * DAY_MS))), target: "_blank", rel: "noopener", textContent: "Calendar note" })));
   if (d.action === "move_to_today" && task) li.firstChild.append(el("div", { className: "row tight" }, btn(`Move “${task.title}” to today`, () => { task.due = todayKey(); task.heldUntil = null; renderTasks(); logAction(`Moved “${task.title}” to today`); })));
@@ -1289,36 +1353,64 @@ function actOnDecision(d, statement) {
     renderSupport();
   }
 }
+function draftControls(draft) {
+  const title = el("input", { type: "text", value: draft.title, maxLength: 200, "aria-label": "Task from your words" });
+  const save = el("button", { type: "button", className: "secondary", textContent: "Save task" });
+  const dismiss = el("button", { type: "button", className: "text-button", textContent: "Dismiss" });
+  const box = el("div", { "data-draft": draft.id }, title, el("div", { className: "row tight" }, save, dismiss));
+  title.addEventListener("input", () => { draft.title = title.value; saveThread(); });
+  save.addEventListener("click", () => {
+    if (!(life.taskDrafts || []).some(d => d.id === draft.id)) return;
+    const value = title.value.trim(); if (!value) return title.focus();
+    if (!(life.tasks || []).some(t => t.title.toLocaleLowerCase() === value.toLocaleLowerCase() && !t.done)) {
+      (life.tasks ||= []).push({ id: newId("t"), title: value, due: draft.due, big: false, done: false, note: `From your confirmed words: ${draft.statement.text}` });
+      logAction(`Saved task: ${value}`);
+    }
+    removeDraft(draft.id, "Task saved.");
+  });
+  dismiss.addEventListener("click", () => removeDraft(draft.id, "Suggestion dismissed."));
+  return box;
+}
+function removeDraft(id, message) {
+  life.taskDrafts = (life.taskDrafts || []).filter(d => d.id !== id);
+  document.querySelectorAll("[data-draft]").forEach(box => { if (box.dataset.draft === id) box.replaceWith(el("p", { className: "caption", textContent: message })); });
+  renderTasks(); saveThread();
+}
+function removeNoteSuggestions(id) {
+  const removed = new Set((life.taskDrafts || []).filter(d => d.statement.id === id).map(d => d.id));
+  life.taskDrafts = (life.taskDrafts || []).filter(d => d.statement.id !== id);
+  document.querySelectorAll("[data-draft]").forEach(box => { if (removed.has(box.dataset.draft)) box.remove(); });
+  renderTasks();
+}
 
 
 /* ---------- Energy (from your words, with voice / band / watch as context) ---------- */
 const DEFAULT_POSITIVE_WORDS = "energised, energized, motivated, productive, great day, good energy, excited, clicked";
-const TENSE_WORDS = ["irritated", "annoyed", "frustrated", "angry", "snapped", "on edge", "tense"];
 const ENERGY_COLORS = { low: "#8E8CD8", steady: "#5E9C7A", positive: "#E9A23B", unknown: "#B9B9B2" };
-function wordsList(text) { return text.split(",").map((w) => w.trim().toLowerCase()).filter(Boolean); }
-function classifyEnergy(text) {
-  const t = text.toLowerCase();
-  const tense = TENSE_WORDS.find((w) => t.includes(w));
-  const low = wordsList(life.energyWords).find((w) => t.includes(w));
-  const pos = wordsList(life.positiveWords || DEFAULT_POSITIVE_WORDS).find((w) => t.includes(w));
-  if (tense) return { state: "low", word: tense, tense: true };
-  if (low) return { state: "low", word: low };
-  if (pos) return { state: "positive", word: pos };
-  return null;
+function rebuildWordRecords() {
+  for (const record of Object.values(life.days)) { record.energy = []; record.mine = 0; }
+  const notes = sessions.reflection.notes;
+  for (const note of notes) {
+    const record = dayRec(todayKey(new Date(note.at))); record.mine += 1;
+    if (note.energySignal?.state === "low") record.energy.push({ word: note.energySignal.quote, id: note.id });
+  }
+  life.energyLog = notes.filter(n => n.energySignal).map(n => ({ id: n.id, at: n.at, state: n.energySignal.state, word: n.energySignal.quote })).sort((a, b) => a.at.localeCompare(b.at));
+  const latest = life.energyLog.at(-1);
+  life.energy = latest ? { ...latest, text: latest.word } : null;
 }
-function noteEnergy(note) {
-  const c = classifyEnergy(note.text); if (!c) return;
-  life.energy = { state: c.state, word: c.word, text: note.text, at: note.at, tense: Boolean(c.tense) };
-  (life.energyLog ||= []).push({ at: note.at, state: c.state, word: c.word }); life.energyLog = life.energyLog.slice(-500);
-  saveThread(); renderEnergy(); renderToday();
-  if (c.state === "low") gentleCheckin(c);
+function applyEnergySignal(signal, statement) {
+  const note = sessions.reflection.notes.find(n => n.id === signal.source_id && n.text === signal.quote);
+  if (!note || signal.source_id !== statement.id || !["low", "positive", "steady"].includes(signal.state)) return;
+  note.energySignal = { state: signal.state, quote: signal.quote };
+  rebuildWordRecords(); saveThread(); renderEnergy(); renderDays(); renderToday();
+  if (signal.state === "low") gentleCheckin({ word: signal.quote, tense: false });
 }
 /* Check-ins: ask once; if opted in, a gentle watch tap next time (at most every 10 minutes). */
 function gentleCheckin(c) {
   const ck = (life.checkins ||= { asked: false, optedIn: false, lastTap: 0 });
   if (!ck.asked) {
     ck.asked = true; saveThread();
-    const text = `I noticed you seemed ${c.tense ? "tense" : "low on energy"} (“${c.word}”). Would you like gentle check-ins if this happens again?`;
+    const text = `You described low energy: “${c.word}”. Would you like gentle check-ins when you say this again?`;
     try { if ("Notification" in window && Notification.permission === "granted") new Notification("Threadline", { body: text }); } catch { /* blocked */ }
     showCheckinPrompt(text);
     return;
@@ -1358,7 +1450,7 @@ function renderEnergy() {
   $("energy-now").dataset.energy = state;
   $("energy-label").textContent = { low: "Low", positive: "Positive", steady: "Steady", unknown: "Unknown" }[state];
   $("energy-since").textContent = e ? `since ${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "no signal yet";
-  $("energy-why").textContent = e ? `From your words: “${e.word}” in “${e.text.slice(0, 90)}${e.text.length > 90 ? "…" : ""}”.` : "Set by your own saved words. Voice, movement and watch readings are shown as context.";
+  $("energy-why").textContent = e ? `Your self-report: “${e.text}”.` : "Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.";
   $("positive-words").value = life.positiveWords || DEFAULT_POSITIVE_WORDS;
   const v = life.voice, w = watch.sensors || {}, r = life.days[todayKey()] || {}, info = cycleInfo();
   const rows = (pairs) => pairs.filter(([, val]) => val != null && val !== "").flatMap(([k, val]) => [el("dt", { textContent: k }), el("dd", { textContent: String(val) })]);
@@ -1389,6 +1481,8 @@ const gcalLink = (title, details, date) => { const d = (date || todayKey()).repl
 function renderTasks() {
   if (!$("tasks-today")) return;
   const tasks = life.tasks || [], today = todayKey();
+  const drafts = life.taskDrafts || [];
+  $("task-banner").replaceChildren(...(drafts.length ? drafts.map(d => el("div", { className: "task-draft" }, el("p", { className: "caption", textContent: `From: “${d.statement.text}”${d.statement.speaker_confirmed ? "" : " · confirm this was you before saving"}` }), draftControls(d))) : [el("p", { className: "caption", textContent: "No pending suggestions. Ask for a reminder while speaking and it will appear here." })]));
   const lists = { today: [], later: [], held: [] };
   for (const t of tasks.filter((x) => !x.done)) (t.heldUntil && t.heldUntil > today ? lists.held : t.due && t.due <= today ? lists.today : lists.later).push(t);
   const item = (t) => {
@@ -1457,7 +1551,7 @@ function renderToday() {
   const stop = now < end ? now : end; if (stop > cursor) segs.push({ from: cursor, to: stop, state }); if (end > stop) segs.push({ from: stop, to: end, state: "future" });
   $("day-arc").replaceChildren(...segs.filter((s) => s.to > s.from).map((s) => el("span", { className: `arc-${s.state}`, title: `${s.state} ${s.from.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}–${s.to.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` }))); 
   [...$("day-arc").children].forEach((c, i) => { const s = segs.filter((x) => x.to > x.from)[i]; c.style.flexGrow = String(Math.max(1, Math.round((s.to - s.from) / 60000))); });
-  $("arc-caption").textContent = events.length ? `${events.length} energy reading${events.length > 1 ? "s" : ""} from your words` : "Fills in as you save statements";
+  $("arc-caption").textContent = events.length ? `${events.length} self-report${events.length > 1 ? "s" : ""} from your words` : "Updates when you describe your energy";
   const marked = loadArchive().filter((e) => todayKey(new Date(e.startedAt)) === key).flatMap((e) => e.lines.filter((l) => l.marked));
   $("day-moments").replaceChildren(...[...events.map((e) => el("span", { className: `moment m-${e.state}`, textContent: `${new Date(e.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${e.word}”` })),
     ...marked.slice(-6).map((l) => el("span", { className: "moment m-mark", textContent: `★ ${new Date(l.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} “${l.text.slice(0, 40)}${l.text.length > 40 ? "…" : ""}”` }))]);
@@ -1467,7 +1561,7 @@ function renderToday() {
   const did = (life.actions || []).filter((a) => todayKey(new Date(a.at)) === key).reverse();
   $("did-list").replaceChildren(...(did.length ? did.map((a) => el("li", {}, el("span", { className: "did-time", textContent: new Date(a.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) }), el("span", { textContent: a.text }))) : [el("li", { className: "empty", textContent: "Nothing yet. Threadline acts only with your OK (or your opt-in for check-ins)." })]));
 }
-$("today-summary").addEventListener("click", () => summarizeToday($("today-summary-out")));
+$("today-summary").addEventListener("click", () => summarizeToday());
 
 
 /* Pair from the watch: the watch shows a code; you enter it here (the session cookie authorizes the claim). */

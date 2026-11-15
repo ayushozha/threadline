@@ -106,6 +106,9 @@
             <p class="caption">Pick “GoPro Webcam” if it's plugged in and its app is running. The camera's own mic is not used.</p>
           </div>
               <label class="check"><input id="rec-consent" type="checkbox"><span>Everyone speaking agrees to recording and processing by Deepgram and Google. I can stop at any time.</span></label>
+              <label for="capture-identity">Who is speaking?</label>
+              <select id="capture-identity"><option value="conversation">Conversation — review who said what</option><option value="solo">Just me — automatically save my words and update my day</option></select>
+              <p class="caption">Choose “Just me” only while you are the only speaker. Conversation audio stays separate from your personal history until you review it.</p>
             </div>
             <div class="recorder">
               <button type="button" id="rec-start" class="rec-btn" aria-label="Start recording"><span class="rec-dot"></span></button>
@@ -153,6 +156,7 @@
             <div class="agent-card">
               <p class="agent-eyebrow">Agent</p>
               <h2 id="agent-h">What Threadline noticed</h2>
+              <p id="agent-status" class="caption" role="status">Ready to act on your next complete thought.</p>
               <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and your cycle dates, decides what would help, and says why.</li></ol>
             </div>
             <div id="support" class="support" hidden></div>
@@ -211,7 +215,7 @@
           <div class="energy-now" id="energy-now" data-energy="unknown">
             <div class="dial"><div class="dial-halo"></div><div class="dial-core"><span id="energy-label">Unknown</span><small id="energy-since">no signal yet</small></div></div>
             <h2>Your energy now</h2>
-            <p id="energy-why" class="caption">From your own words once you save a statement — plus voice, movement and watch readings as context.</p>
+            <p id="energy-why" class="caption">Updates from explicit self-reports in your saved words. Voice and movement are context, not an emotion detector.</p>
             <div class="row tight center">
               <button type="button" id="mood-to-health" class="secondary">Log this mood to Apple Health</button>
             </div>
@@ -234,7 +238,7 @@
             <audio id="music-player" controls hidden></audio>
           </div>
         </section>
-        <section class="card" aria-labelledby="energy-words-h">
+        <section class="card" aria-labelledby="energy-words-h" hidden>
           <h2 id="energy-words-h">Words that set your energy</h2>
           <label for="positive-words">Positive-energy words</label>
           <input id="positive-words" type="text" maxlength="300">
@@ -243,7 +247,7 @@
       </section>
 
       <section class="view" data-view="tasks" hidden>
-        <div class="task-banner" id="task-banner" hidden></div>
+        <section class="card" aria-labelledby="task-suggestions-h"><h2 id="task-suggestions-h">From your conversation</h2><p class="caption">Suggested tasks appear here automatically. Review before saving.</p><div class="task-banner" id="task-banner"></div></section>
         <form id="task-form" class="card task-form">
           <label for="task-title">Add a task</label>
           <div class="row tight">
@@ -282,8 +286,8 @@
         </section>
         <div class="two-col">
           <section class="card" aria-labelledby="words-h">
-            <div class="section-top"><h2 id="words-h">In your words</h2><button type="button" id="today-summary" class="secondary">Summarize my day</button></div>
-            <div id="today-summary-out" class="answer"><p class="caption">A three-line summary from today's saved statements, with the day's readings as context.</p></div>
+            <div class="section-top"><h2 id="words-h">In your words</h2><button type="button" id="today-summary" class="secondary">Refresh summary</button></div>
+            <div id="today-summary-out" class="answer"><p class="caption">Updates automatically from today's saved statements.</p></div>
           </section>
           <section class="card dark" aria-labelledby="measured-h">
             <h2 id="measured-h">Measured today</h2>
@@ -298,14 +302,14 @@
       </section>
 
       <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
-          <div class="section-top"><h2 id="days-heading">Daily log</h2><button type="button" id="day-summary" class="secondary">Summarize today</button></div>
+          <div class="section-top"><h2 id="days-heading">Daily log</h2><button type="button" id="day-summary" class="secondary">Refresh summary</button></div>
           <p class="caption">Recorded automatically from your saved words, your conversations, the band and the watch. Numbers describe what happened, not how you feel.</p>
           <div class="table-wrap"><table class="days-table">
-            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy words</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Cycle day</th></tr></thead>
+            <thead><tr><th scope="col">Day</th><th scope="col">Low-energy self-reports</th><th scope="col">Lines from others</th><th scope="col">Steps</th><th scope="col">Heart rate</th><th scope="col">Cycle day</th></tr></thead>
             <tbody id="days-body"></tbody>
           </table></div>
           <div id="day-summary-out" class="answer" hidden></div>
-          <details class="add-pref">
+          <details class="add-pref" hidden>
             <summary>Words that mean low energy for me</summary>
             <input id="energy-words" type="text" maxlength="300" aria-label="Low-energy words, comma-separated">
             <p class="caption">When a saved statement of yours contains one of these, it is counted for that day.</p>
