@@ -8,6 +8,7 @@ import { ACCESS_MODES, createTapGesture } from './modes.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 import { mountLibrary } from './library.mjs';
 import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
+import { mountEssentials } from './essentials.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -216,7 +217,9 @@ function drawDashboard() {
     const count = $("memory-count"); if (count) count.textContent = `${sessions.reflection.notes.length} notes · ${loadArchive().length} conversations`;
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
-window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); if (location.hash === "#tasks") renderTasks(); });
+window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); if (location.hash === "#library") openLibrary(); if (location.hash === "#tasks") renderTasks(); if (location.hash === "#essentials") openEssentials(); });
+let essentialsMounted = false;
+function openEssentials() { if (essentialsMounted || !$("essentials")) return; essentialsMounted = true; mountEssentials($("essentials"), { el, request, contactName: () => loadContacts().name, onLog: (t) => { try { logAction(t); } catch { /* */ } } }); }
 let library = null;
 function openLibrary() {
   if (library || !$("library")) return;
@@ -1644,7 +1647,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { library: "Library", dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
+const VIEW_TITLES = { essentials: "Essentials", library: "Library", dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
@@ -2795,6 +2798,7 @@ render();
 renderAccessMode();
 showView(location.hash.slice(1) || "dashboard");
 if (location.hash === "#library") openLibrary();
+if (location.hash === "#essentials") setTimeout(openEssentials, 0);
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();

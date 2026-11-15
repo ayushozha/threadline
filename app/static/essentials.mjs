@@ -1,0 +1,61 @@
+// Essentials: everyday supplies ordered with Stripe Checkout, approved by the caregiver.
+// Prices and the catalogue come from the server; prescription medicines are never sold here.
+const SUGGEST = [
+  { id: "stoveoff", why: "The stove was left on (Library · Memory)" },
+  { id: "stairtape", why: "Stairs at night were the top hazard (Library · Sight)" },
+  { id: "nightlight", why: "Dim steps and hallways (real recordings)" },
+  { id: "organiser", why: "“Did I take my pills?” came up again (Library · Memory)" },
+  { id: "meals", why: "Short sleep and low steps this week (Apple Health)" },
+  { id: "magnifier", why: "Reading small print (Sight mode)" },
+];
+const money = (c) => `$${(c / 100).toFixed(2)}`;
+export function mountEssentials(root, { el, request, contactName, onLog }) {
+  let items = [], stripe = false, test = false; const cart = new Map();
+  const params = new URLSearchParams(location.search);
+  async function load() {
+    try { const d = await (await fetch("/api/essentials/catalog")).json(); items = d.items; stripe = d.stripe; test = d.test_mode; } catch { items = []; }
+    render();
+  }
+  const byId = (id) => items.find((x) => x.id === id);
+  function add(id, n = 1) { const q = Math.max(0, Math.min(20, (cart.get(id) || 0) + n)); if (q) cart.set(id, q); else cart.delete(id); render(); }
+  function render() {
+    const total = [...cart].reduce((s, [id, q]) => s + (byId(id)?.cents || 0) * q, 0);
+    const banner = params.get("paid") ? el("p", { className: "ess-banner ok", textContent: "Order paid with Stripe. A receipt is on its way." })
+      : params.get("cancelled") ? el("p", { className: "ess-banner", textContent: "Checkout cancelled. Nothing was charged." }) : null;
+    const sug = el("section", { className: "ess-sug" }, el("h3", { textContent: "Suggested this week, from what Threadline noticed" }),
+      el("div", { className: "ess-sug-grid" }, ...SUGGEST.map((s) => { const it = byId(s.id); if (!it) return null;
+        return el("article", { className: "ess-sug-card" }, el("span", { className: "ess-ic", textContent: it.icon }), el("div", {}, el("b", { textContent: it.name }), el("small", { textContent: s.why })),
+          el("button", { type: "button", className: "dash-btn primary", textContent: cart.has(it.id) ? `In cart · ${cart.get(it.id)}` : `Add ${money(it.cents)}`, onclick: () => add(it.id) })); })));
+    const cats = [...new Set(items.map((i) => i.cat))];
+    const catalog = el("section", { className: "ess-cats" }, ...cats.map((c) => el("div", { className: "ess-cat" }, el("h3", { textContent: c }),
+      el("div", { className: "ess-grid" }, ...items.filter((i) => i.cat === c).map((i) => el("article", { className: "ess-item" },
+        el("span", { className: "ess-ic", textContent: i.icon }), el("b", { textContent: i.name }), el("span", { className: "ess-price", textContent: money(i.cents) }),
+        el("div", { className: "ess-qty" }, el("button", { type: "button", textContent: "−", "aria-label": `Remove one ${i.name}`, onclick: () => add(i.id, -1) }),
+          el("span", { textContent: String(cart.get(i.id) || 0) }), el("button", { type: "button", textContent: "+", "aria-label": `Add one ${i.name}`, onclick: () => add(i.id, 1) }))))))));
+    const approver = el("input", { type: "text", maxLength: 60, value: contactName() || "", placeholder: "Caregiver name", "aria-label": "Approved by" });
+    const ok = el("input", { type: "checkbox", id: "ess-ok" });
+    const msg = el("p", { className: "caption", role: "status" });
+    const pay = el("button", { type: "button", className: "primary-sm ess-pay", textContent: stripe ? `Pay ${money(total)} with Stripe` : "Pay with Stripe", disabled: !cart.size });
+    pay.addEventListener("click", async () => {
+      if (!ok.checked || !approver.value.trim()) { msg.textContent = "A caregiver needs to approve the order first."; return; }
+      if (!stripe) { msg.textContent = "Stripe isn't connected on this server yet: add a Stripe test key (STRIPE_SECRET_KEY) to turn on checkout."; return; }
+      pay.disabled = true; msg.textContent = "Opening Stripe Checkout…";
+      try {
+        const d = await request("/api/essentials/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: [...cart].map(([id, qty]) => ({ id, qty })), approved_by: approver.value.trim() }) });
+        onLog?.(`Essentials order sent to Stripe Checkout (${money(total)}), approved by ${approver.value.trim()}`);
+        location.href = d.url;
+      } catch (e) { msg.textContent = e.message; pay.disabled = false; }
+    });
+    const cartBox = el("aside", { className: "ess-cart" }, el("h3", { textContent: "Order" }),
+      cart.size ? el("ul", {}, ...[...cart].map(([id, q]) => el("li", {}, el("span", { textContent: `${byId(id).icon} ${byId(id).name} × ${q}` }), el("b", { textContent: money(byId(id).cents * q) })))) : el("p", { className: "caption", textContent: "Add items from the suggestions or the shelves." }),
+      el("p", { className: "ess-total" }, el("span", { textContent: "Total" }), el("b", { textContent: money(total) })),
+      el("label", { className: "ess-approve" }, el("span", { textContent: "Approved by" }), approver),
+      el("label", { className: "check" }, ok, el("span", { textContent: "I'm the caregiver and I approve this order" })),
+      pay, el("p", { className: "caption", textContent: `${stripe ? (test ? "Stripe test mode · no real charge" : "Stripe") : "Stripe checkout"} · card details are entered on Stripe's page, never in Threadline.` }), msg,
+      el("div", { className: "ess-rx" }, el("b", { textContent: "Prescription medicines" }),
+        el("p", { className: "caption", textContent: "Threadline never sells prescription medicine. Send the pharmacy a refill request instead." }),
+        el("a", { className: "dash-btn", href: `sms:?&body=${encodeURIComponent("Hello, please prepare a repeat prescription refill for my mother. Thank you.")}`, textContent: "Request a refill" })));
+    root.replaceChildren(...[banner, el("div", { className: "ess-layout" }, el("div", {}, sug, catalog), cartBox)].filter(Boolean));
+  }
+  load();
+}

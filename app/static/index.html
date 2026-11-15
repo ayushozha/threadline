@@ -27,6 +27,7 @@
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
         <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Wellbeing</span></a>
+        <a href="#essentials" class="nav-item" data-view-link="essentials"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2l2.4 11h11L21 7H6.2"></path><circle cx="9" cy="19" r="1.4"></circle><circle cx="17" cy="19" r="1.4"></circle></svg><span>Essentials</span></a>
         <a href="#tasks" class="nav-item" data-view-link="tasks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"></path></svg><span>Tasks</span></a>
         <a href="#integrations" hidden class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
         <a href="#transcripts" class="nav-item" data-view-link="transcripts"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path></svg><span>Transcripts</span></a>
@@ -228,6 +229,10 @@
       <section class="view" data-view="library" hidden>
         <div class="lib-intro"><h2>Scenario library</h2><p class="caption">Real recordings and generated scenes of people facing everyday problems. Gemini watches each video, the Gemini Decisions API picks one action, and you can run live guidance on any of them.</p></div>
         <div id="library" class="lib"></div>
+      </section>
+      <section class="view" data-view="essentials" hidden>
+        <div class="lib-intro"><h2>Essentials</h2><p class="caption">Groceries, over-the-counter health items and home-safety supplies, suggested from what Threadline noticed, approved by the caregiver, paid with Stripe.</p></div>
+        <div id="essentials" class="ess"></div>
       </section>
       <section class="view" data-view="care" hidden>
         <div class="care-grid">

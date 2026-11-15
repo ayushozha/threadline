@@ -10,6 +10,29 @@
 
 Voice · visual context · accessible captions · personal memory · assistance drafts
 
+## ▶ Watch the story (2½ minutes)
+
+[![Threadline: the little things (story film, click to play)](docs/media/video-poster.jpg)](https://threadline.ayushojha.com/static/media/threadline-story.mp4)
+
+**[Play the video](https://threadline.ayushojha.com/static/media/threadline-story.mp4)** · **[Open the live app](https://threadline.ayushojha.com/)** · [Scenario library](https://threadline.ayushojha.com/#library) · [Dashboard](https://threadline.ayushojha.com/#dashboard)
+
+Evelyn, 78, lives with low vision and early memory loss. The film follows one day with Threadline, recorded on the live app: Gemini reasoning on real stair footage, a stove left on and a caregiver alert chosen by the Gemini Decisions API, a plan for tomorrow, a year of real Apple Health data, help in Nepali, and an automatic emergency call.
+
+| Dashboard | Scenario library | Gemini on the stove scene |
+|---|---|---|
+| ![Dashboard](docs/media/dashboard.png) | ![Library](docs/media/library.png) | ![Live stove chat](docs/media/live-stove.png) |
+| **Emergency alert** | **Daily log** | **Memory map** |
+| ![Emergency](docs/media/live-emergency.png) | ![Daily log](docs/media/days.png) | ![Memory graph](docs/media/graph.png) |
+
+### What's live at [threadline.ayushojha.com](https://threadline.ayushojha.com/)
+
+- **Dashboard:** today at a glance, real Apple Health trends, action items, one-tap reports for caregiver, doctor and family.
+- **Library:** 15 scenario videos (3 real recordings, 12 MiniMax Hailuo scenes). Gemini watches each one, the **Gemini Decisions API** picks one action and urgency, and you can chat with Gemini about any video (spoken replies). Your own recordings are stored per visitor and reasoned on the same way.
+- **Care:** live guidance with Gemini Live, a caregiver agent every 30 s, and an **emergency flow**: a fall, triple-tap SOS or cry for help shows a 10-second countdown, then calls the emergency contact, with emergency services one tap away.
+- **Essentials:** groceries, over-the-counter health items and home-safety supplies suggested from what Threadline noticed, caregiver-approved, paid with **Stripe Checkout** (needs `STRIPE_SECRET_KEY`; never sells prescription medicine).
+- **Tasks, Wellbeing, Daily log, Memory:** suggestions built from the library, Care and Health; a 10-second caregiver mood check-in; a self-filling daily log of every Health metric; an Obsidian-style memory graph.
+- **Language:** live transcription is multilingual and Gemini answers in the person's language (the film shows Nepali).
+
 ## The problem
 
 Everyday tasks become harder when an interface assumes you can remember the last step, see small text, hear a conversation or easily reach something. Someone may lose their place while making tea, miss a spoken update, struggle to read a package or need help with an object out of reach. Opening another app, repeating the context and explaining what help is needed adds work at exactly the wrong moment.

@@ -531,3 +531,15 @@ mark{background:#FDE7A8;border-radius:3px;padding:0 2px}
 .sos-ring{width:120px;height:120px;margin:10px auto;border-radius:50%;border:8px solid #b44630;display:grid;place-content:center;animation:sospulse 1s infinite}@keyframes sospulse{50%{box-shadow:0 0 0 14px rgba(180,70,48,.18)}}.sos-count{font:800 44px/1 ui-sans-serif,system-ui;color:#b44630}.sos-ring small{font-size:11px;color:#72766a}
 .sos-steps{text-align:left;margin:12px auto;padding-left:22px;max-width:420px;font-size:14px}.sos-steps li{margin:4px 0;color:#72766a}.sos-steps li.done{color:#2f6b45}.sos-steps li.done::marker{content:"✓ "}.sos-steps li.now{color:#b44630;font-weight:700}
 .sos-actions{display:grid;gap:8px;margin-top:12px}.sos-btn{display:block;padding:13px;border-radius:12px;border:1px solid #d9d9cc;background:#fff;font-weight:700;text-decoration:none;color:#262921;font-size:15px}.sos-btn.primary{background:#262921;color:#fff}.sos-btn.danger{background:#b44630;color:#fff;border-color:#b44630}.sos-btn.ghost{background:transparent}
+
+/* ---------- Essentials ---------- */
+.ess{margin-top:12px}.ess-banner{padding:12px 16px;border-radius:12px;background:#fbeccd;margin:0 0 12px}.ess-banner.ok{background:#e3f1e6;color:#2f6b45;font-weight:600}
+.ess-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}@media (max-width:980px){.ess-layout{grid-template-columns:1fr}}
+.ess-sug{background:linear-gradient(135deg,#fbf3dc,#f4ead0);border:1px solid #ecdcae;border-radius:16px;padding:16px}.ess-sug h3,.ess-cat h3,.ess-cart h3{margin:0 0 10px}
+.ess-sug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}.ess-sug-card{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;background:var(--white);border-radius:12px;padding:12px;border:1px solid var(--line)}.ess-sug-card small{display:block;color:var(--muted);font-size:12px}.ess-sug-card .dash-btn{grid-column:1/3;justify-self:start}
+.ess-ic{font-size:26px}.ess-cats{display:grid;gap:16px;margin-top:16px}.ess-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.ess-item{display:grid;gap:4px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:12px}.ess-item b{font-size:14px}.ess-price{color:var(--muted);font-size:13px}
+.ess-qty{display:flex;align-items:center;gap:10px;margin-top:4px}.ess-qty button{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--paper);font-size:18px}
+.ess-cart{position:sticky;top:12px;background:var(--white);border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;gap:10px}.ess-cart ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}.ess-cart li{display:flex;justify-content:space-between;gap:8px}
+.ess-total{display:flex;justify-content:space-between;font-size:18px;border-top:1px solid var(--line);padding-top:10px;margin:0}.ess-approve{display:grid;gap:4px;font-size:12px}.ess-approve input{margin:0}.ess-pay{width:100%;padding:13px;font-size:15px}
+.ess-rx{border-top:1px dashed var(--line);padding-top:10px}.ess-rx p{margin:4px 0 8px}
