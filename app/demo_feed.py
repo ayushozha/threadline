@@ -1,15 +1,22 @@
 """Public demo feed: one claimed watch-started pairing that presents DEMO_WATCH_KEY publishes its validated
-sensor frames to anyone viewing the demo. Only sensors frames go out (never transcripts, cycle dates, audio,
-mood commands or haptics), and only the last frame is kept, in memory."""
+sensor frames to anyone viewing the demo. From the watch only sensors frames go out (never its transcripts,
+cycle dates, audio, mood commands or haptics); they are also stored in demo_readings. Separately, a
+live-transcribe session that presents DEMO_WATCH_KEY as publish_key is the demo owner's recording: its
+transcript lines are broadcast here and its final lines stored in demo_lines. Visitors' data is never stored."""
 
 import asyncio
+import logging
 import os
 import secrets
+import sqlite3
 import time
+from collections import Counter
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app import main, watch_claim
+from app import main, store, watch_claim
+
+log = logging.getLogger("threadline.demo")
 
 router = APIRouter()
 
@@ -19,6 +26,7 @@ MAX_SUBSCRIBERS = 200
 
 subscribers: set = set()
 state: dict = {"publisher": None, "last": None, "at": 0.0, "live": False, "device": None, "task": None}
+recording: set[str] = set()  # live-transcribe sessions currently publishing the demo transcript
 
 
 def demo_key() -> str:
@@ -80,6 +88,7 @@ async def publish(pairing, frame: dict) -> None:
     if frame.get("type") != "sensors":
         return
     out = {**frame, "demo": True}
+    save(lambda db: db.add_reading(out.get("device"), out))
     state["last"], state["at"], state["device"] = out, time.monotonic(), out.get("device")
     if not state["live"]:
         state["live"] = True
@@ -92,6 +101,55 @@ async def publish(pairing, frame: dict) -> None:
     await broadcast(out)
 
 
+def save(write) -> None:
+    if (db := store.get()) is None:
+        return
+    try:
+        write(db)
+    except sqlite3.Error as exc:
+        log.warning("Demo storage write failed (%s)", exc.__class__.__name__)
+
+
+def line_speaker(words: list) -> int | None:
+    speakers = Counter(w.get("speaker") for w in words if isinstance(w, dict) and isinstance(w.get("speaker"), int))
+    return speakers.most_common(1)[0][0] if speakers else None
+
+
+async def set_recording(session: str, live: bool) -> None:
+    was = bool(recording)
+    (recording.add if live else recording.discard)(session)
+    if bool(recording) != was:
+        await broadcast({"type": "demo_recording", "live": bool(recording)})
+
+
+async def publish_line(session: str, source: str, result: dict) -> None:
+    """result is a simplify() output from the demo owner's live-transcribe session. Finals with text are
+    stored and broadcast; interims are broadcast only."""
+    if result.get("type") != "result" or not demo_key():
+        return
+    text = str(result.get("transcript") or "").strip()
+    if not text:
+        return
+    final = bool(result.get("is_final"))
+    speaker = line_speaker(result.get("words") or [])
+    at = store.now_iso()
+    if final:
+        save(lambda db: db.add_line(session, speaker, text, source, at))
+    await broadcast({"type": "demo_line", "final": final, "at": at, "speaker": speaker, "text": text})
+
+
+@router.get("/api/demo/transcript")
+async def demo_transcript(limit: int = Query(200, ge=1, le=2000)):
+    db = store.get()
+    return {"recording": bool(recording), "lines": db.lines(limit) if db else []}
+
+
+@router.get("/api/demo/readings")
+async def demo_readings(limit: int = Query(500, ge=1, le=5000)):
+    db = store.get()
+    return {"readings": db.readings(limit) if db else []}
+
+
 @router.get("/api/demo/latest")
 async def demo_latest():
     data = status()
@@ -101,7 +159,8 @@ async def demo_latest():
 
 @router.websocket("/api/demo/feed")
 async def demo_feed(client: WebSocket):
-    """Public: no token or cookie. Receives demo_status, then the demo watch's sensors frames."""
+    """Public: no token or cookie. Receives demo_status, then the demo watch's sensors frames, plus demo_line
+    and demo_recording messages from the demo owner's live transcript."""
     await client.accept()
     if len(subscribers) >= MAX_SUBSCRIBERS:
         return await client.close(code=1013)

@@ -10,6 +10,15 @@ services:
       - /home/ayush/threadline/secrets/runtime.env
     environment:
       PORT: "3000"
+      THREADLINE_DB_PATH: /data/threadline.db
+    volumes:
+      # Demo-owner transcript + demo watch readings (SQLite). Host dir must be owned by uid 10001:
+      #   sudo mkdir -p /home/ayush/threadline/data && sudo chown 10001:10001 /home/ayush/threadline/data && sudo chmod 700 /home/ayush/threadline/data
+      - type: bind
+        source: /home/ayush/threadline/data
+        target: /data
+        bind:
+          create_host_path: false
     expose:
       - "3000"
     networks:

@@ -702,7 +702,9 @@ async def close_cleanly(client: WebSocket, sent: int | None) -> None:
 
 @app.websocket("/api/live-transcribe")
 async def live_transcribe(client: WebSocket):
-    """Relay one consented audio stream to Deepgram. The key stays on the server; nothing is stored."""
+    """Relay one consented audio stream to Deepgram. The key stays on the server. Nothing is stored, except
+    when the start message carries publish_key == DEMO_WATCH_KEY: that is the demo owner's public recording,
+    whose lines go to the public demo feed (finals also to demo storage)."""
     await client.accept()
     fail = socket_fail(client)
     if (hello := await socket_hello(client, fail)) is None:
@@ -712,9 +714,29 @@ async def live_transcribe(client: WebSocket):
     source = hello.get("source")
     if source not in {"vexo", "browser"}:
         return await fail("Unknown audio source.")
+    send, on_ready, demo_id = client.send_json, None, None
+    if demo_feed.key_ok(hello.get("publish_key")):
+        demo_id = secrets.token_hex(8)
+
+        async def send(message: dict) -> None:
+            await demo_feed.publish_line(demo_id, source, message)
+            await client.send_json(message)
+
+        async def on_ready() -> None:
+            await demo_feed.set_recording(demo_id, True)
+    try:
+        await transcribe_session(client, source, send, on_ready, fail)
+    finally:
+        if demo_id:
+            await demo_feed.set_recording(demo_id, False)
+
+
+async def transcribe_session(client: WebSocket, source: str, send: Send,
+                             on_ready: Callable[[], Awaitable[None]] | None, fail: Fail) -> None:
     session = getattr(client.state, "guest_session", None)
+    extra = {"on_ready": on_ready} if on_ready else {}
     if not session:
-        return await close_cleanly(client, await relay_audio(source, socket_receiver(client), client.send_json, fail))
+        return await close_cleanly(client, await relay_audio(source, socket_receiver(client), send, fail, **extra))
     try:
         max_seconds, max_bytes = start_guest_stream(session)
     except HTTPException as exc:
@@ -729,7 +751,7 @@ async def live_transcribe(client: WebSocket):
         return data
 
     try:
-        sent = await relay_audio(source, guest_receive, client.send_json, fail,
+        sent = await relay_audio(source, guest_receive, send, fail, **extra,
                                  max_seconds=max_seconds, max_bytes=max_bytes)
     finally:
         end_guest_stream(session, started)
