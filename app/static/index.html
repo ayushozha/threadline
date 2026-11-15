@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f4f4f1">
+  <meta name="theme-color" content="#FBF6F4">
   <title>Threadline — a little context, kept close</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/theme.css">
   <script src="/static/app.js" type="module"></script>
 </head>
 <body>
@@ -16,16 +17,17 @@
         <span>threadline</span>
       </a>
       <div class="nav-list">
-        <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Your band</span><span class="nav-live" id="nav-live" hidden></span></a>
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
         <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Energy</span></a>
         <a href="#tasks" class="nav-item" data-view-link="tasks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"></path></svg><span>Tasks</span></a>
         <a href="#integrations" hidden class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
+        <a href="#assistant" class="nav-item" data-view-link="assistant"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"></path></svg><span>Assistant</span></a>
         <a href="#transcripts" class="nav-item" data-view-link="transcripts"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path></svg><span>Transcripts</span></a>
         <a href="#days" class="nav-item" data-view-link="days"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Daily log</span></a>
         <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Graph</span></a>
         <a href="#live" class="nav-item" data-view-link="devices" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
+        <a href="#live" class="nav-item" data-view-link="live"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 8v8M3 11v2M21 11v2"></path></svg><span>Your band</span><span class="nav-live" id="nav-live" hidden></span></a>
       </div>
       <a href="#live" class="side-band" id="side-band">
         <svg width="30" height="40" viewBox="0 0 34 44" aria-hidden="true"><rect x="5" y="2" width="24" height="40" rx="12" fill="#16161A"></rect><rect x="9" y="12" width="16" height="20" rx="6" fill="#2A2A31"></rect><circle cx="17" cy="22" r="3.2" class="side-led"></circle></svg>
@@ -48,7 +50,7 @@
         </div></div>
       </header>
       <section class="view" data-view="live">
-        <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Connect your Vexo band.</h2><p>Choose your band, connect, and talk. Threadline keeps your words together.</p></div>
+        <div class="band-intro"><h2>Connect your Vexo band.</h2></div>
         <div class="pair" id="pair" data-state="idle">
           <div class="pair-head">
             <svg class="band-art" viewBox="0 0 64 104" aria-hidden="true">
@@ -85,6 +87,7 @@
             <button type="button" id="btn-serial" class="secondary">Connect by USB cable</button>
             <button type="button" id="btn-cancel" class="secondary" hidden>Cancel</button>
             <button type="button" id="band-disconnect" class="secondary" hidden>Disconnect</button>
+            <button type="button" id="consent-reset" class="text-button" hidden>Ask for consent again</button>
           </div>
           <p id="no-ble" class="pair-hint" hidden></p>
           <p id="usb-help" class="pair-hint"><b>By USB cable:</b> the browser lists every port on this computer. Pick <b>Vexo Open band</b> — <b>cu.usbmodem…</b> on a Mac, <b>COM</b> and a number on Windows (maybe "USB Serial Device"). Not "Bluetooth-Incoming-Port". No band in the list? Try another cable; some only charge.</p>
@@ -116,7 +119,9 @@
               <label for="capture-identity">Who is speaking?</label>
               <select id="capture-identity"><option value="conversation">Conversation — review who said what</option><option value="solo">Just me — automatically save my words and update my day</option></select>
               <p class="caption">Choose “Just me” only while you are the only speaker. Conversation audio stays separate from your personal history until you review it.</p>
+              <div hidden><input id="assistant-on" type="checkbox" disabled></div>
             </div>
+            <p id="always-banner" class="caption error" role="status" hidden>● Always listening. Everything the band hears is being transcribed. Press Stop to pause.</p>
             <div class="recorder">
               <button type="button" id="rec-start" class="rec-btn" aria-label="Start recording"><span class="rec-dot"></span></button>
               <button type="button" id="rec-stop" class="rec-btn stop" aria-label="Stop recording" disabled><span class="rec-square"></span></button>
@@ -252,6 +257,20 @@
             <audio id="music-player" controls hidden></audio>
           </div>
         </section>
+        <section class="card" id="symptom-card" aria-labelledby="symptom-h">
+          <h2 id="symptom-h">Symptoms &amp; reminders</h2>
+          <p class="caption">Kept in this browser only. Tap what applies; Threadline notes your energy and cycle day alongside. It doesn't sync to a cycle app yet — copy the log to paste into yours.</p>
+          <div class="row" id="symptom-chips"></div>
+          <ol class="symptom-log" id="symptom-log"></ol>
+          <div class="row tight">
+            <button type="button" id="symptom-copy" class="text-button">Copy log</button>
+            <button type="button" id="symptom-clear" class="text-button">Delete log</button>
+          </div>
+          <label class="check"><input id="voice-reminders" type="checkbox"><span>Speak gentle reminders on this computer when my mood turns tense (off by default)</span></label>
+          <label for="friend-name">Who should a check-in note be addressed to? (optional)</label>
+          <input id="friend-name" type="text" maxlength="40" placeholder="e.g. Maya">
+          <p class="caption" id="affect-status">Sensor engine: waiting for watch, band or voice readings. It learns your own baseline first (about 20 readings per signal).</p>
+        </section>
         <section class="card" aria-labelledby="energy-words-h" hidden>
           <h2 id="energy-words-h">Words that set your energy</h2>
           <label for="positive-words">Positive-energy words</label>
@@ -262,6 +281,27 @@
 
       <section class="view" data-view="tasks" hidden>
         <section class="card" aria-labelledby="task-suggestions-h"><h2 id="task-suggestions-h">From your conversation</h2><p class="caption">Suggested tasks appear here automatically. Review before saving.</p><div class="task-banner" id="task-banner"></div></section>
+        <div class="task-banner" id="task-banner" hidden></div>
+        <section class="card" id="cal-card" aria-labelledby="cal-h">
+          <h2 id="cal-h">Calendars</h2>
+          <p class="caption">Connect so the assistant can see the next few days and add events — only when you tap. Your connection stays in this tab; Threadline stores no calendar data.</p>
+          <div class="row">
+            <button type="button" id="cal-google" class="secondary">Connect Google Calendar</button>
+            <button type="button" id="cal-apple-toggle" class="secondary">Connect Apple Calendar</button>
+            <button type="button" id="cal-refresh" class="text-button" hidden>Refresh</button>
+            <button type="button" id="cal-disconnect" class="text-button" hidden>Disconnect</button>
+          </div>
+          <form id="cal-apple-form" hidden autocomplete="off">
+            <label for="cal-apple-id">Apple ID</label>
+            <input id="cal-apple-id" type="email" maxlength="120" autocomplete="off" required>
+            <label for="cal-apple-pass">App-specific password</label>
+            <input id="cal-apple-pass" type="password" maxlength="100" autocomplete="off" required placeholder="xxxx-xxxx-xxxx-xxxx">
+            <p class="caption">Create one at appleid.apple.com → Sign-In and Security → App-Specific Passwords. It is sent over this connection with each request and not stored. Never use your real Apple ID password.</p>
+            <button type="submit" class="primary-sm">Connect</button>
+          </form>
+          <p class="caption" id="cal-status">Not connected.</p>
+          <ul class="cal-events" id="cal-events"></ul>
+        </section>
         <form id="task-form" class="card task-form">
           <label for="task-title">Add a task</label>
           <div class="row tight">
@@ -282,16 +322,80 @@
       <section class="view" data-view="integrations" hidden>
         <div class="int-grid" id="int-grid"></div>
       </section>
+      <dialog id="consent-dialog" class="consent" aria-labelledby="consent-title">
+        <form method="dialog">
+          <h3 id="consent-title">Before the band listens</h3>
+          <p>Everyone speaking agrees to recording and processing by Deepgram and Google. You can stop at any time.</p>
+          <p>The band's audio is also saved on this computer, in this browser, until you delete it. Recording starts as soon as you agree.</p>
+          <p id="consent-assistant" hidden>The Vexa assistant listens too: it answers when you say “Vexa …”, and checks in when it hears low energy or tension. It speaks out loud from this computer.</p>
+          <div class="row"><button type="submit" value="agree" id="consent-agree" class="primary-sm">I agree</button><button type="submit" value="cancel" id="consent-cancel" class="secondary">Not now</button></div>
+        </form>
+      </dialog>
+      <section class="view" data-view="assistant" hidden>
+        <section class="block" aria-labelledby="assistant-heading">
+          <div class="section-top"><h3 id="assistant-heading">Assistant</h3><button type="button" id="assistant-clear" class="text-button">Clear conversation</button></div>
+          <p class="caption">Say “Vexa, …” and the assistant answers out loud. It also speaks up by itself when it hears low energy or tension in your words or voice. Everything it hears is still transcribed on the Transcripts page. This conversation is kept in this browser only.</p>
+          <div class="assistant-controls">
+            <span id="assistant-state" class="assistant-state" data-on="false" role="status">Not listening</span>
+            <label class="check inline"><input id="assistant-proactive" type="checkbox" checked><span>Check in when I sound low or tense</span></label>
+            <label class="check inline"><input id="assistant-speak" type="checkbox" checked><span>Speak out loud</span></label>
+          </div>
+          <p id="assistant-mood" class="assistant-mood" aria-live="polite"></p>
+          <ol id="assistant-log" class="chat" aria-live="polite"></ol>
+        </section>
+      </section>
       <section class="view" data-view="transcripts" hidden>
+        <section class="block" aria-labelledby="server-heading">
+          <div class="section-top"><h3 id="server-heading">Always listening and server copy</h3><button type="button" id="server-refresh" class="text-button" hidden>Refresh</button></div>
+          <p class="caption" id="server-caption">Locked. Enter the access code to keep audio and transcripts on the server and to let the band record all the time. Without it, nothing leaves this browser except the live audio sent for transcription.</p>
+          <form id="op-form" class="pick" autocomplete="off">
+            <label class="visually-hidden" for="op-token">Access code</label>
+            <input id="op-token" type="password" autocomplete="off" placeholder="Access code" required>
+            <button type="submit" id="op-unlock" class="primary-sm">Unlock</button>
+            <button type="button" id="op-lock" class="secondary" hidden>Lock</button>
+          </form>
+          <label class="check"><input id="always-on" type="checkbox" disabled><span>Always listening: start recording as soon as the band connects, and start again after a drop. Only turn this on if everyone within earshot has agreed. A notice stays on screen while it runs, and pressing Stop pauses it until you press Start.</span></label>
+          <label class="check"><input id="save-server" type="checkbox" disabled><span>Keep the audio and transcript of each capture on the server (kept for <span id="server-days">30</span> days, then deleted). Only people with the access code can listen or delete.</span></label>
+          <p class="caption" id="server-state" role="status"></p>
+          <div class="archive-split"><ol id="server-list" class="archive session-list"></ol><article id="server-detail" class="archive-detail"><p class="caption">Server recordings appear here once unlocked.</p></article></div>
+        </section>
+        <section class="block" aria-labelledby="audio-heading">
+          <div class="section-top"><h3 id="audio-heading">Saved audio on this computer</h3></div>
+          <p class="caption" id="audio-note">Nothing saved yet. Audio from the band is saved here whenever it is recording.</p>
+          <ol id="audio-list" class="session-list recordings"></ol>
+        </section>
         <section class="block" aria-labelledby="archive-heading">
           <div class="section-top"><h3 id="archive-heading">Transcripts</h3><button type="button" id="archive-clear" class="text-button">Delete all</button></div>
-          <p class="caption" id="archive-caption">Every captured session's full transcript, stored in this browser for this band. Nothing is stored on the server.</p>
+          <p class="caption" id="archive-caption">Every captured session's full transcript, stored in this browser for this band. Server copies, if switched on above, are listed in the section above.</p>
           <label class="search"><span class="visually-hidden">Search transcripts</span><input id="archive-search" type="search" placeholder="Search what was said"></label>
           <div class="archive-split"><ol id="archive" class="archive session-list"></ol><article id="archive-detail" class="archive-detail"><p class="caption">Choose a session to read its transcript.</p></article></div>
         </section>
       </section>
 
       <section class="view" data-view="today" hidden>
+        <div class="hero">
+          <section class="hero-card cycle-card" aria-labelledby="cycle-hero-h">
+            <svg class="ring" viewBox="0 0 120 120" role="img" id="ring" aria-label="Cycle day not set yet">
+              <circle class="ring-bg" cx="60" cy="60" r="50"></circle>
+              <circle class="ring-fg" id="ring-fg" cx="60" cy="60" r="50" stroke-dasharray="0 314" transform="rotate(-90 60 60)"></circle>
+              <text class="ring-num" id="ring-num" x="60" y="58">—</text>
+              <text class="ring-cap" x="60" y="77">CYCLE DAY</text>
+            </svg>
+            <div class="cycle-copy">
+              <span class="cycle-kicker" id="cycle-kicker">Your dates</span>
+              <h2 class="cycle-title" id="cycle-hero-h">Add a period start date</h2>
+              <p class="cycle-sub" id="cycle-sub">Add the first day of your last periods, or share them from Apple Health. <a href="#days">Open Daily log</a></p>
+            </div>
+          </section>
+          <section class="hero-card" aria-labelledby="state-h">
+            <div class="state-head"><h2 id="state-h">How you're doing</h2><span class="caption" id="state-since">no signal yet</span></div>
+            <div class="state-seg" role="group" aria-label="Current energy state, from your own words and readings">
+              <span class="s-low" data-s="low"><i></i>Low</span><span class="s-moody" data-s="moody"><i></i>Tense</span><span class="s-steady" data-s="steady"><i></i>Steady</span><span class="s-positive" data-s="positive"><i></i>Positive</span>
+            </div>
+            <ol class="handled" id="handled"></ol>
+            <p class="hero-foot">Shown from your own words and readings. Context only — not a cause or a diagnosis.</p>
+          </section>
+        </div>
         <section class="card" aria-labelledby="arc-h">
           <div class="section-top"><h2 id="arc-h">Energy across the day</h2><span class="caption" id="arc-caption"></span></div>
           <div id="day-arc" class="day-arc" role="img" aria-label="Energy across the day"></div>

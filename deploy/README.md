@@ -36,3 +36,18 @@ ssh ayush-vps 'docker logs --tail 80 threadline-web'
 
 This is a prototype deployment. External HTTPS verification is still required
 after the container health check passes.
+
+Recordings (always-listening mode)
+
+Audio and transcripts a signed-in operator chooses to keep are written to
+`/data` in the container, which `deploy/compose.yaml` mounts from
+`/home/ayush/threadline/data` on the VPS. Create that folder once and give it
+to the container user, otherwise saving fails:
+
+```bash
+mkdir -p /home/ayush/threadline/data && sudo chown 10001:10001 /home/ayush/threadline/data && chmod 700 /home/ayush/threadline/data
+```
+
+Files older than `THREADLINE_RETENTION_DAYS` (default 30) are deleted, and new
+recordings stop when the folder reaches `THREADLINE_MAX_STORE_MB`. Only the
+`APP_ACCESS_TOKEN` holder can list, play or delete them; guests cannot save.

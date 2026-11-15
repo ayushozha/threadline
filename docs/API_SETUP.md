@@ -119,3 +119,20 @@ The static interface is public and initially presents labeled synthetic demo dat
 5. Confirm only selected notes leave the browser on an explicit live request. Do not interpret absence of local server persistence as a guarantee about provider retention.
 
 Troubleshoot `401`/`403` by checking the provider account and access without printing the key; check model identifiers for model-not-found errors; check account credits and rate limits for `429` responses. Keep provider failures visible rather than displaying fabricated success.
+
+## Calendars (Google and Apple)
+
+Both are optional. Threadline stores no calendar data and no calendar credentials; connections live in the open browser tab. Nothing is written to a calendar until the person taps the button for that event.
+
+### Google Calendar
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create a project, enable the **Google Calendar API**, and configure the OAuth consent screen (add yourself as a test user while it is in testing).
+2. Create an **OAuth client ID** of type **Web application**. Under *Authorized JavaScript origins* add the app's address, e.g. `http://127.0.0.1:8000` and `http://localhost:8000`. No redirect URI and no client secret are needed.
+3. Put the client ID in `.env` as `GOOGLE_OAUTH_CLIENT_ID=...apps.googleusercontent.com` and restart. The content-security policy only allows Google's sign-in script when this is set.
+4. In the app: **Tasks → Calendars → Connect Google Calendar**. The scope is `calendar.events` (read and write events). The sign-in lasts about an hour, then connect again.
+
+### Apple Calendar (iCloud)
+
+Apple has no browser sign-in for calendars, so Threadline uses CalDAV with an **app-specific password**: appleid.apple.com → Sign-In and Security → App-Specific Passwords. Enter the Apple ID and that password under **Tasks → Calendars → Connect Apple Calendar**. They are sent to this server with each request, used to talk to `caldav.icloud.com`, and not stored or logged. The server only contacts `*.icloud.com` hosts. Do not enter a real Apple ID password.
+
+Tested against a simulated iCloud only; it has not been run against a real account.

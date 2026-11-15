@@ -33,6 +33,9 @@ Threadline does not tell anyone their feelings are invalid, infer hormones, diag
 | Live transcript for the browser microphone | Implemented (Deepgram streaming via server relay) |
 | Double-tap the band to start/stop capture | Implemented; needs a check on the physical band |
 | Pipecat pipeline, ElevenLabs playback | Not connected. The band has no speaker or haptics; any voice output must play on the laptop |
+| Sensor engine: personal baseline + shift detection from watch, band and voice readings and your words (`app/affect.py`); the baseline lives in this browser, the server stores nothing | Implemented; tested on synthetic data only, weights are untuned |
+| Energy playbooks: low → note to someone close (you send it), uplifting music, symptom log, "move the rest to later" with undo; tense → watch tap / spoken reminder (opt-in) and symptom chips; back up → offer to take pushed tasks back; decision talk → keep focus tasks, move the rest | Implemented; every outward step waits for your tap |
+| Symptom log with cycle day and energy | Implemented (this browser only); no sync to a cycle app yet — copy the log |
 | Google/real calendar, purchases, messages, health assessment | Not implemented |
 
 ## Run locally (PowerShell)
@@ -50,6 +53,8 @@ uv sync --locked
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+
+Tests: `uv run pytest` and `node --test tests/playbook.test.mjs tests/assistant.test.mjs tests/audiostore.test.mjs`.
 
 The root task created an ignored `.env` with a generated access token. Fill the empty provider key fields using your event accounts. `APP_HOST` / `APP_PORT` document local host/port defaults; the command flags determine Uvicorn's listener.
 

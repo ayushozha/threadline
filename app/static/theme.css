@@ -1,0 +1,99 @@
+/* ===================== Berry theme (from the Cycle redesign) =====================
+   Loaded after style.css. Tokens first, then shape/typography overrides, then new components.
+   No inline styles and no web fonts: the CSP only allows 'self'. */
+:root{
+  --paper:#FBF6F4;--ink:#2A1622;--muted:#6E5866;--line:#EBDDE3;--white:#FFFFFF;--soft:#FFFFFF;
+  --coral:#8C2F5C;--indigo:#8C2F5C;--berry:#8C2F5C;--berry-deep:#6A1F44;--berry-tint:#F5E4EA;--berry-wash:#F1E6E9;
+  --ok:#2F6B4B;--ok-tint:#EAF3EE;--warn:#7A4F0A;--warn-tint:#FCEFD9;--rose:#D9667A;
+  --e-low:#8E8CD8;--e-low-bg:#ECEBFA;--e-steady:#5E9C7A;--e-steady-bg:#EAF3EE;--e-pos:#E9A23B;--e-pos-bg:#FCEFD9;
+  --sans:"Plus Jakarta Sans","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --display:var(--sans);
+  --shadow:0 1px 3px rgba(42,22,34,.06);
+  color-scheme:light}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+h1,h2,h3,.pair-name,.dial-core span,.brand{font-family:var(--sans)!important;font-weight:700;letter-spacing:-.015em}
+.topbar h1{font-weight:800;font-size:clamp(30px,3.4vw,38px);letter-spacing:-.02em}
+.crumb{font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+a{color:var(--berry)}a:hover{color:var(--berry-deep)}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--berry);outline-offset:3px}
+
+/* shell */
+.app{background:var(--paper)}
+.side{background:var(--white);border-right:1px solid var(--line)}
+.nav-item{color:var(--muted);font-weight:600;border-radius:14px;min-height:44px}
+.nav-item:hover{background:var(--berry-wash);color:var(--ink)}
+.nav-item[aria-current=page]{background:var(--berry);color:#fff}
+.nav-live{background:var(--rose);box-shadow:0 0 0 4px rgba(217,102,122,.25)}
+.side-band{border-radius:20px;border-color:var(--line);box-shadow:var(--shadow)}
+.dchip{border-radius:999px}
+
+/* surfaces */
+.card,.two-col .block,.setup,.pair,.sig-card,.support,.calendar,.strip{background:var(--white);border:0;border-radius:24px;box-shadow:var(--shadow)}
+.card{padding:22px}
+.card.dark{background:var(--ink);color:#fff}
+.card.dark .caption{color:#D9C4CE}
+.caption,.tag{color:var(--muted)}
+.review{background:var(--warn-tint);border:0;border-radius:20px}
+.reflection-panel{background:var(--berry-wash);border-radius:24px}
+
+/* controls: pills, 44px targets */
+.primary,.primary-sm{background:var(--berry);color:#fff;border-radius:999px;min-height:44px;font-weight:700}
+.primary:hover,.primary-sm:hover{background:var(--berry-deep)}
+.secondary{background:var(--white);border:1px solid var(--line);color:var(--berry);border-radius:999px;min-height:44px;padding:0 18px;font-weight:700}
+.secondary:hover{background:var(--berry-tint)}
+.text-button{color:var(--berry);font-weight:600}
+.chip{border-radius:999px;background:var(--berry-wash);border-color:transparent;font-family:var(--sans)}
+.chip:hover{border-color:var(--berry)}
+.chip[aria-pressed=true],.chip.on{background:var(--berry);color:#fff}
+textarea,input[type=text],input[type=password],input[type=date],select{border:1px solid var(--line);border-radius:14px;background:var(--white);min-height:44px}
+.check input{accent-color:var(--berry)}
+.badge{border-radius:999px}
+.band-info{background:var(--berry-wash);border-radius:16px}
+
+/* energy dial recolour */
+.energy-now{border-radius:28px}
+.energy-now[data-energy=unknown]{background:var(--berry-wash)}
+
+/* ===================== Today hero (cycle ring + state + handled) ===================== */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;margin:0 0 16px}
+.hero-card{background:var(--white);border-radius:24px;box-shadow:var(--shadow);padding:22px;min-width:0}
+.cycle-card{display:flex;gap:20px;align-items:center}
+.ring{width:124px;height:124px;flex:none}
+.ring-bg{fill:none;stroke:var(--berry-tint);stroke-width:12}
+.ring-fg{fill:none;stroke:var(--berry);stroke-width:12;stroke-linecap:round;transition:stroke-dasharray .5s}
+.ring-num{font:800 30px/1 var(--sans);fill:var(--ink);text-anchor:middle}
+.ring-cap{font:600 10.5px var(--sans);letter-spacing:.08em;fill:var(--muted);text-anchor:middle}
+.cycle-copy{display:flex;flex-direction:column;gap:6px;min-width:0}
+.cycle-kicker{font-size:13px;font-weight:700;color:var(--berry)}
+.cycle-title{font-size:21px;font-weight:700;line-height:1.25;margin:0}
+.cycle-sub{font-size:13px;line-height:1.45;color:var(--muted);margin:0}
+.cycle-sub a{font-weight:700}
+.state-head{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 12px}
+.state-head h2{margin:0;font-size:20px}
+.state-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;background:var(--berry-wash);border-radius:16px;margin:0 0 14px}
+.state-seg span{min-height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}
+.state-seg span i{width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.5}
+.state-seg span[aria-current=true]{background:var(--white);color:var(--ink);box-shadow:var(--shadow)}
+.state-seg span[aria-current=true] i{opacity:1}
+.state-seg .s-low[aria-current=true] i{background:var(--e-low)}.state-seg .s-moody[aria-current=true] i{background:var(--rose)}
+.state-seg .s-steady[aria-current=true] i{background:var(--e-steady)}.state-seg .s-positive[aria-current=true] i{background:var(--e-pos)}
+.handled{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.handled li{display:flex;gap:10px;align-items:flex-start;font-size:14px;padding:10px 12px;border-radius:16px;background:var(--paper)}
+.handled .t{font-size:12px;font-weight:700;color:var(--berry);min-width:56px;padding-top:1px}
+.handled .empty{color:var(--muted);background:none;padding:0}
+.hero-foot{margin:12px 0 0;font-size:12px;color:var(--muted)}
+@media(max-width:900px){.hero{grid-template-columns:1fr}}
+@media(max-width:480px){.cycle-card{flex-direction:column;align-items:flex-start}}
+
+/* ===================== What's next (roadmap) ===================== */
+.road-intro{max-width:720px;color:var(--muted);margin:0 0 16px}
+.road-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.road-card h2{font-size:19px;margin:0 0 4px}
+.road-card .road-sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+.road-tag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:999px;padding:3px 10px;margin-bottom:10px}
+.road-tag.fe{background:var(--ok-tint);color:var(--ok)}.road-tag.be{background:var(--warn-tint);color:var(--warn)}
+.road-tag.nat{background:var(--e-low-bg);color:#3F3C99}.road-tag.pol{background:#FBE4E7;color:#9A2F44}
+.road-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.road-list li{font-size:14px;padding:12px 14px;border-radius:16px;background:var(--paper)}
+.road-list b{display:block;font-size:14px}
+.road-list span{display:block;font-size:13px;color:var(--muted);margin-top:2px}
