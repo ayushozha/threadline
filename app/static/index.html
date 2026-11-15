@@ -25,7 +25,7 @@
         <a href="#care" class="nav-item" data-view-link="care"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"></path></svg><span>Care</span></a>
         <a href="#today" class="nav-item" data-view-link="today"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span>Your day</span></a>
         <a href="#thread" class="nav-item" data-view-link="thread"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h14M5 10h14M5 16h9M5 22h6"></path></svg><span>Thread</span></a>
-        <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Energy</span></a>
+        <a href="#energy" class="nav-item" data-view-link="energy"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"></path></svg><span>Wellbeing</span></a>
         <a href="#tasks" class="nav-item" data-view-link="tasks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"></path></svg><span>Tasks</span></a>
         <a href="#integrations" hidden class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
         <a href="#transcripts" class="nav-item" data-view-link="transcripts"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path></svg><span>Transcripts</span></a>
@@ -59,6 +59,7 @@
         <label class="check"><input type="checkbox" id="sample-consent"><span>Allow these fictional notes to be sent to Google for a fresh response.</span></label>
         <div class="row tight"><button type="button" id="sample-ask" class="secondary">Ask Gemini: what was I doing?</button><button type="button" id="sample-clear" class="text-button">Clear fictional history</button></div></div>
       </section>
+      <div id="captions" class="captions" hidden role="dialog" aria-label="Live captions"><button type="button" id="captions-close" class="captions-close">Close captions</button><ol id="captions-lines" class="captions-lines" aria-live="polite"></ol><p id="captions-interim" class="captions-interim"></p></div>
       <section class="view" data-view="live">
         <div class="band-intro"><p class="eyebrow">A little context, kept close</p><h2>Live from the Vexo band.</h2><p>What the band hears appears below as it is said, and is kept in Threadline's database.</p>
           <div class="row tight"><button type="button" id="connect-toggle" class="secondary">Connect a device</button><span id="demo-rec-badge" class="demo-rec" hidden>● Recording live</span></div></div>
@@ -209,7 +210,7 @@
               <p class="agent-eyebrow">Agent</p>
               <h2 id="agent-h">What Threadline noticed</h2>
               <p id="agent-status" class="caption" role="status">Ready to act on your next complete thought.</p>
-              <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and your cycle dates, decides what would help, and says why.</li></ol>
+              <ol id="agent-feed" class="agent-feed"><li class="agent-empty">As you talk, Threadline reads each new line against your preferences, today's readings and the routine, decides what would help, and says why.</li></ol>
             </div>
             <div id="support" class="support" hidden></div>
             <div id="calendar" class="calendar" hidden></div>
@@ -217,7 +218,7 @@
         </div>
       </section>
 
-      <section class="view" data-view="dashboard" hidden><div id="dashboard" class="dash"><p class="caption">Loading the dashboard…</p></div></section>
+      <section class="view" data-view="dashboard" hidden><div id="mode-switch" class="mode-switch" aria-label="Who Threadline is helping"></div><div id="dashboard" class="dash"><p class="caption">Loading the dashboard…</p></div></section>
       <section class="view" data-view="care" hidden>
         <div class="care-grid">
           <div class="stack">
@@ -250,6 +251,7 @@
               <h2 id="care-live-h">Gentle guidance, out loud</h2>
               <p class="caption">Sees the chosen video, hears through the Vexo band (or the video's own sound, or this computer's mic) and speaks calm, short guidance.</p>
               <div class="row tight">
+                <label class="check inline"><input type="checkbox" id="care-consent"> The person in view and their caregiver agreed to live guidance</label>
                 <button type="button" id="care-start" class="primary-sm">Start live guidance</button>
                 <button type="button" id="care-stop" class="secondary" hidden>Stop</button>
                 <label class="check inline"><input type="checkbox" id="care-mute"> Mute speech</label>
@@ -361,7 +363,7 @@
             <article class="sig-card"><header><b>Voice</b><span>Vexo band mic</span></header><dl id="sig-voice"></dl></article>
             <article class="sig-card"><header><b>Body</b><span>Apple Watch</span></header><dl id="sig-body"></dl></article>
             <article class="sig-card"><header><b>Movement</b><span>Band + watch</span></header><dl id="sig-move"></dl></article>
-            <article class="sig-card"><header><b>Cycle</b><span>Your dates · Apple Health</span></header><dl id="sig-cycle"></dl><p class="caption">Context only — not a cause.</p></article>
+            <article class="sig-card" hidden><header><b>Cycle</b><span>Your dates · Apple Health</span></header><dl id="sig-cycle"></dl><p class="caption">Context only — not a cause.</p></article>
           </div>
         </div>
         <section class="card mood-card" aria-labelledby="mood-h">
@@ -449,7 +451,9 @@
 
       <section class="view" data-view="days" hidden><section id="days-panel" class="graph-panel days" aria-labelledby="days-heading">
           <div class="section-top"><h2 id="days-heading">Daily log</h2><span id="days-status" class="caption"></span><button type="button" id="day-summary" class="secondary" hidden>Refresh summary</button></div>
-          <p class="caption">Logged automatically, nothing to fill in: every Apple Health metric for each day, plus the conversations, the band and the watch. Numbers describe what happened, not how anyone feels.</p>
+          <p class="caption">Logged automatically, nothing to fill in. Colours compare each day with the last 30.</p>
+          <div id="days-summary" class="dl-summary"></div>
+          <div class="dl-legend"><span class="t-great">much better than usual</span><span class="t-good">better</span><span class="t-mid">typical</span><span class="t-watch">worse</span><span class="t-low">much worse</span><small>compared with the last 30 days</small></div>
           <div class="table-wrap days-wrap"><table class="days-table">
             <thead id="days-head"></thead>
             <tbody id="days-body"></tbody>
@@ -534,7 +538,7 @@
           <p class="pair-hint">A web page cannot reach a watch over Bluetooth: the Threadline watch app sends its readings (and, if you choose, its microphone) to this server, and the code links it to this page. Readings are numbers, not feelings.</p>
         </div></div></section>
 
-      <footer><p>Your saved transcripts stay in this browser until you delete them.</p><p>A memory aid for reflection — not medical guidance, diagnosis, or emergency monitoring. Cycle timing, when shown, is self-reported context, not a cause.</p></footer>
+      <footer><p>Your saved transcripts stay in this browser until you delete them.</p><p>Threadline supports people living with memory loss, low vision, hearing loss or limited mobility, and the people who care for them. It is not medical guidance, diagnosis or emergency monitoring.</p></footer>
     </main>
   </div>
 </body>

@@ -5,6 +5,7 @@ import { createVisionController } from './vision.mjs';
 import { sampleSeed, DEMO_QUESTION } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
 import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
+import { MODES, MODE_KEYS, currentMode, setMode, modeScenes } from './modes.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -84,7 +85,7 @@ function loadSample() {
     const seed = sampleSeed();
     sessions.reflection.notes = seed.notes.map(n => ({ ...n }));
     sessions.routine.notes = seed.notes.map(n => ({ ...n }));
-    saveArchive(seed.archive);
+    saveArchive([...seed.archive, ...modeScenes()]);
   }
   mode = "routine"; sessions.routine.question = DEMO_QUESTION;
   care.history = []; $("care-history").replaceChildren();
@@ -113,7 +114,34 @@ const ownerHealth = { byDay: {}, latest: null, importedAt: null, days: 0 };
 let ownerMood = { days: [], weeks: [] }; // Only actual caregiver assessments belong in this series.
 const moodOf = (k) => ownerMood.days.find((d) => d.date === k) || null;
 const moodWord = (v) => v > 0.5 ? "very pleasant" : v > 0.2 ? "pleasant" : v < -0.5 ? "very unpleasant" : v < -0.2 ? "unpleasant" : "neutral";
+function renderModeSwitch() {
+  const box = $("mode-switch"); if (!box) return;
+  const cur = currentMode(), m = MODES[cur];
+  box.replaceChildren(
+    el("div", { className: "mode-chips", role: "tablist" }, ...MODE_KEYS.map((k) => { const b = el("button", { type: "button", role: "tab", className: `mode-chip${k === cur ? " on" : ""}`, "aria-selected": String(k === cur) },
+      el("span", { className: "mode-ic", textContent: MODES[k].icon }), el("b", { textContent: MODES[k].label }), el("small", { textContent: MODES[k].who }));
+      b.addEventListener("click", () => { setMode(k); renderModeSwitch(); if (care.ws || lh.ws) message(`${MODES[k].label} mode is set. Restart live guidance to use it.`); }); return b; })),
+    el("div", { className: `mode-card m-${cur}` }, el("div", {}, el("p", { className: "mode-line", textContent: m.line }),
+      el("ul", { className: "mode-does" }, ...m.does.map((d) => el("li", { textContent: d })))),
+      el("div", { className: "mode-side" }, ...m.signals.map((x) => el("span", { className: "mode-sig", textContent: x })),
+        cur === "hearing" ? el("button", { type: "button", className: "primary-sm", textContent: "Open live captions", onclick: openCaptions }) : null,
+        el("a", { className: "secondary", href: "#care", textContent: "Start live guidance" }))));
+}
+let captionsTimer = 0;
+function openCaptions() {
+  $("captions").hidden = false; clearInterval(captionsTimer);
+  const tickC = () => {
+    const lines = [...document.querySelectorAll("#live-lines li")].slice(-4).map((li) => ({ who: li.querySelector(".line-meta b")?.textContent || "", text: li.querySelector("p")?.textContent || "" }));
+    const heard = (typeof care !== "undefined" ? care.lines : []).filter((l) => l.kind === "heard").slice(-2).map((l) => ({ who: "Heard", text: l.text }));
+    const all = [...lines, ...heard].slice(-4);
+    $("captions-lines").replaceChildren(...(all.length ? all.map((l) => el("li", {}, el("small", { textContent: l.who }), el("span", { textContent: l.text }))) : [el("li", { className: "empty" }, el("span", { textContent: "Waiting for speech from the band…" }))]));
+    $("captions-interim").textContent = $("live-interim")?.textContent || "";
+  };
+  tickC(); captionsTimer = setInterval(tickC, 300);
+}
+$("captions-close").addEventListener("click", () => { $("captions").hidden = true; clearInterval(captionsTimer); });
 function drawDashboard() {
+  renderModeSwitch();
   try {
     renderDashboard($("dashboard"), { health: healthOn() ? ownerHealth.byDay : {}, mood: ownerMood, careHistory: typeof care !== "undefined" ? care.history : [],
       transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? "Meera · fictional demo" : "Your person" });
@@ -1409,24 +1437,46 @@ function renderDays() {
   const present = new Set(); for (const k of keys) for (const m of Object.keys(hDay(k) || {})) present.add(m);
   const cols = HEALTH_COLS.filter(([m]) => present.has(m));
   for (const m of present) if (!["date", "workout_types", "workout_count"].includes(m) && !HEALTH_COLS.some(([x]) => x === m)) cols.push([m, m.replace(/_/g, " "), (v) => (Math.round(v * 10) / 10).toLocaleString()]);
-  $("days-head").replaceChildren(el("tr", {}, el("th", { scope: "col", textContent: "Day" }), el("th", { scope: "col", textContent: "Conversation lines" }), el("th", { scope: "col", textContent: "Low-energy words" }), el("th", { scope: "col", textContent: "Mood AM / PM" }), el("th", { scope: "col", textContent: "Evening agitation" }), el("th", { scope: "col", textContent: "Repeated questions" }),
-    ...cols.map(([, label]) => el("th", { scope: "col", textContent: label })), present.has("workout_types") ? el("th", { scope: "col", textContent: "Workout types" }) : null));
+  // Direction: +1 higher is better, -1 lower is better, 0 neutral. Groups give the table its section headers.
+  const DIR = { steps: 1, distance_km: 1, active_energy_kcal: 1, exercise_min: 1, flights_climbed: 1, stand_hours: 1, stand_min: 1, sleep_hours: 1, hrv_sdnn: 1, walking_steadiness: 1, walking_speed_kmh: 1, mindful_min: 1, oxygen_saturation: 1, resting_heart_rate: -1, audio_exposure_db: -1, heart_rate: 0, respiratory_rate: 0, wrist_temp_c: 0, workouts: 1, mood: 1 };
+  const GROUP = { sleep_hours: "Sleep", resting_heart_rate: "Heart", heart_rate: "Heart", hrv_sdnn: "Heart", oxygen_saturation: "Breathing", respiratory_rate: "Breathing", wrist_temp_c: "Breathing",
+    steps: "Activity", distance_km: "Activity", active_energy_kcal: "Activity", exercise_min: "Activity", flights_climbed: "Activity", stand_hours: "Activity", stand_min: "Activity", workouts: "Activity",
+    walking_speed_kmh: "Mobility", walking_steadiness: "Mobility", audio_exposure_db: "Environment", mindful_min: "Mind", mood: "Mind", menstrual_flow: "Other" };
+  const ORDER = ["Sleep", "Heart", "Breathing", "Activity", "Mobility", "Mind", "Environment", "Other"];
+  cols.sort((a, b) => ORDER.indexOf(GROUP[a[0]] || "Other") - ORDER.indexOf(GROUP[b[0]] || "Other"));
+  const stats = Object.fromEntries(cols.map(([m]) => { const v = keys.map((k) => hDay(k)?.[m]).filter((x) => typeof x === "number"); const mean = v.reduce((a, b) => a + b, 0) / (v.length || 1);
+    const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length || 1)) || 1; return [m, { mean, sd, min: Math.min(...v), max: Math.max(...v), n: v.length, series: keys.slice().reverse().map((k) => hDay(k)?.[m] ?? null) }]; }));
+  const tone = (m, v) => { const st = stats[m], d = DIR[m] ?? 0; if (v == null || !st || !d || st.n < 5) return ""; const z = ((v - st.mean) / st.sd) * d; return z > 0.8 ? "t-great" : z > 0.25 ? "t-good" : z < -0.8 ? "t-low" : z < -0.25 ? "t-watch" : "t-mid"; };
+  const hasConv = keys.some((k) => life.days[k]?.others || life.days[k]?.mine), hasMood = keys.some((k) => moodOf(k));
+  // Summary cards: the headline metrics with a 30-day sparkline.
+  const sparkSvg = (series) => { const v = series.map((x) => x ?? null), real = v.filter((x) => x != null); const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", "0 0 100 30"); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("class", "dl-spark");
+    if (real.length > 1) { const lo = Math.min(...real), hi = Math.max(...real), sp = hi - lo || 1; const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); pl.setAttribute("points", v.map((d, i) => d == null ? null : `${(i / (v.length - 1)) * 100},${28 - ((d - lo) / sp) * 26}`).filter(Boolean).join(" ")); svg.append(pl); } return svg; };
+  const headline = ["sleep_hours", "steps", "resting_heart_rate", "hrv_sdnn", "oxygen_saturation", "walking_steadiness", "exercise_min", "active_energy_kcal"].filter((m) => stats[m]?.n);
+  const summary = $("days-summary");
+  if (summary) summary.replaceChildren(...headline.map((m) => { const c = cols.find((x) => x[0] === m), st = stats[m], today = hDay(keys[0])?.[m];
+    return el("article", { className: `dl-card ${tone(m, today)}` }, el("small", { textContent: c[1] }), el("b", { textContent: today != null ? c[2](today, hDay(keys[0])) : "—" }),
+      el("span", { className: "dl-avg", textContent: `30-day avg ${c[2](st.mean, {})} · ${c[2](st.min, {})}–${c[2](st.max, {})}` }), sparkSvg(st.series)); }));
+  const groups = []; for (const c of cols) { const g = GROUP[c[0]] || "Other"; if (groups.at(-1)?.g === g) groups.at(-1).n += 1; else groups.push({ g, n: 1 }); }
+  const lead = 1 + (hasConv ? 1 : 0) + (hasMood ? 3 : 0);
+  $("days-head").replaceChildren(
+    el("tr", { className: "dl-groups" }, el("th", { colSpan: lead, textContent: "" }), ...groups.map((x) => el("th", { colSpan: x.n, className: `g-${x.g.toLowerCase()}`, textContent: x.g })), present.has("workout_types") ? el("th", { textContent: "" }) : null),
+    el("tr", {}, el("th", { scope: "col", textContent: "Day" }), hasConv ? el("th", { scope: "col", textContent: "Conversation" }) : null,
+      ...(hasMood ? ["Mood AM / PM", "Agitation", "Repeats"].map((x) => el("th", { scope: "col", textContent: x })) : []),
+      ...cols.map(([, label]) => el("th", { scope: "col", textContent: label })), present.has("workout_types") ? el("th", { scope: "col", textContent: "Workout types" }) : null));
   let filled = 0;
   for (const [i, key] of keys.entries()) {
     const r = life.days[key], h = hDay(key) || {};
     if (Object.keys(h).length > 1) filled += 1;
-    const label = i === 0 ? "Today" : i === 1 ? "Yesterday" : parseDay(key).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-    const fmt = (m, f) => { if (m === "steps" && r?.watchSteps != null) return `${r.watchSteps.toLocaleString()} watch`; if (m === "heart_rate" && r?.hrN) return `${Math.round(r.hrSum / r.hrN)} (${r.hrMin}–${r.hrMax})`; const v = h[m]; return v == null ? "—" : f(v, h); };
-    rows.push(el("tr", {}, el("th", { scope: "row", textContent: label }),
-      el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)}` : "—" }),
-      el("td", { textContent: r?.energy?.length ? `${r.energy.length} (${[...new Set(r.energy.map((e) => e.word))].join(", ")})` : "—" }),
-      el("td", { textContent: moodOf(key) ? `${moodOf(key).morningLabel} / ${moodOf(key).eveningLabel}` : "—" }),
-      el("td", { textContent: moodOf(key) ? ["none", "mild", "moderate", "severe"][moodOf(key).agitation] : "—" }),
-      el("td", { textContent: moodOf(key) ? String(moodOf(key).repeats) : "—" }),
-      ...cols.map(([m, , f]) => el("td", { textContent: fmt(m, f) })),
-      present.has("workout_types") ? el("td", { textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)} min`).join(", ") : "—" }) : null));
+    const d = parseDay(key), label = i === 0 ? "Today" : i === 1 ? "Yesterday" : d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    const fmt = (m, f) => { if (m === "steps" && r?.watchSteps != null) return `${r.watchSteps.toLocaleString()}`; if (m === "heart_rate" && r?.hrN) return `${Math.round(r.hrSum / r.hrN)}`; const v = h[m]; return v == null ? "—" : f(v, h); };
+    const weekend = [0, 6].includes(d.getDay());
+    rows.push(el("tr", { className: `${i === 0 ? "dl-today" : ""}${weekend ? " dl-weekend" : ""}` }, el("th", { scope: "row", textContent: label }),
+      hasConv ? el("td", { textContent: r && (r.others || r.mine) ? `${(r.others || 0) + (r.mine || 0)} lines` : "—" }) : null,
+      ...(hasMood ? [el("td", { textContent: moodOf(key) ? `${moodOf(key).morningLabel} / ${moodOf(key).eveningLabel}` : "—" }), el("td", { textContent: moodOf(key) ? ["none", "mild", "moderate", "severe"][moodOf(key).agitation] : "—" }), el("td", { textContent: moodOf(key) ? String(moodOf(key).repeats) : "—" })] : []),
+      ...cols.map(([m, , f]) => el("td", { className: tone(m, h[m]), textContent: fmt(m, f) })),
+      present.has("workout_types") ? el("td", { className: "dl-wrap", textContent: h.workout_types ? Object.entries(h.workout_types).map(([k, v]) => `${k.replace(/([a-z])([A-Z])/g, "$1 $2")} ${Math.round(v)}m`).join(", ") : "—" }) : null));
   }
-  $("days-status").textContent = ownerHealth.days ? `${filled} of the last ${DAYS} days have Health data · ${cols.length} metrics · from ${ownerHealth.days} days imported` : "Waiting for Health data…";
+  $("days-status").textContent = ownerHealth.days ? `Auto-logged · ${filled}/${DAYS} days · ${cols.length} metrics · ${ownerHealth.days} days of history` : "Waiting for Health data…";
   $("days-body").replaceChildren(...rows);
   // cycle
   $("cycle-dates").replaceChildren(...info.starts.slice(-8).reverse().map((d) => {
@@ -1502,7 +1552,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
+const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Wellbeing", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");
@@ -1791,7 +1841,6 @@ function renderIntegrations() {
     card("Apple Watch · Health", $("watch-pair").dataset.state === "connected", "Heart rate, HRV, resting HR, breathing, blood oxygen, sleep, wrist temperature, noise, exercise, mindful minutes, State of Mind, period days you logged. Taps for check-ins.", "Threadline watch app · pairing code · Devices"),
     card("Camera · GoPro", Boolean(capture.camStream), "Video via the GoPro Webcam app; stays in this browser.", "Live session → Add video"),
     card("Calendar", (life.tasks || []).length > 0 || agent.events.length > 0, "Quiet-time blocks and notes around tasks and decisions.", "Add to Google Calendar links or .ics files — each needs your tap"),
-    card("Cycle · Apple Health", life.cycle.starts.some((x) => x.source === "health"), "Reads the period days you logged; saves a mood to State of Mind only after you confirm on the watch.", "Watch → Share cycle dates"),
     card("Music", true, "Calm, steady or uplifting search to match your energy.", "Opens Apple Music or Spotify — nothing is played or tracked"),
     card("Messages", sessions.reflection.prefs.some((p) => p.action === "update"), "Your pre-approved update to close friends.", "Your share sheet or Messages — Threadline never sends"),
     card("Deepgram", service.transcription, "Speech to text while you record.", "Configured by the app"),
@@ -2050,7 +2099,7 @@ $("lh-start").addEventListener("click", async () => {
     lh.out = new AudioContext({ sampleRate: 24000 }); lh.playAt = 0;
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
     ws.binaryType = "arraybuffer"; lh.ws = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory", ...(lh.bridge ? { vision: "bridge" } : {}) }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: currentMode(), ...(lh.bridge ? { vision: "bridge" } : {}) }));
     ws.onmessage = async (event) => {
       if (event.data instanceof ArrayBuffer) return lhPlay(event.data);
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
@@ -2295,6 +2344,7 @@ function careStartFrames() {
 async function careStart() {
   if (isFictionalDemo()) return careLiveStatus("Exit fictional history before starting a live camera session.");
   if (care.ws) return;
+  if (!$("care-consent").checked) return careLiveStatus("Tick the consent box first: the person in view and their caregiver agreed to live guidance.");
   if (lh.ws) lhStop("Paused: live guidance on the Care page is using Gemini Live.");
   if (care.src === "file" && !care.files.length) return careLiveStatus("Upload a video first, or choose the GoPro or this computer's camera.");
   if (care.src === "camera" && !(await careStartCamera())) return careLiveStatus("Camera unavailable. Pick another source.");
@@ -2307,7 +2357,7 @@ async function careStart() {
     ws.binaryType = "arraybuffer"; care.ws = ws;
     const bridge = care.src === "bridge";
     const openTimer = setTimeout(() => { if (care.ws === ws && $("care-live").dataset.state === "busy") careStop("Gemini Live didn't answer. It may be unavailable right now."); }, 15000);
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: "memory", ...(bridge ? { vision: "bridge" } : {}) }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: currentMode(), ...(bridge ? { vision: "bridge" } : {}) }));
     ws.onmessage = async (event) => {
       if (care.ws !== ws) return;
       if (event.data instanceof ArrayBuffer) return livePlayPcm24(care, event.data);
@@ -2354,7 +2404,11 @@ function careWatchBand() {
   const b = capture.band;
   if (b && !care.bandSeen.has(b)) {
     care.bandSeen.add(b);
-    b.on("tap", () => care.taps.push(Date.now()));
+    b.on("tap", () => { const t = Date.now(); care.taps.push(t);
+      if (care.taps.filter((x) => t - x < 2000).length >= 3 && t - (care.sos || 0) > 10000) {  // triple-tap = SOS
+        care.sos = t; careLog("note", "SOS: triple-tap on the band. Alerting the caregiver.", true); sendHaptic("notification", "SOS sent to your caregiver");
+        if (typeof logAction === "function") logAction("SOS triple-tap on the band"); careAssess(true);
+      } });
     b.on("free-fall", () => { care.falls.push(Date.now()); careLog("note", "The band felt a possible fall. Checking in.", true); if (care.visible || care.ws) setTimeout(() => careAssess(false), 500); });
   }
   const cut = Date.now() - 10 * 60000;
@@ -2521,7 +2575,7 @@ function careContext() {
   const nowIso = new Date().toISOString();
   const src = { file: "file", upload: "file", files: "file", bridge: "gopro", gopro: "gopro", camera: "camera" }[care.src] || null;
   return {
-    transcript: [...bandLines, ...heard].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
+    transcript: [...bandLines, ...heard, ...(care.sos && Date.now() - care.sos < 600000 ? ["SOS: help requested by triple-tap on the band"] : [])].slice(-40).map((text) => ({ at: nowIso, speaker: text.startsWith("Heard: ") ? "video/mic" : "band", text: text.slice(0, 500) })),
     observations: [...said.slice(-19).map((text) => ({ at: nowIso, text: text.slice(0, 500) })),
       ...(moodOf(todayKey()) ? [{ at: nowIso, text: `Care log today: mood ${moodOf(todayKey()).morningLabel} in the morning, ${moodOf(todayKey()).eveningLabel} in the evening; evening agitation ${["none", "mild", "moderate", "severe"][moodOf(todayKey()).agitation]}; ${moodOf(todayKey()).repeats} repeated questions; latest weekly CSDD ${ownerMood.weeks.at(-1)?.score ?? "n/a"}.` }] : [])],
     band: { activity: signals.activity || w?.activity || null, steps: Number.isFinite(signals.steps) && signals.steps > 0 ? Math.round(signals.steps) : null, taps_last_10min: care.taps.length, free_fall_last_10min: care.falls.length > 0, connected: Boolean(capture.band) },

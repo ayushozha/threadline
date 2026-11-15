@@ -39,6 +39,27 @@ Never claim to recognise who a person is from their face. You may describe what 
 If they describe an emergency, such as a fall, injury, chest pain, fire or feeling unsafe, tell them to call emergency services or their caregiver now."""
 
 
+# One assistant, four ways of helping. The mode only changes emphasis; every safety rule above still applies.
+MODE_INSTRUCTIONS = {
+    "memory": "",
+    "sight": """MODE: the person is blind or has low vision. Describe what is in front of them in order of importance:
+hazards first (steps, kerbs, traffic, obstacles, wet floor), then where things are using clock directions or left/right and
+distance in steps, then any text you can read (labels, medicine boxes, signs, screens) word for word. Keep each turn under
+three sentences. If text is unreadable, say so and suggest moving closer or turning the item. Never identify people by face.""",
+    "hearing": """MODE: the person is deaf or hard of hearing and reads your words as captions. Answer in very short written-style
+sentences. Report important sounds and speech you hear: who is speaking (by position, not identity), their name being called,
+doorbells, alarms, sirens, kettles. Start alerts with the word ALERT.""",
+    "mobility": """MODE: the person has limited mobility or a fall risk. Point out trip hazards, stairs, clutter and poor lighting in
+view, suggest the safest path and a place to sit. If they mention dizziness, weakness or a fall, tell them to stay still and call
+their caregiver or emergency services.""",
+}
+
+
+def mode_instruction(mode: object) -> str:
+    extra = MODE_INSTRUCTIONS.get(mode if isinstance(mode, str) else "", "")
+    return SYSTEM_INSTRUCTION + ("\n\n" + extra if extra else "")
+
+
 def clean_notes(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -50,11 +71,11 @@ def notes_text(notes: list[str]) -> str:
         "\n".join(f"- {n}" for n in notes)
 
 
-def setup_message(model: str) -> dict:
+def setup_message(model: str, mode: object = "memory") -> dict:
     return {"setup": {
         "model": model if model.startswith("models/") else f"models/{model}",
         "generationConfig": {"responseModalities": ["AUDIO"]},
-        "systemInstruction": {"parts": [{"text": SYSTEM_INSTRUCTION}]},
+        "systemInstruction": {"parts": [{"text": mode_instruction(mode)}]},
         "inputAudioTranscription": {},
         "outputAudioTranscription": {},
         # Lets the saved notes go in as initial history via clientContent before realtime input starts.
@@ -83,7 +104,7 @@ async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: i
         try:
             async with ws_connect(GEMINI_LIVE_URL, additional_headers={"x-goog-api-key": key},
                                   open_timeout=10, max_size=8 * 1024 * 1024) as gemini:
-                await gemini.send(json.dumps(setup_message(model)))
+                await gemini.send(json.dumps(setup_message(model, hello.get("mode"))))
                 first = json.loads(await asyncio.wait_for(gemini.recv(), timeout=15))
                 if "setupComplete" not in first:
                     return await fail("Live conversation could not start. Please try again.", 1011)
