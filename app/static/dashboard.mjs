@@ -21,7 +21,7 @@ export function buildModel({ health = {}, mood = { days: [], weeks: [] }, careHi
   const series = (f) => H.map((x) => x[f] ?? null);
   const last7 = (a) => a.slice(-7), prev = (a) => a.slice(0, -7);
   const tile = (label, arr, unit, digits = 0, better = "up", show = (v) => fmt(v, digits)) => {
-    const now7 = avg(last7(arr)), base = avg(prev(arr)), delta = now7 != null && base ? (now7 - base) / Math.abs(base) : null;
+    const now7 = avg(last7(arr)), base = avg(prev(arr)), delta = now7 != null && base ? Math.max(-0.99, Math.min(0.99, (now7 - base) / Math.max(Math.abs(base), label === "Mood" ? 1 : 1e-9))) : null;
     return { label, value: show(now7), unit, delta, good: delta == null ? null : (better === "up" ? delta >= 0 : delta <= 0), spark: arr };
   };
   const sleep = series("sleep_hours"), steps = series("steps"), rhr = series("resting_heart_rate"), hrv = series("hrv_sdnn"), spo2 = series("oxygen_saturation");

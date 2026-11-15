@@ -4,6 +4,7 @@ import { createUtteranceCollector, createSerialQueue } from './transcript-flow.m
 import { createVisionController } from './vision.mjs';
 import { sampleSeed, DEMO_QUESTION } from './sample-data.mjs';
 import { renderDashboard } from './dashboard.mjs';
+import { mountMemoryGraph, TYPE_STYLE } from './memory-graph.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
   const node = document.createElement(tag);
@@ -118,7 +119,7 @@ function drawDashboard() {
       transcripts: loadArchive(), tasks: life.tasks || [], who: isFictionalDemo() ? "Meera · fictional demo" : "Your person" });
   } catch (e) { $("dashboard").textContent = `Dashboard unavailable: ${e.message}`; }
 }
-window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); });
+window.addEventListener("hashchange", () => { if (location.hash === "#dashboard") drawDashboard(); if (location.hash === "#graph") drawGraph(); });
 function renderMood() {
   if (!$("mood-chart")) return;
   if (!ownerMood.days.length) {
@@ -157,7 +158,7 @@ async function loadOwnerHealth() {
     const keys = Object.keys(ownerHealth.byDay).sort();
     ownerHealth.latest = ownerHealth.byDay[todayKey()] || (keys.length ? ownerHealth.byDay[keys.at(-1)] : null);
     ownerHealth.importedAt = d.imported_at; ownerHealth.days = keys.length;
-    drawDashboard();
+    drawDashboard(); drawGraph();
     renderEnergy(); renderToday(); renderDays(); renderIntegrations();
   } catch { /* offline: screens keep live readings only */ }
 }
@@ -1186,40 +1187,54 @@ async function buildGraph() {
   } catch (e) { if (version === graph.version) $("graph-status").textContent = `Graph not updated: ${e.message}`; }
 }
 document.querySelectorAll("input[name=graph-engine]").forEach((r) => r.addEventListener("change", () => scheduleGraph(0)));
-function drawGraph() {
-  const svg = $("graph-svg"), NS = "http://www.w3.org/2000/svg", W = 600, H = 420;
-  svg.replaceChildren();
-  const data = graph.data;
-  if (!data || !data.nodes.length) { const t = document.createElementNS(NS, "text"); t.setAttribute("x", W / 2); t.setAttribute("y", H / 2); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "g-empty"); t.textContent = "Save a statement to start your graph"; svg.append(t); return; }
-  const nodes = data.nodes.map((n, i) => ({ ...n, x: W / 2 + 160 * Math.cos((i / data.nodes.length) * Math.PI * 2), y: H / 2 + 130 * Math.sin((i / data.nodes.length) * Math.PI * 2), vx: 0, vy: 0 }));
-  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-  const edges = data.edges.filter((e) => byId[e.source] && byId[e.target]);
-  for (let step = 0; step < 220; step++) {  // small force layout: repel all, pull linked, centre
-    for (const a of nodes) for (const b of nodes) { if (a === b) continue; const dx = a.x - b.x, dy = a.y - b.y, d2 = Math.max(dx * dx + dy * dy, 30); a.vx += (dx / d2) * 260; a.vy += (dy / d2) * 260; }
-    for (const e of edges) { const a = byId[e.source], b = byId[e.target], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, f = (d - 80) * 0.03; a.vx += (dx / d) * f; a.vy += (dy / d) * f; b.vx -= (dx / d) * f; b.vy -= (dy / d) * f; }
-    for (const n of nodes) { n.vx += (W / 2 - n.x) * 0.012; n.vy += (H / 2 - n.y) * 0.016; n.x = Math.max(70, Math.min(W - 70, n.x + n.vx * 0.5)); n.y = Math.max(34, Math.min(H - 40, n.y + n.vy * 0.5)); n.vx *= 0.6; n.vy *= 0.6; }
+let memGraph = null;
+const NAME_STOP = new Set("I Im Ill Ive Dad Mum Mom Yes No Okay Ok Oh Good The That This She He It Its Has Did Where What When Who Why How Is Are Was Can Could Should Would Will Do Does Monday Tuesday Wednesday Thursday Friday Saturday Sunday Today Tomorrow Right Then And But So We You They My Our Your There Here Hello Hi Thanks Thank Please".split(" "));
+function memoryData() {
+  const N = new Map(), E = [], seen = new Set();
+  const add = (id, label, type, weight = 1, extra = {}) => { if (!N.has(id)) N.set(id, { id, label, type, weight, ...extra }); else N.get(id).weight += weight; return id; };
+  const link = (a, b) => { if (!a || !b || a === b) return; const k = a < b ? a + "|" + b : b + "|" + a; if (!seen.has(k)) { seen.add(k); E.push({ source: a, target: b }); } };
+  const self = add("self", "Dad", "self", 8), gd = graph.data;
+  if (gd) { for (const n of gd.nodes) add(n.id, n.label, TYPE_STYLE[n.type] ? n.type : "topic", n.weight || 1, { sources: n.sources }); for (const e of gd.edges) link(e.source, e.target);
+    for (const n of gd.nodes) if (n.weight >= 2 || ["person", "place"].includes(n.type)) link(self, n.id); }
+  for (const note of sessions.reflection.notes.slice(-80)) {
+    const id = add(`note:${note.id}`, note.text, "note", 1, { note });
+    const refs = gd ? gd.nodes.filter((n) => n.sources?.includes(note.id)) : []; refs.forEach((r) => link(id, r.id)); if (!refs.length) link(id, self);
   }
-  const maxW = Math.max(...nodes.map((n) => n.weight || 1));
-  for (const e of edges) { const a = byId[e.source], b = byId[e.target], line = document.createElementNS(NS, "line"); Object.entries({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "g-edge", "stroke-width": 1 + Math.min(3, (e.weight || 1) - 1) }).forEach(([k, v]) => line.setAttribute(k, v)); svg.append(line); }
-  for (const n of nodes) {
-    const g = document.createElementNS(NS, "g"); g.setAttribute("class", `g-node${graph.selected === n.id ? " selected" : ""}`); g.setAttribute("tabindex", "0"); g.setAttribute("role", "button"); g.setAttribute("aria-label", `${n.type}: ${n.label}`);
-    const r = 6 + 8 * Math.sqrt((n.weight || 1) / maxW);
-    const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", n.x); c.setAttribute("cy", n.y); c.setAttribute("r", r); c.setAttribute("fill", TYPE_COLORS[n.type] || "#8A8A92");
-    const t = document.createElementNS(NS, "text"); t.setAttribute("x", n.x); t.setAttribute("y", n.y + r + 13); t.setAttribute("text-anchor", "middle"); t.textContent = n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label;
-    g.append(c, t);
-    const pick = () => { graph.selected = n.id; drawGraph(); showGraphNode(n, edges, byId); };
-    g.addEventListener("click", pick); g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
-    svg.append(g);
+  for (const t of loadArchive().slice(0, 15)) {
+    const cid = add(`conv:${t.id}`, `Conversation · ${new Date(t.startedAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`, "conversation", 1, { conv: t }); link(cid, self);
+    const names = new Set();
+    for (const l of t.lines) for (const sent of l.text.split(/[.?!]\s+/)) sent.split(/\s+/).slice(1).forEach((w) => { const m = w.replace(/[^A-Za-z']/g, "").replace(/'s$/, ""); if (/^[A-Z][a-z]{2,}$/.test(m) && !NAME_STOP.has(m)) names.add(m); });
+    for (const nm of names) { const pid = add(`person:${nm.toLowerCase()}`, nm, "person", 1); link(cid, pid); link(pid, self); }
+    for (const l of t.lines) { const tl = l.text.toLowerCase(); for (const [w, type] of [["bank", "place"], ["park", "place"], ["kitchen", "place"], ["garden", "place"], ["shop", "place"], ["glasses", "object"], ["tablets", "object"], ["mug", "object"], ["phone", "object"], ["kettle", "object"], ["soup", "object"], ["walk", "event"], ["visit", "event"], ["lunch", "event"], ["breakfast", "event"]]) if (tl.includes(w)) { const oid = add(`${type}:${w}`, w[0].toUpperCase() + w.slice(1), type, 1); link(cid, oid); } }
   }
+  try { for (const r of careRoutine()) link(add(`routine:${r}`, r, "routine", 1), self); } catch { /* not ready */ }
+  const hl = hLatest();
+  if (hl) { const hub = add("health:hub", "Health today", "health", 4); link(hub, self);
+    for (const [k, lab] of [["sleep_hours", `Sleep ${hl.sleep_hours != null ? hm(hl.sleep_hours) : ""}`], ["steps", `Steps ${hl.steps != null ? r0(hl.steps) : ""}`], ["resting_heart_rate", `Resting HR ${hl.resting_heart_rate != null ? r0(hl.resting_heart_rate) : ""}`], ["hrv_sdnn", `HRV ${hl.hrv_sdnn != null ? r0(hl.hrv_sdnn) + " ms" : ""}`], ["oxygen_saturation", `SpO₂ ${hl.oxygen_saturation != null ? r0(hl.oxygen_saturation) + "%" : ""}`], ["walking_steadiness", `Steadiness ${hl.walking_steadiness != null ? r0(hl.walking_steadiness) + "%" : ""}`]])
+      if (hl[k] != null) link(add(`health:${k}`, lab, "health", 2), hub); }
+  const md = ownerMood.days.at(-1);
+  if (md) { const m = add("feeling:mood", `Mood ${md.morningLabel} → ${md.eveningLabel}`, "feeling", 3); link(m, self); link(m, "health:sleep_hours");
+    if (md.agitation >= 1) { const a = add("feeling:agitation", `Evening agitation: ${["none", "mild", "moderate", "severe"][md.agitation]}`, "feeling", 2); link(a, m); link(a, "health:steps"); }
+    const w = ownerMood.weeks.at(-1); if (w) link(add("health:csdd", `Weekly CSDD ${w.score}`, "health", 2), m); }
+  return { nodes: [...N.values()], edges: E.filter((e) => N.has(e.source) && N.has(e.target)) };
 }
-function showGraphNode(n, edges, byId) {
-  const notes = sessions.reflection.notes, links = edges.filter((e) => e.source === n.id || e.target === n.id);
-  $("graph-detail").replaceChildren(
-    el("p", { className: "eyebrow", textContent: `${n.type} · ${n.sources.length} statement${n.sources.length === 1 ? "" : "s"}` }),
-    el("h3", { textContent: n.label }),
-    links.length ? el("p", { className: "caption", textContent: "Linked with: " + links.map((e) => byId[e.source === n.id ? e.target : e.source].label).join(", ") }) : null,
-    el("ul", { className: "why" }, ...n.sources.map((id) => notes.find((x) => x.id === id)).filter(Boolean).map((x) => el("li", {}, `“${x.text}” `, el("span", { className: "caption", textContent: `${fmtDate(x.at)} · ${SOURCE_LABELS[x.source] || x.source} ` }), sourceLink(x.id)))),
-    el("p", { className: "caption", textContent: "A link means two things came up in the same saved statement. It is not a cause or a diagnosis." }));
+function drawGraph() {
+  const host = $("memory-graph"); if (!host) return;
+  if (!memGraph) memGraph = mountMemoryGraph(host, { onSelect: showMemoryNode });
+  try { memGraph.update(memoryData()); } catch (e) { $("graph-status").textContent = `Graph not drawn: ${e.message}`; }
+}
+function showMemoryNode(n, near = [], expand, depth = 1) {
+  const box = $("graph-detail");
+  if (!n) { box.replaceChildren(el("p", { className: "caption", textContent: "Drag to move, scroll to zoom, click a node to focus its memories." })); return; }
+  const chip = (m) => { const b = el("button", { type: "button", className: "mg-near", textContent: m.label.length > 40 ? m.label.slice(0, 39) + "…" : m.label }); b.prepend(el("i", { className: `mg-dot t-${m.type}` })); b.addEventListener("click", () => memGraph.select(m.id)); return b; };
+  const notes = sessions.reflection.notes, body = [];
+  if (n.note) body.push(el("blockquote", { className: "mg-quote", textContent: n.note.text }), el("p", { className: "caption", textContent: `${fmtDate(n.note.at)} · ${SOURCE_LABELS[n.note.source] || n.note.source}` }));
+  if (n.conv) body.push(el("ul", { className: "mg-lines" }, ...n.conv.lines.slice(0, 12).map((l) => el("li", {}, el("b", { textContent: `S${l.speakers?.[0] ?? "?"}` }), ` ${l.text}`))));
+  if (n.sources) body.push(el("ul", { className: "why" }, ...n.sources.map((id) => notes.find((x) => x.id === id)).filter(Boolean).slice(0, 8).map((x) => el("li", {}, `“${x.text}” `, el("span", { className: "caption", textContent: fmtDate(x.at) })))));
+  const more = el("button", { type: "button", className: "secondary", textContent: depth >= 3 ? "Showing 3 hops" : `Expand to ${depth + 1} hops` }); more.disabled = depth >= 3; more.addEventListener("click", () => expand?.());
+  box.replaceChildren(el("p", { className: "eyebrow", textContent: `${(TYPE_STYLE[n.type]?.label || n.type).replace(/s$/, "")} · ${near.length} connected` }), el("h3", { textContent: n.label }), ...body,
+    el("div", { className: "mg-near-list" }, ...near.filter(Boolean).slice(0, 40).map(chip)), more,
+    el("p", { className: "caption", textContent: "Links mean things came up together in the same memory or conversation — not a cause or a diagnosis." }));
 }
 
 
@@ -1487,7 +1502,7 @@ async function summarizeToday() {
 
 
 /* ---------- Views (sidebar) ---------- */
-const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Graph", devices: "Your band", integrations: "Integrations", care: "Care" };
+const VIEW_TITLES = { dashboard: "Dashboard", today: "Your day", transcripts: "Transcripts", live: "Your band", energy: "Energy", tasks: "Plan with your energy", thread: "Thread", days: "Daily log", graph: "Memory", devices: "Your band", integrations: "Integrations", care: "Care" };
 function showView(name) {
   if (name.startsWith("note-")) {
     const target = name; showView("thread");

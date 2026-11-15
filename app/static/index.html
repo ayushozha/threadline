@@ -30,7 +30,7 @@
         <a href="#integrations" hidden class="nav-item" data-view-link="integrations"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M17.5 14v7M14 17.5h7"></path></svg><span>Integrations</span></a>
         <a href="#transcripts" class="nav-item" data-view-link="transcripts"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"></path><path d="M8 9h8M8 12h5"></path></svg><span>Transcripts</span></a>
         <a href="#days" class="nav-item" data-view-link="days"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg><span>Daily log</span></a>
-        <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Graph</span></a>
+        <a href="#graph" class="nav-item" data-view-link="graph"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="11" cy="18" r="3"></circle><path d="M8.5 7.5l7 .5M7.5 8.5l2.5 7M16.5 10.5l-4 5"></path></svg><span>Memory</span></a>
         <a href="#live" class="nav-item" data-view-link="devices" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="5"></rect><circle cx="12" cy="9" r="1.5" fill="currentColor"></circle></svg><span>Devices</span></a>
       </div>
       <a href="#live" class="side-band" id="side-band">
@@ -472,13 +472,13 @@
           </div>
         </section></section>
       <section class="view" data-view="graph" hidden><section id="graph-panel" class="graph-panel" aria-labelledby="graph-heading">
-          <div class="section-top"><h2 id="graph-heading">Your graph</h2><span id="graph-status" class="caption"></span></div>
+          <div class="section-top"><h2 id="graph-heading">Memory</h2><span id="graph-status" class="caption"></span></div>
           <div class="row tight" role="radiogroup" aria-label="Graph engine" hidden>
             <label class="check inline"><input type="radio" name="graph-engine" value="local" checked><span>Keywords · no AI</span></label>
             <label class="check inline"><input type="radio" name="graph-engine" value="gemini"><span>Gemini · sends saved notes to Google</span></label>
           </div>
-          <svg id="graph-svg" class="graph-svg" viewBox="0 0 600 420" role="img" aria-label="Knowledge graph of your saved notes"></svg>
-          <div id="graph-detail" class="graph-detail"><p class="caption">Rebuilds automatically as you save statements. Select a node to see the lines it came from.</p></div>
+          <div class="mg-layout"><div id="memory-graph" class="mg-host" aria-label="Interactive memory graph"></div>
+          <aside id="graph-detail" class="graph-detail mg-detail"><p class="caption">Drag to move, scroll to zoom, click a node to focus its memories. Double-click a pinned node to release it.</p></aside></div>
         </section></section>
       <section class="view" data-view="devices" hidden><div class="device-grid"><div class="pair watch" id="watch-pair" data-state="idle">
           <div class="pair-head">
