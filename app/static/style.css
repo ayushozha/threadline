@@ -798,3 +798,19 @@ input[type=file]::file-selector-button:hover{border-color:var(--ink)}
 
 /* the topbar already names the view */
 .view[data-view=library] .lib-intro h2,.view[data-view=essentials] .lib-intro h2{display:none}
+
+/* Live camera · iPhone (phonecam.mjs) */
+.pc-card .pc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.pc-card h2{margin:0 0 10px}
+.pc-badge{font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--line);color:var(--muted);font-variant-numeric:tabular-nums}
+.pc-badge[data-live=true]{background:#dff3e6;color:#1d6b3a}
+.pc-stage{position:relative;aspect-ratio:4/3;background:#111;border-radius:12px;overflow:hidden;margin:6px 0 12px;display:flex;align-items:center;justify-content:center}
+.pc-preview{width:100%;height:100%;object-fit:contain;display:block}.pc-preview[hidden]{display:none}
+.pc-empty{color:#c9c9cf;font-size:14px;padding:0 20px;text-align:center;margin:0}
+.pc-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.pc-pair{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.pc-qr{width:200px;height:200px;flex:none;border-radius:8px;border:1px solid var(--line)}
+.pc-pair-text{flex:1 1 220px;min-width:0}.pc-pair-text p{margin:0 0 8px}.pc-steps{font-size:14px;line-height:1.5}
+.pc-code b{font-size:24px;letter-spacing:.16em;font-variant-numeric:tabular-nums}
+.pc-url{overflow-wrap:anywhere}
+.pc-more summary{cursor:pointer;color:var(--muted);font-size:13px}
+@media (max-width:560px){.pc-qr{width:100%;height:auto;max-width:260px}}

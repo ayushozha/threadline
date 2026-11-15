@@ -11,6 +11,7 @@ import { mountEmergency, loadContacts, saveContacts } from './emergency.mjs';
 import { mountEssentials, purchaseReply } from './essentials.mjs';
 import { mountAssistant } from './assistant.mjs';
 import { mountCalendar } from './calendar.mjs';
+import { mountPhoneCam } from './phonecam.mjs';
 import { suggestTasks } from './task-suggest.mjs';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => {
@@ -2347,7 +2348,8 @@ const care = { src: "file", files: [], idx: 0, camStream: null, bridgeTimer: 0, 
   ws: null, out: null, playAt: 0, sources: [], muted: false, frameTimer: 0, audioStop: null, vctx: null, vsrc: null, noSoundWarned: false,
   lines: [], visible: false, agentTimer: 0, agentBusy: false, history: [], lastStatus: null, lastTapAt: 0,
   health: null, healthAt: 0, taps: [], falls: [], bandSeen: new WeakSet(), routineKey: "" };
-const CARE_SRC_LABEL = { file: "Recorded video, played as a live stream", bridge: "GoPro (via bridge)", camera: "This computer's camera" };
+const CARE_SRC_LABEL = { file: "Recorded video, played as a live stream", bridge: "GoPro (via bridge)", camera: "This computer's camera", phone: "the iPhone camera" };
+const careStill = () => care.src === "bridge" || care.src === "phone"; // server-side frames shown in <img id="care-bridge">
 function careSrcStatus(text) { $("care-src-status").textContent = text; }
 function careLiveStatus(text) { $("care-live-status").textContent = text; }
 function careLiveState(state, text) {
@@ -2357,9 +2359,9 @@ function careLiveState(state, text) {
 function careShowMedia() {
   const v = $("care-video"), img = $("care-bridge");
   const hasVideo = (care.src === "file" && care.files.length) || (care.src === "camera" && care.camStream);
-  v.hidden = !hasVideo; img.hidden = care.src !== "bridge";
+  v.hidden = !hasVideo; img.hidden = !careStill();
   v.controls = care.src === "file";
-  $("care-stage-empty").hidden = Boolean(hasVideo) || care.src === "bridge";
+  $("care-stage-empty").hidden = Boolean(hasVideo) || careStill();
   $("care-file-row").hidden = care.src !== "file";
   $("care-files-clear").hidden = !care.files.length;
   const badge = $("care-live-badge");
@@ -2367,6 +2369,7 @@ function careShowMedia() {
   if (care.src === "file" && care.files.length) { label = "Recorded video · played as a live stream"; live = true; }
   else if (care.src === "camera" && care.camStream) { label = "This computer's camera · live"; live = true; }
   else if (care.src === "bridge") { label = care.bridgeLive ? "GoPro (via bridge) · live" : "GoPro (via bridge) · waiting"; live = care.bridgeLive; }
+  else if (care.src === "phone") { label = care.bridgeLive ? "iPhone camera · live" : "iPhone camera · waiting"; live = care.bridgeLive; }
   badge.hidden = !label; badge.textContent = label; badge.dataset.live = String(live);
 }
 function careSourceLive() { return care.src === "file" ? care.files.length > 0 : care.src === "camera" ? Boolean(care.camStream) : care.bridgeLive; }
@@ -2419,6 +2422,12 @@ function careStopCamera() {
 }
 /* GoPro bridge */
 async function careBridgeStatus() {
+  if (care.src === "phone") {
+    if (!care.phoneCode) { care.bridgeLive = false; careSrcStatus("Pair an iPhone first: Dashboard → Live camera · iPhone."); return careShowMedia(); }
+    try { const r = await fetch(`/api/phonecam/status?c=${care.phoneCode}`); const s = r.ok ? await r.json() : {}; care.bridgeLive = Boolean(s.live); careSrcStatus(care.bridgeLive ? `iPhone camera live · ${s.fps} fps.` : r.ok ? "Waiting for the iPhone to send frames…" : "iPhone pairing ended. Pair it again on the dashboard."); }
+    catch { care.bridgeLive = false; careSrcStatus("iPhone camera unavailable."); }
+    return careShowMedia();
+  }
   try { const s = await (await fetch("/api/vision/status")).json(); care.bridgeLive = Boolean(s.live); careSrcStatus(care.bridgeLive ? `GoPro bridge live${s.camera ? ` · ${s.camera}` : ""}.` : "Waiting for the GoPro bridge to send frames…"); }
   catch { care.bridgeLive = false; careSrcStatus("GoPro bridge unavailable on this server."); }
   careShowMedia();
@@ -2427,8 +2436,9 @@ function careBridgeOn() {
   if (care.bridgeTimer) return;
   const img = $("care-bridge");
   img.onerror = () => { img.removeAttribute("src"); };
-  const tick = () => { if (!document.hidden) img.src = `/api/vision/latest.jpg?t=${Date.now()}`; };
-  tick(); care.bridgeTimer = setInterval(tick, 1000);
+  const phone = care.src === "phone";
+  const tick = () => { if (!document.hidden && (!phone || care.phoneCode)) img.src = phone ? `/api/phonecam/latest.jpg?c=${care.phoneCode}&t=${Date.now()}` : `/api/vision/latest.jpg?t=${Date.now()}`; };
+  tick(); care.bridgeTimer = setInterval(tick, phone ? 500 : 1000);
   careBridgeStatus(); care.bridgeStatusTimer = setInterval(careBridgeStatus, 5000);
 }
 function careBridgeOff() { clearInterval(care.bridgeTimer); clearInterval(care.bridgeStatusTimer); care.bridgeTimer = 0; care.bridgeStatusTimer = 0; $("care-bridge").removeAttribute("src"); }
@@ -2438,11 +2448,11 @@ function careSetSource(src) {
   document.querySelectorAll("input[name=care-src]").forEach((r) => { r.checked = r.value === src; });
   const v = $("care-video");
   if (src !== "camera") careStopCamera();
-  if (src !== "bridge") careBridgeOff();
+  careBridgeOff();
   if (src === "file") { if (care.files.length) { if (!v.src || v.srcObject) carePlayIndex(care.idx); } else { v.removeAttribute("src"); careSrcStatus("Upload one or more videos. They stay on this computer and play in a loop like a live stream."); } }
   else { v.pause(); v.removeAttribute("src"); }
   if (src === "camera") careStartCamera();
-  if (src === "bridge" && care.visible) careBridgeOn();
+  if (careStill() && care.visible) careBridgeOn();
   careRenderPlaylist(); careShowMedia();
 }
 document.querySelectorAll("input[name=care-src]").forEach((r) => r.addEventListener("change", () => { if (r.checked) careSetSource(r.value); }));
@@ -2497,7 +2507,7 @@ function careStartFrames() {
   const c = $("care-canvas"), ctx = c.getContext("2d");
   care.frameTimer = setInterval(() => {
     const v = $("care-video");
-    if (care.ws?.readyState !== 1 || document.hidden || care.src === "bridge" || !v.videoWidth || v.hidden) return;
+    if (care.ws?.readyState !== 1 || document.hidden || careStill() || !v.videoWidth || v.hidden) return;
     c.width = 640; c.height = Math.round(640 * v.videoHeight / v.videoWidth);
     try { ctx.drawImage(v, 0, 0, c.width, c.height); } catch { return; }
     const data = c.toDataURL("image/jpeg", 0.6).split(",")[1];
@@ -2511,16 +2521,17 @@ async function careStart() {
   if (lh.ws) lhStop("Paused: live guidance on the Care page is using Gemini Live.");
   if (care.src === "file" && !care.files.length) return careLiveStatus("Upload a video first, or choose the GoPro or this computer's camera.");
   if (care.src === "camera" && !(await careStartCamera())) return careLiveStatus("Camera unavailable. Pick another source.");
+  if (care.src === "phone" && !care.phoneCode) return careLiveStatus("Pair an iPhone first: Dashboard → Live camera · iPhone.");
   careLiveState("busy", "Connecting to Gemini Live…");
   try {
     if (care.src === "file") { const v = $("care-video"); if (v.paused) await v.play().catch(() => {}); }
-    if (care.src === "bridge") careBridgeOn();
+    if (careStill()) careBridgeOn();
     care.out = new AudioContext({ sampleRate: 24000 }); care.playAt = 0; care.out.resume().catch(() => {});
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-gemini`);
     ws.binaryType = "arraybuffer"; care.ws = ws;
-    const bridge = care.src === "bridge";
+    const bridge = careStill(), vision = care.src === "phone" ? { vision: "phone", code: care.phoneCode } : care.src === "bridge" ? { vision: "bridge" } : {};
     const openTimer = setTimeout(() => { if (care.ws === ws && $("care-live").dataset.state === "busy") careStop("Gemini Live didn't answer. It may be unavailable right now."); }, 15000);
-    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: accessMode, ...(bridge ? { vision: "bridge" } : {}) }));
+    ws.onopen = () => ws.send(JSON.stringify({ token: "", mode: accessMode, ...vision }));
     ws.onmessage = async (event) => {
       if (care.ws !== ws) return;
       if (event.data instanceof ArrayBuffer) return livePlayPcm24(care, event.data);
@@ -2540,7 +2551,7 @@ async function careStart() {
       else if (msg.type === "turn_complete") { const l = care.lines[care.lines.length - 1]; if (l) l.done = true; const heard = [...care.lines].reverse().find(x => x.kind === "heard"); if (heard) renderHearingCaption(heard.text, true); }
       else if (msg.type === "interrupted") liveInterrupt(care);
       else if (msg.type === "error") { careLiveStatus(msg.message || "Gemini Live reported an error."); if ($("care-live").dataset.state === "busy") careStop(`Gemini Live unavailable: ${msg.message || "error"}`); }
-      else if (msg.type === "vision") careLiveStatus(msg.live ? `Seeing through ${msg.camera || "the GoPro"}.` : "Waiting for GoPro frames from the bridge…");
+      else if (msg.type === "vision") careLiveStatus(msg.live ? `Seeing through ${msg.camera || "the GoPro"}.` : vision.vision === "phone" ? "Waiting for frames from the iPhone…" : "Waiting for GoPro frames from the bridge…");
     };
     ws.onerror = () => {};
     ws.onclose = () => { clearTimeout(openTimer); if (care.ws === ws) careStop($("care-live").dataset.state === "busy" ? "Gemini Live is unavailable right now." : "Live guidance ended."); };
@@ -2554,7 +2565,7 @@ function careStop(text = "Stopped.") {
   try { care.audioStop?.(); } catch { /* */ } care.audioStop = null;
   try { care.out?.close(); } catch { /* */ } care.out = null;
   if (care.src === "camera") { careStopCamera(); careSrcStatus("Camera off. Choose the camera again to turn it on."); }
-  if (care.src === "bridge" && !care.visible) careBridgeOff();
+  if (careStill() && !care.visible) careBridgeOff();
   careShowMedia(); careLiveState("idle", text);
 }
 $("care-start").addEventListener("click", careStart);
@@ -2811,7 +2822,7 @@ function careOnView(name) {
   const was = care.visible; care.visible = name === "care";
   if (care.visible && !was) {
     renderCareRoutine(); loadCareHealth(); careShowMedia(); careRenderPlaylist();
-    if (care.src === "bridge") careBridgeOn();
+    if (careStill()) careBridgeOn();
     clearInterval(care.agentTimer);
     care.agentTimer = setInterval(() => { if (!document.hidden) { careAssess(false); renderCareHealth(); } }, 30000);
     setTimeout(() => { if (care.visible && !care.history.length) careAssess(false); }, 1500);
@@ -2945,6 +2956,8 @@ async function assistantIntercept(text) {
 const assistant = $("assistant") ? mountAssistant($("assistant"), { el, request, getContext: assistantContext, runAction: assistantAction, intercept: assistantIntercept, bandOn: () => Boolean(capture.band && capture.active), bandPcm,
   ensureBand: async () => { if (!capture.band) return false; if (!$("rec-consent").checked) return false; if (!capture.active && !busy) { autoRec.userStopped = false; $("rec-start").click(); await new Promise((r) => setTimeout(r, 2500)); } return Boolean(capture.active); } }) : null;
 if ($("calendar-card")) mountCalendar($("calendar-card"), { el, request });
+if ($("phonecam-card")) mountPhoneCam($("phonecam-card"), { el, request, onFrameSource: (code) => { care.phoneCode = code; if (care.src === "phone") careBridgeStatus(); },
+  onTalk: (code) => { care.phoneCode = code; location.hash = "care"; careSetSource("phone"); setTimeout(careStart, 300); } });
 if (location.hash === "#tasks") setTimeout(renderTasks, 300);
 renderProfile();
 renderPublish(); loadDemoTranscript(); startDemoFeed();

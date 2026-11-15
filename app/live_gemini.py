@@ -15,7 +15,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 router = APIRouter()  # defined before importing main, which registers it
 
-from app import main, vision_bridge  # noqa: E402
+from app import main, phonecam, vision_bridge  # noqa: E402
 
 GEMINI_LIVE_URL = ("wss://generativelanguage.googleapis.com/ws/"
                    "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent")
@@ -24,7 +24,7 @@ MAX_AUDIO_CHUNK = 64 * 1024  # one browser chunk; 16 kHz PCM16 is 32 KB/s
 MAX_AUDIO_BYTES = 16000 * 2 * MAX_SECONDS
 MAX_FRAME_BYTES = 300 * 1024  # decoded JPEG
 FRAME_INTERVAL = 0.5  # at most 2 frames per second
-BRIDGE_INTERVAL = 1.0  # how often the relay checks the camera bridge for a newer frame
+BRIDGE_INTERVAL = 1.0  # how often the relay checks the camera bridge (or paired iPhone) for a newer frame
 MAX_TEXT = 1000
 MAX_NOTES, MAX_NOTE_CHARS = 20, 300
 
@@ -101,6 +101,12 @@ async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: i
     mode = hello.get("mode", "memory")
     if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
         return await fail("Unknown assistance mode. Choose Memory, Sight, Hearing or Mobility.")
+    vision = None
+    if hello.get("vision") == "bridge":
+        vision = vision_bridge.fresh
+    elif hello.get("vision") == "phone":
+        if (vision := phonecam.source_for(hello.get("code"), phonecam.owner_of(client))) is None:
+            return await fail("That iPhone camera isn't paired to this session. Pair it again on the dashboard.")
     if not key or not model:
         return await fail("Live conversation is unavailable: set GOOGLE_API_KEY and GEMINI_LIVE_MODEL.", 1011)
     slots = main.stream_slots
@@ -116,12 +122,16 @@ async def relay(client: WebSocket, hello: dict, max_seconds: float, max_bytes: i
                     return await fail("Live conversation could not start. Please try again.", 1011)
                 await gemini.send(json.dumps(initial_history(clean_notes(hello.get("notes")))))
                 await client.send_json({"type": "ready", "model": model})
-                await pump(client, gemini, max_seconds, max_bytes, bridge=hello.get("vision") == "bridge")
+                await pump(client, gemini, max_seconds, max_bytes, vision=vision)
         except (OSError, asyncio.TimeoutError, WebSocketException, ValueError):
             await fail("Live conversation was interrupted. Please try again.", 1011)
 
 
-async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int, bridge: bool = False) -> None:
+async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int, bridge: bool = False,
+               vision=None) -> None:
+    """vision: a zero-argument function returning the latest fresh server-side frame (camera bridge or paired
+    iPhone) or None; bridge=True is shorthand for the camera bridge."""
+    vision = vision or (vision_bridge.fresh if bridge else None)
     state = {"bytes": 0, "last_frame": 0.0}
 
     async def from_bridge():
@@ -129,7 +139,7 @@ async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int, br
         second, and tell the browser when bridge frames start or stop."""
         sent_seq, live = 0, False
         while True:
-            frame = vision_bridge.fresh()
+            frame = vision()
             if frame is not None and frame.seq != sent_seq:
                 state["bytes"] += len(frame.jpeg)
                 if state["bytes"] > max_bytes:
@@ -220,7 +230,7 @@ async def pump(client: WebSocket, gemini, max_seconds: float, max_bytes: int, br
                 await client.send_json({"type": "error", "message": "Live session is ending soon; start again."})
 
     tasks = [asyncio.create_task(from_browser()), asyncio.create_task(to_browser())]
-    if bridge:
+    if vision:
         tasks.append(asyncio.create_task(from_bridge()))
     try:
         done, _ = await asyncio.wait(tasks, timeout=max_seconds, return_when=asyncio.FIRST_COMPLETED)

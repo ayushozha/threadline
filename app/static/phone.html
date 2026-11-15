@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Threadline camera</title>
+  <link rel="stylesheet" href="/static/phone.css">
+  <script type="module" src="/static/phone.mjs"></script>
+</head>
+<body>
+  <main class="pc">
+    <video id="pc-video" class="pc-video" playsinline muted autoplay hidden></video>
+    <canvas id="pc-canvas" hidden></canvas>
+
+    <section id="pc-intro" class="pc-intro">
+      <p class="pc-brand">Threadline</p>
+      <h1>Use this iPhone as a camera</h1>
+      <p class="pc-lead">Point the back camera at what you want Threadline to see. The picture appears on the dashboard, and Gemini can talk with you about it.</p>
+      <p id="pc-code" class="pc-code"></p>
+      <button id="pc-start" class="pc-btn pc-btn-go" type="button">Start camera</button>
+      <p class="pc-fine">Only still pictures (about 2 per second) are sent to your Threadline. No sound is sent from this phone.</p>
+    </section>
+
+    <header class="pc-bar" id="pc-bar" hidden>
+      <span id="pc-dot" class="pc-dot" data-state="idle" aria-hidden="true"></span>
+      <span id="pc-status" class="pc-status" role="status" aria-live="polite">Starting…</span>
+    </header>
+
+    <footer class="pc-foot" id="pc-foot" hidden>
+      <p id="pc-error" class="pc-error" role="alert"></p>
+      <button id="pc-stop" class="pc-btn pc-btn-stop" type="button">Stop</button>
+    </footer>
+  </main>
+</body>
+</html>
