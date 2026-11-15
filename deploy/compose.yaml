@@ -10,6 +10,8 @@ services:
       - /home/ayush/threadline/secrets/runtime.env
     environment:
       PORT: "3000"
+    volumes:
+      - /home/ayush/threadline/data:/data
     expose:
       - "3000"
     networks:
