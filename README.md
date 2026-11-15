@@ -1,130 +1,166 @@
-# Threadline Care
+# Threadline
 
-An assistant with four chosen support modes: Memory, Sight, Hearing and Mobility. Built at VexoHacks (AI wearables, Y Combinator, November 14, 2026).
+**One assistant, four chosen ways to help: Memory, Sight, Hearing and Mobility.**
 
-[Live prototype](https://threadline.ayushojha.com/#care) · [Demo script](docs/DEMO.md) · [API setup](docs/API_SETUP.md) · [Live video and device setup](docs/LIVE_CAPTURE_HANDOFF.md) · [Deployment](deploy/README.md) · [Watch app](watch/README.md)
+[Live prototype](https://threadline.ayushojha.com/) · [Watch the concept film](https://threadline.ayushojha.com/accessibility/) · [Try the evidence demo](https://threadline.ayushojha.com/demo/) · [Video script](docs/demo/FINAL_VIDEO_SCRIPT.md) · [Device setup](docs/LIVE_CAPTURE_HANDOFF.md)
 
-## Four support modes
+[![Stage: hackathon prototype](https://img.shields.io/badge/stage-hackathon_prototype-52734b)](#status) [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab)](pyproject.toml) [![Hardware: Vexo](https://img.shields.io/badge/hardware-Vexo_band-242424)](#connect-the-hardware)
 
-Choose a mode on the Dashboard. The selection changes Gemini Live instructions, the Care assessment and report label. It does not diagnose a disability or change the physical hardware.
+[![Threadline four-mode concept film](assets/demo/accessibility/poster.jpg)](https://threadline.ayushojha.com/accessibility/)
 
-| Mode | Current behavior |
-| --- | --- |
-| Memory | Recovers a stated intention or last mentioned location from saved conversations; keeps uncertainty. |
-| Sight | Describes camera frames and reads visible text. No face identification, dosing advice or safe-navigation guarantee. |
-| Hearing | Large captions from incoming speech, speaker numbers, and an optional name cue sent to a paired watch. |
-| Mobility | Access preferences, supplied movement readings and user-requested assistance drafts. No calculated fall-risk score. |
-
-The **Load fictional [mode] demo** control opens separate per-band/mode history:
-Memory has 48 dialogue lines; Sight, Hearing and Mobility each have 21. Fourteen
-days of labeled synthetic chart data fill the existing Dashboard. These are not
-patient recordings, device readings or clinical evidence. No completed actions
-are seeded. Consent is required before sending fictional notes to Gemini. Exit
-returns to real data. The [four-mode concept film](https://threadline.ayushojha.com/accessibility/)
-is 59 seconds with Jessica narration; [production notes](docs/demo/ACCESSIBILITY_VIDEO.md)
-list the real footage still needed.
-
-Live guidance requires its own consent checkbox. **Request assistance** prepares
-a message for review. Three tap events within 700 ms use the same flow; the
-firmware exposes single/double events, so recognition is implemented in the app
-and remains to be verified on the physical band. Sight double-tap asks about the
-scene during an active live session. Email/Text opens another app for the user
-to send; Threadline does not confirm delivery.
+Voice · visual context · accessible captions · personal memory · assistance drafts
 
 ## The problem
 
-A family caregiver cannot watch someone all day. The same question comes back every few minutes ("Where is my wife?"), glasses and keys go missing, pills are a constant worry, and a fall can go unnoticed until someone walks in. Threadline Care listens and watches through wearables, answers the person calmly in the moment, and tells the caregiver only what needs their attention, with the reason attached.
+Everyday tasks become harder when an interface assumes you can remember the last step, see small text, hear a conversation or easily reach something. Someone may lose their place while making tea, miss a spoken update, struggle to read a package or need help with an object out of reach. Opening another app, repeating the context and explaining what help is needed adds work at exactly the wrong moment.
 
-## What works now
+Threadline carries context across those moments. It combines the person's saved words, a current camera view and available wearable inputs to offer one useful next step. The person chooses the kind of support, checks the evidence and decides what to share. A caregiver can review the same context without the system pretending to know more than it observed.
 
-| Piece | What it does |
+**The pitch:** different access needs should not require four disconnected assistants. Threadline changes how one assistant listens, responds and presents information around the support a person chooses.
+
+## Contents
+
+- [Four support modes](#four-support-modes)
+- [Try the demo](#try-the-demo)
+- [Status](#status)
+- [How it works](#how-it-works)
+- [Run locally](#run-locally)
+- [Connect the hardware](#connect-the-hardware)
+- [Configuration and API](#configuration-and-api)
+- [Limits and data handling](#limits-and-data-handling)
+- [Development](#development)
+
+## Four support modes
+
+Choose a mode on the Dashboard. It changes Gemini Live's instructions, the Care assessment context, captions and report wording; it does not infer a disability.
+
+| Mode | A useful moment | What the prototype does |
+| --- | --- | --- |
+| **Memory** | “What was I doing before the phone rang?” | Retrieves a stated plan or last mentioned location from saved conversation. Uses visual context where available, with timestamps and uncertainty. |
+| **Sight** | “What does this package say?” | Describes visible objects and reads legible text from camera frames. Unclear text remains unclear; it does not identify faces or guarantee a safe route. |
+| **Hearing** | “What did they just say?” | Displays large live captions with speaker numbers and corrections. A chosen-name cue can request a notification from a paired watch. |
+| **Mobility** | “Please ask Morgan to come over.” | Keeps access preferences and available movement readings in context, and prepares an assistance message for review. It does not calculate fall risk or direct a physical transfer. |
+
+All four use the existing Dashboard, transcript archive, Memory graph, saved notes and report previews. **Wellbeing** presents available sleep, activity and heart information; the app does not turn these readings into a diagnosis or a prediction of difficult evenings.
+
+## Try the demo
+
+1. Open the [live site](https://threadline.ayushojha.com/) and choose a support mode.
+2. Select **Load fictional [mode] demo**. This opens a separate workspace, leaving real recordings untouched.
+3. Explore the conversations, Memory graph and Dashboard. Allow fictional-demo processing, then select **Ask Gemini about this example** for a fresh response based on the supplied notes.
+4. Follow its source links. Use **Back to my data** to return to the real workspace.
+
+The four scenarios contain **111 written dialogue lines across 19 conversations**: Memory has 48 lines, and each other mode has 21. Each scenario also supplies 14 days of clearly labeled synthetic chart values. They are illustrative inputs, not patient histories, device measurements or clinical evidence. Decisions and completed actions are not prefilled.
+
+The [Memory evidence demo](https://threadline.ayushojha.com/demo/) submits a fictional conversation plus a generated kitchen image to the real Gemini vision endpoint after consent. Its film includes a captured provider response; the interactive button makes a new request.
+
+### Video and presentation assets
+
+| Asset | Use |
 | --- | --- |
-| **Vexo band 73** (official [Vexo Open kit](https://github.com/VexoAI-Org/vexo-open-kit), `app/static/vendor/vexo-open/`) | The recorder. Band mic audio is decoded in the browser to 16 kHz PCM16 and relayed through `/api/live-transcribe` to Deepgram nova-3 for a live transcript. Also streams motion/activity, taps and free-fall. Auto-reconnects over the USB port the site already has permission for. |
-| **Apple Watch app** (`watch/`) | Live heart rate, HRV, SpO2, sleep and other readings, plus haptic taps on the wrist. Pairs from the watch with a 6-digit code. |
-| **iPhone app** (`phone/`) | Uploads 365 days of Apple Health daily aggregates to `/api/health/daily`; `/api/health/summary` serves them. A Health export zip can also be imported (`/api/health/import`). |
-| **Vision** | GoPro LIT HERO via the Open GoPro USB bridge (`tools/gopro_bridge.py`, frames to `/api/vision/frame`), uploaded video files looped as a live feed, or the laptop camera. |
-| **Gemini Live** (`app/live_gemini.py`, `WS /api/live-gemini`) | Speaks calm, real-time guidance from camera frames and audio ("Your glasses are on the kitchen counter"). |
-| **Caregiver agent** (`app/care_agent.py`, `POST /api/care/assess`) | Gemini (Interactions API) reads the transcript, what the camera saw, the band, the watch and the routine, and returns a status (**ok / needs attention / urgent**), one next step, a note for the family and the reasons. Falls back to deterministic local rules when Gemini is unavailable. |
-| **Server storage** (`app/store.py`) | SQLite for the owner's public demo transcript and health history only. |
-| **Other screens** | Your day, Energy, Tasks, Thread, Daily log, Graph (knowledge graph), Transcripts, Integrations. |
+| [Four-mode concept film](assets/demo/accessibility/threadline-four-modes.mp4) | Approximately 59 seconds, Jessica narration, captions, synthetic scenes and illustrative UI. |
+| [Memory evidence film](assets/demo/dementia/threadline-dementia-demo.mp4) | Approximately 55 seconds; the interrupted-routine scenario and a captured Gemini response. |
+| [Shot list and narration plan](docs/demo/ACCESSIBILITY_VIDEO.md) | What the pitch demonstrates, what remains conceptual, and the real footage needed. |
+| [Local image workflow](docs/demo/LOCAL_IMAGE_RUNTIME.md) | Reproduce the MiniMax image assets with local model files. |
 
-Empty screens show clearly labelled **sample** conversations, notes and tasks; one button ("Clear sample data") removes them. Health numbers are real: they are the builder's own Apple Health data, standing in for the person being cared for.
+These films are presentation assets. They do not prove live wearable behavior. Real camera footage, live captions and physical watch cues still need to be recorded and checked together for an end-to-end hardware demo.
 
-## How it fits together
+## Status
 
+| Surface | Current state |
+| --- | --- |
+| Band audio → transcript | Implemented with the official Vexo kit and a server-side Deepgram relay. Partial text renders in the band and Care views before archive/dashboard work. |
+| Camera → spoken assistance | Implemented Gemini Live relay for a camera, uploaded clips or GoPro bridge; explicit consent required. |
+| Mode-specific behavior | Implemented for Memory, Sight, Hearing and Mobility. |
+| Memory and Dashboard | Saved notes, source links, transcript history, graph and available chart data; missing measurements remain missing. |
+| Assistance and reports | Reviewable drafts, copy/download, and system email/text links. Sending and delivery are not automated or confirmed. |
+| Triple-tap / name cue | App gesture and cue paths implemented; physical band/watch verification remains necessary. |
+| Clinical predictions / navigation | Not implemented or validated. No diagnosis, medication verification, fall-risk score or safe-crossing guarantee. |
+
+## How it works
+
+```text
+Vexo band ── USB / BLE ── browser ── server relay ── Deepgram ── live captions
+                                                │
+Saved conversation + selected camera frames ── Gemini ── grounded next step
+                                                │
+Apple Watch / Health imports ── available readings ── Dashboard and report preview
+                                                │
+                                   Person reviews any assistance message
 ```
-Vexo band ──USB/BLE──> browser ──PCM16──> /api/live-transcribe ──> Deepgram nova-3 ──> live transcript
-Apple Watch ──────────> server (pairing code) ──> page: HR, HRV, SpO2, sleep; page ──> watch: haptic tap
-iPhone ──Apple Health daily aggregates──> /api/health/daily ──> SQLite ──> /api/health/summary
-GoPro (Open GoPro bridge) / looped clips / laptop camera ──frames──> Gemini Live ──> spoken guidance
-transcript + what was seen + band + watch + routine ──> /api/care/assess ──> status, next step, family note
-```
 
-## Evidence boundaries
+The Vexo band supplies audio and available motion/tap events. The browser owns the device connection. API credentials stay on the server. Gemini Live handles spoken interaction; Gemini's structured endpoints support source-backed reflection, visual checks, graph extraction and Care assessments. MiniMax local image models and ElevenLabs Jessica supply the separate presentation assets.
 
-`app/care_agent.py` checks every Gemini answer before it reaches the page:
+## Run locally
 
-- **Urgent only for a real signal:** a band free-fall in the last 10 minutes or a help phrase ("help", "I've fallen", "can't get up", "call 911", ...). The model cannot raise urgent without one, and cannot soften it when one exists.
-- **Never diagnoses.** Diagnostic language (stages, infections, "decline", and so on) is removed.
-- **Never claims medication was taken or missed.** Sentences matching `MED_CLAIM_RE` are replaced with "Can't confirm medication — check the organiser together."
-- **No face identification.** Sentences that recognise or identify people by face are removed.
-- **Reasons must cite inputs that were actually provided**; with no inputs the answer is "Not enough information yet."
-- If Gemini fails or returns unusable output, the local rules answer and the response says why (`fallback_reason`).
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), and a browser supporting the device connection you plan to use. Node is used for the JavaScript checks and media tools, not the FastAPI server.
 
-## Sponsors and tech used
-
-Vexo (band 73, Vexo Open kit) · Google Gemini (Live API for spoken guidance; Interactions API for the caregiver agent and knowledge graph) · Deepgram (nova-3 streaming) · GoPro (LIT HERO, Open GoPro API) · Apple Watch and iPhone (HealthKit, SwiftUI) · FastAPI, SQLite, Docker/Traefik.
-
-## Limitations and roadmap
-
-- Not a medical device, diagnostic, or emergency service. Status is a prompt for a human to look, not a verdict.
-- Family alerts are a pre-filled text-message link, not push notifications. **Not built yet:** remote family alerts, medication schedule alarms, wandering/geofence detection.
-- Health data shown is the builder's, not a patient's. There are no per-user accounts yet; the public site is a single-owner demo.
-- Speaker labels separate voices; they are not identity verification. The new triple-tap and name cue paths need physical band/watch verification; the browser and protocol checks do not prove hardware behavior.
-- Audio goes to Deepgram and frames/text go to Google when those features run; their retention terms apply.
-
-## Run locally (PowerShell)
-
-Install [uv](https://docs.astral.sh/uv/) if it is not available, then:
+From PowerShell in the repository:
 
 ```powershell
-Copy-Item .env.example .env  # first setup only; keep existing credentials on later runs
+# First setup only; do not overwrite an existing .env.
+Copy-Item .env.example .env
 uv sync --locked
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Fill the provider keys in `.env` (`GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_LIVE_MODEL`, `DEEPGRAM_API_KEY`) from your event accounts; see [API setup](docs/API_SETUP.md). Never commit `.env`. Open `http://127.0.0.1:8000/#care`.
+Fill the relevant keys and model selections in `.env`, then open `http://127.0.0.1:8000/`. For a private laptop-only server, `APP_TRUST_LOOPBACK=1` permits local requests without entering a token. Never enable it on a public server. Provider-free local behavior and synthetic inputs are labeled; a provider failure is not represented as a successful live result.
 
-GoPro bridge: `uv run python tools/gopro_bridge.py --server http://127.0.0.1:8000` (details in the script header and [Live video and device setup](docs/LIVE_CAPTURE_HANDOFF.md)).
+## Connect the hardware
 
-## Vexo band
+Set `VEXO_BAND_NUMBER` to your assigned band. This project uses **73**. In **Your band**, connect only that device and grant recording consent. Close the Vexo dashboard first: one connection must own its audio stream. The official kit is vendored unchanged under `app/static/vendor/vexo-open/` and records its upstream revision.
 
-Set `VEXO_BAND_NUMBER` in `.env` (ours is 73, `Vexo-HACK-73`). On **Your band**, press **Connect band** and pick only your band; close the Vexo dashboard first, since a band serves one program per link. The library in `app/static/vendor/vexo-open/` is the official Vexo Open kit (MIT), copied unchanged; `UPSTREAM_COMMIT` records the version. It refuses any band whose number does not match.
+Camera options include the computer camera, uploaded clips played as a feed, and the Open GoPro bridge:
 
-## Main API
+```powershell
+uv run python tools/gopro_bridge.py --server http://127.0.0.1:8000
+```
 
-- `GET /api/health`: public deployment health. `GET /api/config`: provider readiness (token required).
-- `WS /api/live-transcribe`: band (`vexo_pcm`), watch or browser audio relayed to Deepgram; interim/final results with word timings and speaker labels.
-- `WS /api/live-gemini`: Gemini Live relay for spoken guidance.
-- `POST /api/care/assess`: caregiver assessment (`engine: "gemini"` or `"local"`).
-- `POST /api/vision/frame`, `GET /api/vision/latest.jpg`: GoPro bridge frames.
-- `POST /api/health/daily`, `POST|DELETE /api/health/import`, `GET /api/health/summary`: Apple Health history.
-- `POST /api/watch/start`, `/api/watch/claim`, `WS /api/watch/feed`: Apple Watch pairing and live readings.
+A local video preview is not proof of remote streaming or AI analysis. See the [capture handoff](docs/LIVE_CAPTURE_HANDOFF.md), [hardware setup](docs/HARDWARE_SETUP.md), [watch app](watch/README.md) and [iPhone app](phone/) for their distinct setup paths.
 
-## Repository
+## Configuration and API
 
-`app/` FastAPI server and provider adapters; `app/static/` web app; `watch/` watchOS app; `phone/` iPhone uploader; `tools/` GoPro bridge and demo tooling; `tests/` focused checks; `deploy/` Docker/Traefik deployment (SQLite at `THREADLINE_DB_PATH`, `/data` volume).
+| Configuration | Purpose |
+| --- | --- |
+| `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GEMINI_DECISION_MODEL`, `GEMINI_LIVE_MODEL` | Google credentials and environment-selected models. |
+| `DEEPGRAM_API_KEY`, `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE` | Streaming transcription configuration. |
+| `APP_ACCESS_TOKEN`, `APP_GUEST_SESSIONS`, `APP_PUBLIC_ORIGIN` | Server access and bounded browser sessions. |
+| `VEXO_BAND_NUMBER` | Assigned band filter; 73 for this project. |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL` | Optional presentation narration generation. |
+| `MINIMAX_*`, `COMFYUI_DIR`, `PYTHON_RUNTIME` | Optional local image/media workflow. |
 
-## Verify
+Do not commit `.env` or copy credentials into frontend files. Exact options are in [.env.example](.env.example) and [API setup](docs/API_SETUP.md).
+
+The principal endpoints are `GET /api/health`, `WS /api/live-transcribe`, `WS /api/live-gemini`, `POST /api/reflect`, `POST /api/vision` and `POST /api/care/assess`. Watch pairing, camera bridge and Health import routes have separate authorization paths; see their setup docs. Deployment uses the [commit-based VPS helper](deploy/README.md), not a copy of the working directory or local secrets.
+
+## Limits and data handling
+
+- This is a hackathon prototype, not a medical device, diagnostic service or emergency response system.
+- A last mentioned object location is not its verified current location. Speaker numbers are not identities. A device free-fall event is not proof a person fell.
+- Sight mode does not recommend a medication dose, replace mobility aids or determine when to cross a street.
+- Consent is required for live guidance. Audio and selected frames go to the configured providers when enabled.
+- Ordinary notes and transcripts are stored in the browser per band. The explicitly published owner's demo stream and imported Health history can use server SQLite. This public prototype is not a multi-user clinical records system.
+- Synthetic mode data stays separate from real captures. Empty data does not imply that someone is safe or unwell.
+- A message draft, requested watch cue or opened sharing app is not confirmed delivery. Hardware latency, gesture recognition and watch cues require physical testing.
+
+## Development
+
+| Path | Purpose |
+| --- | --- |
+| `app/` | FastAPI adapters, validation and storage. |
+| `app/static/` | Browser UI, device connection, graph and demo inputs. |
+| `watch/`, `phone/` | WatchOS client and iPhone Health uploader. |
+| `assets/demo/`, `tools/` | Presentation assets and reproducible media tools. |
+| `tests/`, `deploy/` | Targeted checks and VPS release tooling. |
 
 ```powershell
 uv run pytest
 uv run python -m compileall -q app
-uv export --no-dev --format requirements-txt --output-file requirements.txt
+node --test tests/access-modes.test.mjs tests/band-capture.test.mjs tests/dashboard.test.mjs tests/sample-data.test.mjs tests/transcript-flow.test.mjs tests/vision.test.mjs
 ```
 
-Update the exported requirements whenever `uv.lock` changes. Deployment uses a commit archive, never the working `.env` or local files.
+Preserve consent and authorization boundaries, the official Vexo kit, source labels and separate fictional storage. Keep model selection in environment configuration. Only the authenticated `ayushozha` account may push directly to `main`; other contributors use reviewed pull requests. Never commit private recordings, personal Health data or secrets.
 
 ## License
 
-No license file is currently checked in.
+No project license file is currently checked in. The vendored Vexo Open kit retains its own license and attribution.
