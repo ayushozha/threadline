@@ -76,6 +76,7 @@ recorded run, explicitly introduced as a recording.
 | Wellbeing | Real mood check-ins, health measurements, supplied clinical scores | Example charts are labeled. Missing scores remain unknown and are not inferred from speech. |
 | Local-language speech | A verified successful spoken response | Demonstrate the confirmed Nepali text exchange. Do not overdub narration as live app audio. |
 | External actions | Confirmed message delivery or completed call | Describe drafts and opening another app accurately. A dialer link is not a completed call. |
+| Essentials | A verified checkout and real fulfillment | Treat the catalogue as a prototype. Do not claim a purchase or delivery from a success URL alone. |
 
 ## Likely questions
 

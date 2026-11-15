@@ -2,7 +2,7 @@
 
 **One assistant, four chosen ways to help: Memory, Sight, Hearing and Mobility.**
 
-[Live prototype](https://threadline.ayushojha.com/) · [Project media](https://threadline.ayushojha.com/media/) · [Watch the concept film](https://threadline.ayushojha.com/accessibility/) · [Try the evidence demo](https://threadline.ayushojha.com/demo/) · [Video script](docs/demo/FINAL_VIDEO_SCRIPT.md) · [Device setup](docs/LIVE_CAPTURE_HANDOFF.md)
+[Live prototype](https://threadline.ayushojha.com/) · [Project media](https://threadline.ayushojha.com/media/) · [Judge presentation](docs/demo/JUDGES_RUNBOOK.md) · [Watch the concept film](https://threadline.ayushojha.com/accessibility/) · [Try the evidence demo](https://threadline.ayushojha.com/demo/) · [Video script](docs/demo/FINAL_VIDEO_SCRIPT.md) · [Device setup](docs/LIVE_CAPTURE_HANDOFF.md)
 
 [![Stage: hackathon prototype](https://img.shields.io/badge/stage-hackathon_prototype-52734b)](#status) [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab)](pyproject.toml) [![Hardware: Vexo](https://img.shields.io/badge/hardware-Vexo_band-242424)](#connect-the-hardware)
 
@@ -16,7 +16,7 @@ Voice · visual context · accessible captions · personal memory · assistance 
 
 **[Play the video](https://threadline.ayushojha.com/static/media/threadline-story.mp4)** · **[Open the live app](https://threadline.ayushojha.com/)** · [Scenario library](https://threadline.ayushojha.com/#library) · [Dashboard](https://threadline.ayushojha.com/#dashboard)
 
-Evelyn, 78, lives with low vision and early memory loss. The film follows one day with Threadline, recorded on the live app: Gemini reasoning on real stair footage, a stove left on and a caregiver alert chosen by the Gemini Decisions API, a plan for tomorrow, a year of real Apple Health data, help in Nepali, and an automatic emergency call.
+The film uses the illustrative character Evelyn to show everyday memory and accessibility support, alongside app captures. A separate [two-minute son-perspective cut](https://threadline.ayushojha.com/media/son-cut/newfilm.mp4) shows fresh visual reasoning, a verified Nepali text response and source-linked Memory. Opening a phone dialer is not a completed emergency call.
 
 | Dashboard | Scenario library | Gemini on the stove scene |
 |---|---|---|
@@ -28,7 +28,7 @@ Evelyn, 78, lives with low vision and early memory loss. The film follows one da
 
 - **Dashboard:** today at a glance, real Apple Health trends, action items, one-tap reports for caregiver, doctor and family.
 - **Library:** 15 scenario videos (3 real recordings, 12 MiniMax Hailuo scenes). Gemini watches each one, the **Gemini Decisions API** picks one action and urgency, and you can chat with Gemini about any video (spoken replies). Your own recordings are stored per visitor and reasoned on the same way.
-- **Care:** live guidance with Gemini Live, a caregiver agent every 30 s, and an **emergency flow**: a fall, triple-tap SOS or cry for help shows a 10-second countdown, then calls the emergency contact, with emergency services one tap away.
+- **Care:** a Gemini Live guidance path, a caregiver agent every 30 s while the page is open, and an **assistance flow**: a possible incident can show a 10-second countdown and request the phone dialer. The person completes the call; placement and delivery are not verified.
 - **Essentials:** groceries, over-the-counter health items and home-safety supplies suggested from what Threadline noticed, caregiver-approved, paid with **Stripe Checkout** (needs `STRIPE_SECRET_KEY`; never sells prescription medicine).
 - **Tasks, Wellbeing, Daily log, Memory:** suggestions built from the library, Care and Health; a 10-second caregiver mood check-in; a self-filling daily log of every Health metric; an Obsidian-style memory graph.
 - **Language:** live transcription is multilingual and Gemini answers in the person's language (the film shows Nepali).
