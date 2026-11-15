@@ -496,7 +496,7 @@ def live_url(source: str) -> str:
     }
     if source == "vexo":  # The band sends raw Opus packets: 16 kHz mono, 20 ms each, one per message.
         params.update(encoding="opus", sample_rate="16000", channels="1")
-    elif source == "pcm16":  # Apple Watch: raw little-endian 16-bit PCM, 16 kHz mono.
+    elif source in {"pcm16", "vexo_pcm"}:  # Apple Watch, or band audio decoded in the browser: raw little-endian 16-bit PCM, 16 kHz mono.
         params.update(encoding="linear16", sample_rate="16000", channels="1")
     return "wss://api.deepgram.com/v1/listen?" + str(httpx.QueryParams(params))
 
@@ -712,7 +712,7 @@ async def live_transcribe(client: WebSocket):
     if not socket_token_ok(client, hello, allow_guest=True):
         return await fail("Recording session expired. Reload the page to reconnect.")
     source = hello.get("source")
-    if source not in {"vexo", "browser"}:
+    if source not in {"vexo", "vexo_pcm", "browser"}:
         return await fail("Unknown audio source.")
     send, on_ready, demo_id = client.send_json, None, None
     if demo_feed.key_ok(hello.get("publish_key")):

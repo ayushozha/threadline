@@ -484,6 +484,7 @@ function attachBand(band) {
     capture.lastPacketAt = Date.now();
     capture.decoder?.push(a);
     if (capture.warnedSilent) { capture.warnedSilent = false; recState("Band audio is arriving again."); $("rec-takeback").hidden = true; }
+    if (capture.pcm) return;  // decoded PCM is queued from the decoder instead (Deepgram linear16)
     if (queueBandAudio(capture.audioQueue, a)) capture.droppedPackets += 1;
     flushBandAudio();
   });
@@ -549,13 +550,20 @@ $("rec-start").addEventListener("click", async () => {
   if (vexo && await kit.canDecodeAudio()) capture.decoder = new kit.BandAudio((samples) => {
     if (!capture.active || capture.stopping) return;
     capture.pcmChunks.push(samples.slice());
+    if (capture.pcm) {  // stream decoded 16 kHz PCM16 to Deepgram — raw band Opus produced no transcripts on nova-3
+      const pcm = new Int16Array(kit.toInt16(samples));
+      capture.audioQueue.push({ opus: new Uint8Array(pcm.buffer), time: Date.now() });
+      if (capture.audioQueue.length > 400) { capture.audioQueue.shift(); capture.droppedPackets += 1; }
+      flushBandAudio();
+    }
     while (capture.pcmChunks.length > 600) capture.pcmChunks.shift();
     const rms = Math.sqrt(samples.reduce((sum, x) => sum + x * x, 0) / samples.length);
     capture.rmsDb = rms ? 20 * Math.log10(rms) : -96;
     if (capture.rmsDb > -42) capture.lastSpeechAt = Date.now();
     signals.level = Math.max(0, Math.min(1, (capture.rmsDb + 60) / 40));
     $("sig-loud").style.width = `${Math.round(signals.level * 100)}%`; pushWave(signals.level);
-  }, { rate: 16000, onError: () => { $("speech-status").textContent = "Audio quality check unavailable in this browser."; } });
+  }, { rate: 16000, onError: () => { capture.pcm = false; $("speech-status").textContent = "Audio quality check unavailable in this browser."; } });
+  capture.pcm = Boolean(capture.decoder);
   $("rec-takeback").hidden = true;
   $("live").hidden = false; $("live-lines").replaceChildren(); $("live-interim").textContent = ""; capture.sourceLabel = (vexo ? `${capture.band.name} · ${({ serial: "USB", ble: "Bluetooth", sim: "pretend" })[capture.band.transportKind] || ""}` : SOURCE_LABELS_LIVE[source]) + (camera ? " + camera" : "");
   if (camera) startVideo(stream);
@@ -589,7 +597,7 @@ function openSocket() {
   const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/live-transcribe`);
   ws.binaryType = "arraybuffer"; capture.ws = ws;
   const opened = Date.now();
-  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? "vexo" : "browser", ...(publishKey() ? { publish_key: publishKey() } : {}) }));
+  ws.onopen = () => ws.send(JSON.stringify({ source: capture.vexo ? (capture.pcm ? "vexo_pcm" : "vexo") : "browser", ...(publishKey() ? { publish_key: publishKey() } : {}) }));
   ws.onmessage = async (event) => {
     if (ws !== capture.ws || !capture.active) return;
     const msg = JSON.parse(event.data);
