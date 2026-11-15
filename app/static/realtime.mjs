@@ -44,7 +44,7 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
   const pc = new RTCPeerConnection(), audio = document.createElement("audio");
   const dc = pc.createDataChannel("oai-events");  // created before the offer so it is negotiated
   audio.autoplay = true;
-  let closed = false;
+  let closed = false, speaking = false, unmuteTimer = 0;
   const done = new Set();
   const stop = () => {
     if (closed) return; closed = true;
@@ -73,12 +73,14 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
         if (ev.transcript?.trim()) onTranscript({ role: "user", text: ev.transcript.trim() }); break;
       case "response.output_audio_transcript.done":
         if (ev.transcript?.trim()) onTranscript({ role: "assistant", text: ev.transcript.trim() }); break;
-      case "output_audio_buffer.started": if (muteWhileSpeaking) muteWhileSpeaking(true); onState("speaking"); break;
+      case "output_audio_buffer.started": clearTimeout(unmuteTimer); speaking = true; if (muteWhileSpeaking) muteWhileSpeaking(true); onState("speaking"); break;
       case "output_audio_buffer.stopped": case "output_audio_buffer.cleared":
-        if (muteWhileSpeaking) muteWhileSpeaking(false); onState("listening"); break;
+        // Keep the band muted a moment longer so the tail of our own voice is not heard as a new turn.
+        speaking = false; clearTimeout(unmuteTimer); unmuteTimer = setTimeout(() => { if (!speaking && muteWhileSpeaking) muteWhileSpeaking(false); onState("listening"); }, 900); break;
       case "response.done": {
         const calls = functionCalls(ev).filter((c) => !done.has(c.call_id));
         if (!calls.length) break;
+        const alreadySpoke = (ev.response.output || []).some((o) => o?.type === "message");
         for (const c of calls) {
           done.add(c.call_id);
           let result = null;
@@ -90,7 +92,8 @@ export async function startRealtime({ getContext, runAction, onTranscript = () =
             : { ok: Boolean(result) && !String(result).startsWith("Failed"), result: result || "Not available" };
           send({ type: "conversation.item.create", item: { type: "function_call_output", call_id: c.call_id, output: JSON.stringify(payload).slice(0, 12000) } });
         }
-        send({ type: "response.create" });
+        // Ask for a follow-up only when the model hasn't spoken yet (it needs the tool result to answer); otherwise it would talk twice.
+        if (!alreadySpoke) send({ type: "response.create" });
         break;
       }
       case "error": onState("error", ev.error?.message || "Realtime error"); break;
