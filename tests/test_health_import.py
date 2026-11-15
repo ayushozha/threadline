@@ -215,3 +215,55 @@ def test_storage_disabled_is_503(client, monkeypatch):
     monkeypatch.setattr(store, "get", lambda: None)
     assert upload(client, SYNTHETIC_XML.encode()).status_code == 503
     assert client.get("/api/health/summary").status_code == 503
+
+
+def post_daily(client, rows, key=KEY):
+    headers = {"X-Publish-Key": key} if key is not None else {}
+    return client.post("/api/health/daily", json={"rows": rows, "source": "iphone"}, headers=headers)
+
+
+def test_daily_upload_from_iphone(client):
+    rows = [
+        {"date": D1, "metric": "steps", "value": 1234.0, "count": 1, "min": None, "max": None},
+        {"date": D1, "metric": "heart_rate", "value": 72.5, "count": 300, "min": 50.0, "max": 140.0},
+        {"date": D2, "metric": "sleep_hours", "value": 7.25, "count": 4},
+        {"date": D2, "metric": "workouts", "value": 45.0, "count": 2},
+        {"date": D2, "metric": "workout:Running", "value": 30.0, "count": 1},
+        {"date": D2, "metric": "mood", "value": None, "count": 1},
+    ]
+    r = post_daily(client, rows)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"days": 2, "metrics": ["heart_rate", "mood", "sleep_hours", "steps", "workout:Running",
+                                                "workouts"], "range": [D1, D2]}
+    d1, summary = day(client, D1)
+    assert d1["steps"] == 1234 and d1["heart_rate"] == 72.5
+    d2, _ = day(client, D2)
+    assert d2["sleep_hours"] == 7.25 and d2["workout_count"] == 2 and d2["workout_types"] == {"Running": 30}
+    assert summary["imported_at"]
+    # a second upload replaces, it does not merge
+    assert post_daily(client, rows[:1]).json()["days"] == 1
+    assert client.get("/api/health/summary").json()["range"] == [D1, D1]
+
+
+def test_daily_upload_validation(client):
+    good = {"date": D1, "metric": "steps", "value": 1.0, "count": 1}
+    assert post_daily(client, [good], key="wrong").status_code == 401
+    assert post_daily(client, [good], key=None).status_code == 401
+    for bad in ({**good, "metric": "nope"}, {**good, "metric": "workout:../x"}, {**good, "date": OLD},
+                {**good, "date": "2020-13-01"}, {**good, "value": None}, {**good, "value": "1"},
+                {**good, "count": -1}, {**good, "min": "x"}):
+        r = post_daily(client, [bad])
+        assert r.status_code == 400, (bad, r.text)
+    assert post_daily(client, [good, good]).status_code == 400
+    assert post_daily(client, []).status_code == 400
+    r = client.post("/api/health/daily", content=b"{nope", headers={"X-Publish-Key": KEY})
+    assert r.status_code == 400
+    assert client.post("/api/health/daily", content=b'{"rows":[]}', headers={"X-Publish-Key": KEY,
+                       "Content-Type": "application/json"}).status_code == 400
+    assert client.get("/api/health/summary").json()["range"] is None
+
+
+def test_daily_upload_row_cap(client, monkeypatch):
+    monkeypatch.setattr(health_import, "MAX_ROWS", 1)
+    rows = [{"date": D1, "metric": "steps", "value": 1.0}, {"date": D2, "metric": "steps", "value": 2.0}]
+    assert post_daily(client, rows).status_code == 400

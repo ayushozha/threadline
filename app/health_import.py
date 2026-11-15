@@ -6,7 +6,9 @@ public on purpose: it is the demo owner's own data, shown in the demo."""
 
 import asyncio
 import logging
+import math
 import os
+import re
 import secrets
 import tempfile
 import threading
@@ -398,3 +400,78 @@ async def health_summary(days: int = Query(30, ge=1, le=KEEP_DAYS)):
     averages = {m: round(sum(v) / len(v), 2) for m, v in sorted(sums.items())}
     return {"range": full_range, "today": daily[-1] if daily else {}, "daily": daily, "averages": averages,
             "imported_at": db.health_imported_at()}
+
+
+MAX_ROWS = 50_000
+WORKOUT_TYPE = re.compile(r"workout:[A-Za-z0-9]{1,40}")
+
+
+def _finite(value, field_name: str, nullable: bool) -> float | None:
+    if value is None and nullable:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ImportError_(f"{field_name} must be a finite number.")
+    return float(value)
+
+
+def validate_rows(raw: object) -> list[tuple]:
+    """Check daily rows sent by the iPhone uploader and turn them into (date, metric, value, count, min, max)."""
+    if not isinstance(raw, list) or not raw:
+        raise ImportError_("rows must be a non-empty list.")
+    if len(raw) > MAX_ROWS:
+        raise ImportError_(f"Too many rows (max {MAX_ROWS}).")
+    today = date.today()
+    oldest, newest = today - timedelta(days=KEEP_DAYS), today + timedelta(days=1)  # 1 day slack for phone time zones
+    out, seen = [], set()
+    for i, row in enumerate(raw):
+        if not isinstance(row, dict):
+            raise ImportError_(f"rows[{i}] must be an object.")
+        try:
+            day = date.fromisoformat(row.get("date") if isinstance(row.get("date"), str) else "")
+        except ValueError:
+            raise ImportError_(f"rows[{i}].date must be YYYY-MM-DD.") from None
+        if not oldest <= day <= newest:
+            raise ImportError_(f"rows[{i}].date is outside the last {KEEP_DAYS} days.")
+        metric = row.get("metric")
+        if not isinstance(metric, str) or not (metric in METRICS or WORKOUT_TYPE.fullmatch(metric)):
+            raise ImportError_(f"rows[{i}].metric is not a known metric.")
+        value = _finite(row.get("value"), f"rows[{i}].value", nullable=metric == "mood")
+        count = row.get("count", 1)
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 10_000_000:
+            raise ImportError_(f"rows[{i}].count must be a non-negative integer.")
+        lo = _finite(row.get("min"), f"rows[{i}].min", nullable=True)
+        hi = _finite(row.get("max"), f"rows[{i}].max", nullable=True)
+        key = (day.isoformat(), metric)
+        if key in seen:
+            raise ImportError_(f"rows[{i}] duplicates {key[0]} {metric}.")
+        seen.add(key)
+        out.append((key[0], metric, round(value, 3) if value is not None else None, count, lo, hi))
+    return sorted(out)
+
+
+@router.post("/api/health/daily")
+async def upload_daily(request: Request):
+    """Daily aggregates read straight from HealthKit by the iPhone uploader (phone/), replacing the stored history."""
+    require_owner(request)
+    db = store.get()
+    if db is None:
+        raise HTTPException(503, "Storage is disabled.")
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Body must be JSON.") from None
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Body must be a JSON object.")
+    try:
+        rows = validate_rows(body.get("rows"))
+    except ImportError_ as exc:
+        raise HTTPException(400, str(exc)) from None
+    if not import_lock.acquire(blocking=False):
+        raise HTTPException(409, "An import is already running.")
+    try:
+        await asyncio.to_thread(db.replace_health, rows)
+    finally:
+        import_lock.release()
+    days = sorted({r[0] for r in rows})
+    log.info("health daily upload: %d rows, %d days from %s", len(rows), len(days), str(body.get("source"))[:20])
+    return {"days": len(days), "metrics": sorted({r[1] for r in rows}), "range": [days[0], days[-1]]}

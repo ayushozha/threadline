@@ -1,0 +1,312 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0461168859EA4BA7DB146BFD /* Uploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67BB59542F0BC2F25DEF49E /* Uploader.swift */; };
+		A4A9AE34CEDB0FEC213EEAC6 /* HealthExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73CA77B95ED070DD216933F8 /* HealthExporter.swift */; };
+		E3ABA9850F91699A75AF446E /* ThreadlinePhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C12886180402C4045F49F08 /* ThreadlinePhoneApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0C12886180402C4045F49F08 /* ThreadlinePhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadlinePhoneApp.swift; sourceTree = "<group>"; };
+		13E3FAF93CC958BB8756272E /* ThreadlinePhone.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ThreadlinePhone.entitlements; sourceTree = "<group>"; };
+		73CA77B95ED070DD216933F8 /* HealthExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthExporter.swift; sourceTree = "<group>"; };
+		9A33E687B5A2CADF9117133A /* ThreadlinePhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ThreadlinePhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B2B86B15033DEB8A4CF511E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C67BB59542F0BC2F25DEF49E /* Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uploader.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		32E2D48A709D60F3F2CAD028 /* ThreadlinePhone */ = {
+			isa = PBXGroup;
+			children = (
+				73CA77B95ED070DD216933F8 /* HealthExporter.swift */,
+				9B2B86B15033DEB8A4CF511E /* Info.plist */,
+				13E3FAF93CC958BB8756272E /* ThreadlinePhone.entitlements */,
+				0C12886180402C4045F49F08 /* ThreadlinePhoneApp.swift */,
+				C67BB59542F0BC2F25DEF49E /* Uploader.swift */,
+			);
+			path = ThreadlinePhone;
+			sourceTree = "<group>";
+		};
+		A5141E7B506BBD46B40E03CE = {
+			isa = PBXGroup;
+			children = (
+				32E2D48A709D60F3F2CAD028 /* ThreadlinePhone */,
+				C73D9EDF494719374D611875 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C73D9EDF494719374D611875 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9A33E687B5A2CADF9117133A /* ThreadlinePhone.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8F831EFF2AA746D1052999F3 /* ThreadlinePhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DAD135459C0918343287F686 /* Build configuration list for PBXNativeTarget "ThreadlinePhone" */;
+			buildPhases = (
+				A129565D95E14FB8EB9D8B8D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ThreadlinePhone;
+			packageProductDependencies = (
+			);
+			productName = ThreadlinePhone;
+			productReference = 9A33E687B5A2CADF9117133A /* ThreadlinePhone.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		62E84F711E6C42A038771903 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					8F831EFF2AA746D1052999F3 = {
+						DevelopmentTeam = TFAYL6D4RR;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = BF039B5DBFBCA17FC0E5AE88 /* Build configuration list for PBXProject "ThreadlinePhone" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A5141E7B506BBD46B40E03CE;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C73D9EDF494719374D611875 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8F831EFF2AA746D1052999F3 /* ThreadlinePhone */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A129565D95E14FB8EB9D8B8D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4A9AE34CEDB0FEC213EEAC6 /* HealthExporter.swift in Sources */,
+				E3ABA9850F91699A75AF446E /* ThreadlinePhoneApp.swift in Sources */,
+				0461168859EA4BA7DB146BFD /* Uploader.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0A31E813D5E96BC40B548B69 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ThreadlinePhone/ThreadlinePhone.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TFAYL6D4RR;
+				INFOPLIST_FILE = ThreadlinePhone/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ayush.threadline.health;
+				PRODUCT_NAME = "Threadline Health";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		0D57BA915797E21AB34E7BAD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				THREADLINE_DEMO_KEY = "";
+				THREADLINE_SERVER = "https://threadline.ayushojha.com";
+			};
+			name = Release;
+		};
+		92E41EF2FB49AE88A8AAE508 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				THREADLINE_DEMO_KEY = "";
+				THREADLINE_SERVER = "https://threadline.ayushojha.com";
+			};
+			name = Debug;
+		};
+		DE58625CD4B2BB5FAA9DE7AA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = ThreadlinePhone/ThreadlinePhone.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = TFAYL6D4RR;
+				INFOPLIST_FILE = ThreadlinePhone/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ayush.threadline.health;
+				PRODUCT_NAME = "Threadline Health";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BF039B5DBFBCA17FC0E5AE88 /* Build configuration list for PBXProject "ThreadlinePhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				92E41EF2FB49AE88A8AAE508 /* Debug */,
+				0D57BA915797E21AB34E7BAD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DAD135459C0918343287F686 /* Build configuration list for PBXNativeTarget "ThreadlinePhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DE58625CD4B2BB5FAA9DE7AA /* Debug */,
+				0A31E813D5E96BC40B548B69 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 62E84F711E6C42A038771903 /* Project object */;
+}

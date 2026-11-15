@@ -1,0 +1,41 @@
+name: ThreadlinePhone
+options:
+  bundleIdPrefix: com.ayush.threadline
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Override on the xcodebuild command line; the key is never committed.
+    THREADLINE_SERVER: https://threadline.ayushojha.com
+    THREADLINE_DEMO_KEY: ""
+targets:
+  ThreadlinePhone:
+    type: application
+    platform: iOS
+    sources: [ThreadlinePhone]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ayush.threadline.health
+        PRODUCT_NAME: Threadline Health
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: TFAYL6D4RR
+        TARGETED_DEVICE_FAMILY: "1"
+    entitlements:
+      path: ThreadlinePhone/ThreadlinePhone.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    info:
+      path: ThreadlinePhone/Info.plist
+      properties:
+        CFBundleDisplayName: Threadline Health
+        ThreadlineDefaultServer: $(THREADLINE_SERVER)
+        ThreadlineDemoKey: $(THREADLINE_DEMO_KEY)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSHealthShareUsageDescription: Threadline Health reads daily totals and averages from the last 365 days (steps, distance, energy, exercise, stand, flights, heart rate, resting heart rate, HRV, respiratory rate, blood oxygen, walking speed and steadiness, wrist temperature, noise, sleep, mindful minutes, workouts, state of mind and period days) and sends only those per-day numbers to your own Threadline server when you tap Send.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
